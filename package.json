@@ -1,0 +1,25 @@
+{
+  "name": "recepia",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.6.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "with-env": "doppler run --"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0"
+  }
+}

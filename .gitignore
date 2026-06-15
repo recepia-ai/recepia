@@ -1,0 +1,39 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Entornos
+.env
+.env*.local
+.env.development
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Doppler
+.doppler.yaml
