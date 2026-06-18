@@ -236,7 +236,7 @@ SELECT
   '00000000-0000-0000-0000-000000000001',
   '__USER_UUID_AQUI__'::uuid,
   'admin'::clinic_user_role
-WHERE '__USER_UUID_AQUI__' <> '__USER_UUID_AQUI__'  -- guarda: solo si fue reemplazado
+WHERE position('__USER_UUID' in '__USER_UUID_AQUI__') = 0  -- guarda: solo si fue reemplazado
 ON CONFLICT (clinic_id, user_id) DO NOTHING;
 
 
