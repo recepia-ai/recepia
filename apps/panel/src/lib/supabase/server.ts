@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import type { Database } from "@recepia/db"
 
@@ -13,13 +13,15 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(
+          cookiesToSet: { name: string; value: string; options: CookieOptions }[]
+        ) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Server Component: ignoramos, el middleware se encarga
+            // Llamado desde Server Component: lo ignora, el middleware lo gestiona.
           }
         },
       },
