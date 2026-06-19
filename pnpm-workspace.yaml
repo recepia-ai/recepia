@@ -1,5 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+
 allowBuilds:
-  sharp: set this to true or false
+  "@biomejs/biome": true
+  "@tailwindcss/oxide": true
+  sharp: true
+  unrs-resolver: true
