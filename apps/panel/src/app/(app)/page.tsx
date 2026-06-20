@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
 
 type ClinicUserRow = {
   role: string;
@@ -6,51 +7,20 @@ type ClinicUserRow = {
   clinics: { name: string } | { name: string }[] | null;
 };
 
-export default async function DashboardPage() {
-  // Static metrics for now — will be wired to real queries in E7.
-  const METRICS = [
-    { label: "Conversaciones hoy", value: "—" },
-    { label: "Citas hoy", value: "—" },
-    { label: "Pendientes", value: "—" },
-  ];
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  recepcion: "Recepción",
+  veterinario: "Veterinario",
+};
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      {/* Page title */}
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-900">
-          Bienvenido a Recepia
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Aquí verás un resumen de tu clínica.
-        </p>
-      </div>
-
-      {/* Metrics row */}
-      <div className="grid grid-cols-3 gap-6">
-        {METRICS.map((m) => (
-          <Card key={m.label} className="rounded-xl border-zinc-200 shadow-sm">
-            <CardContent className="p-6">
-              <p className="text-3xl font-semibold text-zinc-900">
-                {m.value}
-              </p>
-              <p className="mt-1 text-sm text-zinc-500">{m.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Clinic info */}
-      <ClinicInfoCard />
-    </div>
-  );
+/** Extracts the first name from an email address (before @ or before dot). */
+function extractFirstName(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const name = local.split(".")[0] ?? local;
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-// -- Internal: clinic info card --------------------------------------------
-
-async function ClinicInfoCard() {
-  const { createClient } = await import("@/lib/supabase/server");
-
+export default async function DashboardPage() {
   const supabase = await createClient();
 
   const {
@@ -71,27 +41,75 @@ async function ClinicInfoCard() {
       : clinicUser.clinics
     : null;
 
+  const firstName = extractFirstName(user!.email ?? "Usuario");
+  const clinicName = clinic?.name ?? "tu clínica";
+
+  const METRICS = [
+    { label: "Conversaciones hoy", value: "—", delta: "vs. ayer —" },
+    { label: "Citas hoy", value: "—", delta: "vs. ayer —" },
+    { label: "Pendientes", value: "—", delta: "activas —" },
+  ];
+
   return (
-    <Card className="rounded-xl border-zinc-200 shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-zinc-900">
-          Tu clínica
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-zinc-500">Nombre</span>
-          <span className="font-medium text-zinc-900">
-            {clinic?.name ?? "Sin nombre"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-zinc-500">Tu rol</span>
-          <span className="font-medium text-zinc-900">
-            {clinicUser?.role ?? "—"}
-          </span>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Welcome */}
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
+          Bienvenido, {firstName}
+        </h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Aquí tienes el resumen de hoy en {clinicName}.
+        </p>
+      </div>
+
+      {/* Metrics row */}
+      <div className="grid grid-cols-3 gap-6">
+        {METRICS.map((m) => (
+          <Card
+            key={m.label}
+            className="rounded-xl border-stone-200 shadow-card transition-shadow hover:shadow-card-hero"
+          >
+            <CardContent className="p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                {m.label}
+              </p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-stone-900">
+                {m.value}
+              </p>
+              <p className="mt-1 text-xs text-stone-400">{m.delta}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Clinic info */}
+      <Card className="rounded-xl border-stone-200 shadow-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-stone-900">
+            Tu clínica
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-stone-500">Nombre</span>
+            <span className="font-medium text-stone-900">{clinicName}</span>
+          </div>
+          <div className="border-t border-stone-100" />
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-stone-500">Tu rol</span>
+            <span className="font-medium text-stone-900">
+              {ROLE_LABELS[clinicUser?.role ?? ""] ?? clinicUser?.role ?? "—"}
+            </span>
+          </div>
+          <div className="border-t border-stone-100" />
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-stone-500">Estado</span>
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+              Activa
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

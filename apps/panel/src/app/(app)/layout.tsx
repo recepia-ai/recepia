@@ -47,15 +47,15 @@ export default async function AppLayout({
     return (
       <html lang="es">
         <body className="antialiased">
-          <main className="flex min-h-screen items-center justify-center bg-zinc-50 p-8">
-            <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+          <main className="flex min-h-screen items-center justify-center bg-stone-50 p-8">
+            <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-8 text-center shadow-card">
               <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-amber-100">
                 <span className="text-2xl">⚠️</span>
               </div>
-              <h1 className="text-lg font-semibold text-zinc-900">
+              <h1 className="text-lg font-semibold text-stone-900">
                 Sin acceso a clínicas
               </h1>
-              <p className="mt-2 text-sm text-zinc-500">
+              <p className="mt-2 text-sm text-stone-500">
                 Tu usuario no está vinculado a ninguna clínica. Contacta con el
                 administrador de Recepia para que te asigne una.
               </p>
@@ -68,7 +68,7 @@ export default async function AppLayout({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-screen overflow-hidden bg-zinc-50">
+      <div className="flex h-screen overflow-hidden bg-stone-50">
         {/* Sidebar — fixed left */}
         <AppSidebar clinicName={clinic.name} />
 
