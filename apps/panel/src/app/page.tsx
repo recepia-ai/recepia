@@ -19,6 +19,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Belt-and-suspenders: middleware protege la ruta, pero TS no lo sabe.
   if (!user) {
     redirect("/login")
   }

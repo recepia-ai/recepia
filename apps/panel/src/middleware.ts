@@ -30,8 +30,28 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresca el token JWT si es necesario
-  await supabase.auth.getUser()
+  // Refresca el token JWT + protege rutas autenticadas
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const pathname = request.nextUrl.pathname
+  const isPublicRoute =
+    pathname.startsWith("/login") || pathname.startsWith("/auth")
+
+  // No autenticado + ruta protegida → login
+  if (!user && !isPublicRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/login"
+    return NextResponse.redirect(url)
+  }
+
+  // Autenticado en /login → home
+  if (user && pathname === "/login") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    return NextResponse.redirect(url)
+  }
 
   return response
 }
