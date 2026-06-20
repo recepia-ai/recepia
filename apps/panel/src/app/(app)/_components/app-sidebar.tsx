@@ -4,8 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  Home,
-  MessageSquareText,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  LayoutDashboard,
+  MessageSquare,
   Calendar,
   Users,
   Settings,
@@ -21,31 +26,16 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: Home, enabled: true },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, enabled: true },
   {
     href: "/conversations",
     label: "Conversaciones",
-    icon: MessageSquareText,
+    icon: MessageSquare,
     enabled: true,
   },
-  {
-    href: "/calendar",
-    label: "Calendario",
-    icon: Calendar,
-    enabled: false,
-  },
-  {
-    href: "/clients",
-    label: "Clientes",
-    icon: Users,
-    enabled: false,
-  },
-  {
-    href: "/settings",
-    label: "Ajustes",
-    icon: Settings,
-    enabled: false,
-  },
+  { href: "/calendar", label: "Calendario", icon: Calendar, enabled: false },
+  { href: "/clients", label: "Clientes", icon: Users, enabled: false },
+  { href: "/settings", label: "Ajustes", icon: Settings, enabled: false },
 ];
 
 // -- Component -------------------------------------------------------------
@@ -58,25 +48,27 @@ export function AppSidebar({ clinicName }: Props) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
-      {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4">
-        <div className="flex size-7 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white">
-          R
+    <aside className="flex w-[220px] shrink-0 flex-col border-r border-zinc-200 bg-white">
+      {/* Brand */}
+      <div className="flex h-14 items-center px-4">
+        <div className="flex items-center gap-2">
+          <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-600" />
+          <span className="text-base font-semibold text-zinc-900">
+            Recepia
+          </span>
         </div>
-        <span className="text-sm font-semibold text-slate-900">Recepia</span>
       </div>
 
       {/* Clinic name */}
-      <div className="border-b border-slate-100 px-4 py-3">
-        <p className="text-xs font-medium text-slate-500">Clínica</p>
-        <p className="truncate text-sm font-medium text-slate-900">
-          {clinicName}
-        </p>
+      <div className="px-4 pb-2">
+        <p className="truncate text-xs text-zinc-500">{clinicName}</p>
       </div>
 
+      {/* Separator */}
+      <div className="mx-3 border-t border-zinc-100" />
+
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-2 py-3">
+      <nav className="flex-1 space-y-0.5 px-3 py-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -84,41 +76,47 @@ export function AppSidebar({ clinicName }: Props) {
               ? pathname === "/"
               : pathname.startsWith(item.href);
 
-          return (
+          const link = (
             <Link
               key={item.href}
-              href={item.href}
+              href={item.enabled ? item.href : "#"}
               aria-disabled={!item.enabled}
               tabIndex={item.enabled ? undefined : -1}
               className={cn(
-                "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 item.enabled &&
                   isActive &&
-                  "bg-slate-100 text-slate-900",
+                  "border-l-2 border-emerald-600 bg-emerald-50 text-emerald-700 -ml-1 pl-[11px]",
                 item.enabled &&
                   !isActive &&
-                  "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                  "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
                 !item.enabled &&
-                  "cursor-not-allowed text-slate-400 select-none",
+                  "cursor-not-allowed text-zinc-400 opacity-50 select-none",
               )}
             >
               <Icon className="size-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {!item.enabled && (
-                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
-                  pronto
-                </span>
-              )}
             </Link>
           );
+
+          if (!item.enabled) {
+            return (
+              <Tooltip key={item.href} delayDuration={300}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right" className="text-xs">
+                  Próximamente
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+
+          return link;
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-slate-200 px-4 py-3">
-        <p className="text-[11px] text-slate-400">
-          Recepia · Piloto Dr. Patiño
-        </p>
+      <div className="border-t border-zinc-200 px-4 py-3">
+        <p className="text-[11px] text-zinc-400">Recepia · Piloto</p>
       </div>
     </aside>
   );
