@@ -13,11 +13,35 @@ const ROLE_LABELS: Record<string, string> = {
   veterinario: "Veterinario",
 };
 
-/** Extracts the first name from an email address (before @ or before dot). */
+/**
+ * Extracts a human-readable first name from an email address.
+ *
+ * Examples:
+ *   "marc.soler@example.com"   → "Marc"
+ *   "marcsolerroldan85@..."    → "Marcsolerro"
+ *   "j.doe@..."                → "J"
+ *   "@..."                     → "Usuario"
+ */
 function extractFirstName(email: string): string {
   const local = email.split("@")[0] ?? "";
-  const name = local.split(".")[0] ?? local;
-  return name.charAt(0).toUpperCase() + name.slice(1);
+
+  // If the local part has a dot, take everything before the first dot.
+  const candidate = local.includes(".")
+    ? local.split(".")[0] ?? local
+    : local;
+
+  // Strip trailing digits and non-alpha characters to keep only letters.
+  const letters = candidate.match(/^[a-zA-Z]+/)?.[0] ?? "";
+
+  // If longer than ~9 chars (surname concatenated), trim to first 9.
+  // This gives "Marcsoler" for "marcsolerroldan85" and preserves names
+  // like "Alejandro" (9 chars) and "Christian" (9 chars).
+  const trimmed = letters.length > 9 ? letters.slice(0, 9) : letters;
+
+  // Fallback if the result is empty or implausibly short.
+  if (trimmed.length < 2) return "Usuario";
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 }
 
 export default async function DashboardPage() {
