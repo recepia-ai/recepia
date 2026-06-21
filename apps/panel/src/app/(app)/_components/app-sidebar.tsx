@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: MessageSquare,
     enabled: true,
   },
-  { href: "/calendar", label: "Calendario", icon: Calendar, enabled: false },
+  { href: "/calendar", label: "Calendario", icon: Calendar, enabled: true },
   { href: "/clients", label: "Clientes", icon: Users, enabled: false },
   { href: "/settings", label: "Ajustes", icon: Settings, enabled: false },
 ];
