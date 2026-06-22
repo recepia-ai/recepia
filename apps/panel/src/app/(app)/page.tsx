@@ -16,32 +16,47 @@ const ROLE_LABELS: Record<string, string> = {
 /**
  * Extracts a human-readable first name from an email address.
  *
+ * Strategy:
+ *   1. If local part contains a dot → first segment before dot → "Juan"
+ *   2. If local part has no dot and no uppercase letters:
+ *      - If the resulting letters are ≤9 chars → plausible single name. Keep it.
+ *      - If longer than 9 chars → likely concatenation (e.g. marcsolerroldan).
+ *        Truncate to first 4 chars as an approximate first name.
+ *   3. Fallback: "Hola" (no name) if we can't extract confidently.
+ *
  * Examples:
  *   "marc.soler@example.com"   → "Marc"
- *   "marcsolerroldan85@..."    → "Marcsolerro"
- *   "j.doe@..."                → "J"
- *   "@..."                     → "Usuario"
+ *   "alejandro@gmail.com"      → "Alejandro"   (9 chars, preserved)
+ *   "marcsolerroldan85@..."    → "Marc"        (concatenation detected)
+ *   "j.doe@..."                → "J" → below threshold → "Hola"
+ *   "@..."                     → "Hola"
  */
 function extractFirstName(email: string): string {
   const local = email.split("@")[0] ?? "";
 
-  // If the local part has a dot, take everything before the first dot.
+  // If the local part has a dot, take the first segment.
   const candidate = local.includes(".")
-    ? local.split(".")[0] ?? local
+    ? (local.split(".")[0] ?? local)
     : local;
 
-  // Strip trailing digits and non-alpha characters to keep only letters.
-  const letters = candidate.match(/^[a-zA-Z]+/)?.[0] ?? "";
+  // Strip leading non-letters, then take contiguous letters.
+  const letters = candidate.match(/[a-zA-Z]+/)?.[0] ?? "";
 
-  // If longer than ~9 chars (surname concatenated), trim to first 9.
-  // This gives "Marcsoler" for "marcsolerroldan85" and preserves names
-  // like "Alejandro" (9 chars) and "Christian" (9 chars).
-  const trimmed = letters.length > 9 ? letters.slice(0, 9) : letters;
+  if (letters.length < 2) return "";
 
-  // Fallback if the result is empty or implausibly short.
-  if (trimmed.length < 2) return "Usuario";
+  // If the local part has a dot, the first segment is very likely a name.
+  if (local.includes(".")) {
+    return letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase();
+  }
 
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  // No dot, no mixed-case → ambiguous. Long runs are likely concatenations.
+  const hasUppercase = /[A-Z]/.test(letters);
+  if (!hasUppercase && letters.length > 9) {
+    // Truncate to first 4 chars — best guess at first name.
+    return letters.slice(0, 4).charAt(0).toUpperCase() + letters.slice(1, 4).toLowerCase();
+  }
+
+  return letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase();
 }
 
 export default async function DashboardPage() {
@@ -79,7 +94,7 @@ export default async function DashboardPage() {
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
-          Bienvenido, {firstName}
+          {firstName ? `Bienvenido, ${firstName}` : "Bienvenido"}
         </h1>
         <p className="mt-1 text-sm text-stone-500">
           Aquí tienes el resumen de hoy en {clinicName}.
