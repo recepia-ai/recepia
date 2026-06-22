@@ -3,31 +3,26 @@ import type { AppointmentWithDetails } from "./types";
 
 const STATUS_STYLES: Record<
   AppointmentWithDetails["status"],
-  { border: string; dot: string; label: string }
+  { border: string; label: string }
 > = {
   scheduled: {
     border: "border-l-emerald-500",
-    dot: "bg-emerald-500",
     label: "Programada",
   },
   confirmed: {
     border: "border-l-emerald-600",
-    dot: "bg-emerald-600",
     label: "Confirmada",
   },
   cancelled: {
     border: "border-l-rose-400",
-    dot: "bg-rose-400",
     label: "Cancelada",
   },
   no_show: {
     border: "border-l-amber-500",
-    dot: "bg-amber-500",
     label: "No asistió",
   },
   completed: {
     border: "border-l-stone-400",
-    dot: "bg-stone-400",
     label: "Completada",
   },
 };
@@ -67,19 +62,31 @@ export function AppointmentCard({
     return (
       <div
         className={cn(
-          "truncate rounded-md border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] leading-tight",
+          "h-full overflow-hidden rounded-md border border-stone-200 bg-white px-2 py-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
           styles.border,
           "border-l-2",
-          isCancelled && "line-through opacity-60",
+          isCancelled && "opacity-60",
           className,
         )}
       >
-        <span className="font-medium text-stone-700">
-          {formatTime(appointment.starts_at)}
-        </span>{" "}
-        <span className="text-stone-500">
-          {appointment.client_name ?? "—"}
-        </span>
+        <div className="flex items-center gap-1 min-w-0">
+          <span
+            className={cn(
+              "shrink-0 text-[11px] font-medium",
+              isCancelled ? "text-stone-400 line-through" : "text-stone-700",
+            )}
+          >
+            {formatTime(appointment.starts_at)}
+          </span>
+          <span className="truncate text-[11px] text-stone-600">
+            {appointment.client_name ?? appointment.client_phone ?? "—"}
+          </span>
+        </div>
+        {appointment.service_name && (
+          <p className="mt-0.5 truncate text-[10px] leading-tight text-stone-400">
+            {appointment.service_name}
+          </p>
+        )}
       </div>
     );
   }
@@ -98,9 +105,6 @@ export function AppointmentCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span
-                className={cn("inline-block size-2 shrink-0 rounded-full", styles.dot)}
-              />
               <span className="text-sm font-medium text-stone-900">
                 {formatTime(appointment.starts_at)} –{" "}
                 {formatTime(appointment.ends_at)}
@@ -155,9 +159,6 @@ export function AppointmentCard({
       )}
     >
       <div className="flex items-start gap-2">
-        <span
-          className={cn("mt-0.5 inline-block size-2 shrink-0 rounded-full", styles.dot)}
-        />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-stone-500">
             {formatTime(appointment.starts_at)}

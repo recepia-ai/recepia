@@ -1,6 +1,6 @@
 "use client";
 
-import { AppointmentCard, formatTime } from "./appointment-card";
+import { AppointmentCard } from "./appointment-card";
 import { EmptySlot } from "./empty-slot";
 import type { AppointmentWithDetails, BusinessHours } from "./types";
 import {
@@ -10,6 +10,7 @@ import {
   appointmentsForSlot,
   sameDay,
   timeToMinutes,
+  appointmentsForDay,
 } from "./helpers";
 import { Coffee } from "lucide-react";
 
@@ -19,10 +20,14 @@ type Props = {
   businessHours: BusinessHours | null;
 };
 
+const SLOT_HEIGHT = 48; // 30-min slot in pixels
+const MIN_CARD_HEIGHT = 20;
+
 export function DayView({ date, appointments, businessHours }: Props) {
   const dayHours = hoursForDay(businessHours, date);
   const open = isClinicOpen(businessHours, date);
   const slots = generateSlots(dayHours);
+  const dayApps = appointmentsForDay(appointments, date);
   const now = new Date();
 
   if (!open) {
@@ -41,7 +46,9 @@ export function DayView({ date, appointments, businessHours }: Props) {
     );
   }
 
-  // Track which appointments we've rendered to avoid duplicates
+  if (slots.length === 0) return null;
+
+  // Prevent rendering the same multi-slot appointment in every slot it covers
   const rendered = new Set<string>();
 
   return (
@@ -53,8 +60,8 @@ export function DayView({ date, appointments, businessHours }: Props) {
           slot.start,
           slot.end,
         );
+        const slotStartMin = timeToMinutes(slot.start);
 
-        // Build slot datetime to compare with now
         const slotDate = new Date(date);
         const [sh, sm] = slot.start.split(":").map(Number);
         slotDate.setHours(sh!, sm!, 0, 0);
@@ -63,7 +70,9 @@ export function DayView({ date, appointments, businessHours }: Props) {
         return (
           <div
             key={`${slot.start}-${slot.end}`}
-            className={`flex min-h-[48px] border-b border-stone-100 ${isPast ? "opacity-40" : ""}`}
+            className={`flex min-h-[48px] border-b border-stone-100 ${
+              isPast ? "opacity-40" : ""
+            }`}
           >
             {/* Time label */}
             <div className="flex w-16 shrink-0 items-start pt-2">
@@ -73,34 +82,41 @@ export function DayView({ date, appointments, businessHours }: Props) {
             </div>
 
             {/* Content area */}
-            <div className="min-w-0 flex-1 py-0.5 pr-3">
-              {slotApps.length === 0 ? (
-                <EmptySlot height={48} />
-              ) : (
-                slotApps.map((appt) => {
-                  if (rendered.has(appt.id)) return null;
-                  rendered.add(appt.id);
-
-                  // Calculate how many 30-min slots this appointment spans
-                  const startMin = new Date(appt.starts_at);
-                  const endMin = new Date(appt.ends_at);
-                  const durationSlots = Math.max(
-                    1,
-                    Math.ceil(
-                      (endMin.getTime() - startMin.getTime()) / (30 * 60_000),
-                    ),
-                  );
-
-                  return (
-                    <div
-                      key={appt.id}
-                      style={{ minHeight: durationSlots * 48 }}
-                    >
-                      <AppointmentCard appointment={appt} variant="default" />
-                    </div>
-                  );
-                })
+            <div className="min-w-0 flex-1 relative py-0.5 pr-3">
+              {/* Background empty indicator when no appointment starts in this slot */}
+              {slotApps.filter((a) => !rendered.has(a.id)).length === 0 && (
+                <EmptySlot height={SLOT_HEIGHT} />
               )}
+
+              {slotApps.map((appt) => {
+                if (rendered.has(appt.id)) return null;
+                rendered.add(appt.id);
+
+                const startDate = new Date(appt.starts_at);
+                const endDate = new Date(appt.ends_at);
+                const startMin =
+                  startDate.getHours() * 60 + startDate.getMinutes();
+                const endMin =
+                  endDate.getHours() * 60 + endDate.getMinutes();
+                const durationMin = Math.max(1, endMin - startMin);
+
+                const topPx =
+                  ((startMin - slotStartMin) / 30) * SLOT_HEIGHT;
+                const heightPx = Math.max(
+                  MIN_CARD_HEIGHT,
+                  (durationMin / 30) * SLOT_HEIGHT,
+                );
+
+                return (
+                  <div
+                    key={appt.id}
+                    className="absolute left-0 right-0 z-10"
+                    style={{ top: topPx, height: heightPx }}
+                  >
+                    <AppointmentCard appointment={appt} variant="default" />
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
