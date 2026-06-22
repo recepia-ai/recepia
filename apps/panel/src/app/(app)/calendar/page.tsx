@@ -4,7 +4,7 @@ import type { AppointmentWithDetails, BusinessHours } from "./_components/types"
 import type { Database } from "@recepia/db";
 
 type ApptRow = Database["public"]["Tables"]["appointments"]["Row"] & {
-  clients: { name: string; phone: string } | { name: string; phone: string }[] | null;
+  clients: { full_name: string; phone: string } | { full_name: string; phone: string }[] | null;
   pets: { name: string; species: Database["public"]["Enums"]["pet_species"] } | { name: string; species: Database["public"]["Enums"]["pet_species"] }[] | null;
   services: { name: string; duration_minutes: number } | { name: string; duration_minutes: number }[] | null;
 };
@@ -23,14 +23,18 @@ export default async function CalendarPage() {
   const to = new Date(today);
   to.setDate(to.getDate() + 60);
 
-  const { data: appointments } = await supabase
+  const { data: appointments, error: apptError } = await supabase
     .from("appointments")
     .select(
-      "id, starts_at, ends_at, status, notes, clients(name, phone), pets(name, species), services(name, duration_minutes)",
+      "id, starts_at, ends_at, status, notes, clients(full_name, phone), pets(name, species), services(name, duration_minutes)",
     )
     .gte("starts_at", from.toISOString())
     .lte("starts_at", to.toISOString())
     .order("starts_at", { ascending: true });
+
+  if (apptError) {
+    throw new Error(`Failed to fetch appointments: ${apptError.message}`);
+  }
 
   // Fetch clinic config for business hours
   const { data: clinicUser } = await supabase
@@ -96,7 +100,7 @@ export default async function CalendarPage() {
       ends_at: row.ends_at,
       status: row.status,
       notes: row.notes,
-      client_name: client?.name ?? null,
+      client_name: client?.full_name ?? null,
       client_phone: client?.phone ?? null,
       pet_name: pet?.name ?? null,
       pet_species: pet?.species ?? null,
