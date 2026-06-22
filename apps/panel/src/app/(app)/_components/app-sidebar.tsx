@@ -34,7 +34,7 @@ const NAV_ITEMS: NavItem[] = [
     enabled: true,
   },
   { href: "/calendar", label: "Calendario", icon: Calendar, enabled: true },
-  { href: "/clients", label: "Clientes", icon: Users, enabled: false },
+  { href: "/clients", label: "Clientes", icon: Users, enabled: true },
   { href: "/settings", label: "Ajustes", icon: Settings, enabled: false },
 ];
 
