@@ -389,13 +389,7 @@ export type Database = {
             referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "clinic_invitations_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
+          // invited_by FK to auth.users omitted (auth schema not in Database type)
         ]
       }
       clinic_users: {
@@ -441,13 +435,6 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clinic_users_invited_by_fkey"
-            columns: ["invited_by"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

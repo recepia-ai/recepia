@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "./_components/app-sidebar";
 import { AppHeader } from "./_components/app-header";
 
@@ -80,6 +81,7 @@ export default async function AppLayout({
           <main className="flex-1 overflow-y-auto px-8 py-6">{children}</main>
         </div>
       </div>
+      <Toaster position="top-right" richColors />
     </TooltipProvider>
   );
 }
