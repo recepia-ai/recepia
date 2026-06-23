@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   profileSchema,
-  updateProfile,
   type ProfileFormValues,
-} from "./profile-actions";
+} from "./profile-schema";
+import { updateProfile } from "./profile-actions";
 
 type Props = {
   displayName: string | null;

@@ -1,27 +1,8 @@
 "use server";
 
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-
-// ---------------------------------------------------------------------------
-// Schema — single source of truth. Imported by both action and form.
-// ---------------------------------------------------------------------------
-
-export const profileSchema = z.object({
-  display_name: z
-    .string()
-    .min(2, "Mínimo 2 caracteres")
-    .max(60, "Máximo 60 caracteres")
-    .trim(),
-});
-
-export type ProfileFormValues = z.infer<typeof profileSchema>;
-
-export type ProfileFormState = {
-  success?: boolean;
-  error?: string;
-};
+import { profileSchema, type ProfileFormState } from "./profile-schema";
 
 // ---------------------------------------------------------------------------
 // Action
