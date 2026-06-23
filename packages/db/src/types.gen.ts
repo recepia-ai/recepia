@@ -338,26 +338,101 @@ export type Database = {
           },
         ]
       }
+      clinic_invitations: {
+        Row: {
+          accepted_at: string | null
+          clinic_id: string
+          created_at: string
+          display_name: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["clinic_user_role"]
+          status: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          clinic_id: string
+          created_at?: string
+          display_name?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["clinic_user_role"]
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          clinic_id?: string
+          created_at?: string
+          display_name?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["clinic_user_role"]
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_invitations_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinic_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clinic_users: {
         Row: {
           clinic_id: string
           created_at: string
+          display_name: string | null
+          email: string | null
           id: string
+          invited_at: string | null
+          invited_by: string | null
           role: Database["public"]["Enums"]["clinic_user_role"]
+          updated_at: string
           user_id: string
         }
         Insert: {
           clinic_id: string
           created_at?: string
+          display_name?: string | null
+          email?: string | null
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role: Database["public"]["Enums"]["clinic_user_role"]
+          updated_at?: string
           user_id: string
         }
         Update: {
           clinic_id?: string
           created_at?: string
+          display_name?: string | null
+          email?: string | null
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role?: Database["public"]["Enums"]["clinic_user_role"]
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -368,39 +443,70 @@ export type Database = {
             referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clinic_users_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clinics: {
         Row: {
+          address_city: string | null
+          address_country: string | null
+          address_postal_code: string | null
+          address_street: string | null
           created_at: string
+          email: string | null
           id: string
+          legal_name: string | null
           locale: string
           metadata: Json
           name: string
+          phone: string | null
           slug: string
           status: Database["public"]["Enums"]["clinic_status"]
+          tax_id: string | null
           timezone: string
           updated_at: string
         }
         Insert: {
+          address_city?: string | null
+          address_country?: string | null
+          address_postal_code?: string | null
+          address_street?: string | null
           created_at?: string
+          email?: string | null
           id?: string
+          legal_name?: string | null
           locale?: string
           metadata?: Json
           name: string
+          phone?: string | null
           slug: string
           status?: Database["public"]["Enums"]["clinic_status"]
+          tax_id?: string | null
           timezone?: string
           updated_at?: string
         }
         Update: {
+          address_city?: string | null
+          address_country?: string | null
+          address_postal_code?: string | null
+          address_street?: string | null
           created_at?: string
+          email?: string | null
           id?: string
+          legal_name?: string | null
           locale?: string
           metadata?: Json
           name?: string
+          phone?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["clinic_status"]
+          tax_id?: string | null
           timezone?: string
           updated_at?: string
         }
