@@ -15,7 +15,8 @@
     "typecheck": "turbo run typecheck",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "with-env": "doppler run --"
+    "with-env": "doppler run --",
+    "db:gen-types": "pnpm --filter @recepia/db gen:types"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

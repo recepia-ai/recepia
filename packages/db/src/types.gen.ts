@@ -389,7 +389,6 @@ export type Database = {
             referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
-          // invited_by FK to auth.users omitted (auth schema not in Database type)
         ]
       }
       clinic_users: {
