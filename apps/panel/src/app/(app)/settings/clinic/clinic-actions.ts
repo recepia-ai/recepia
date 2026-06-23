@@ -65,11 +65,20 @@ export async function updateClinic(
   };
 
   const query = supabase.from("clinics") as any;
-  const { error } = await query.update(payload).eq("id", cu.clinic_id);
+  const { data: updated, error } = await query
+    .update(payload)
+    .eq("id", cu.clinic_id)
+    .select()
+    .maybeSingle();
 
   if (error) {
     console.error("[updateClinic]", error);
     return { error: "Error al guardar. Intenta de nuevo." };
+  }
+
+  if (!updated) {
+    console.error("[updateClinic] UPDATE affected 0 rows. RLS policy missing?");
+    return { error: "No tienes permiso para editar la clínica." };
   }
 
   revalidatePath("/settings/clinic");

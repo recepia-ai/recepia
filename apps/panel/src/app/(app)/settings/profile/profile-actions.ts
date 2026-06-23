@@ -33,10 +33,19 @@ export async function updateProfile(
   // (GenericTable | GenericView). Casting the query builder to `any` is the
   // standard escape hatch; the runtime behaviour is correct.
   const query = supabase.from("clinic_users") as any;
-  const { error } = await query.update(payload).eq("user_id", user.id);
+  const { data: updated, error } = await query
+    .update(payload)
+    .eq("user_id", user.id)
+    .select()
+    .maybeSingle();
 
   if (error) {
     return { error: "Error al guardar. Intenta de nuevo." };
+  }
+
+  if (!updated) {
+    console.error("[updateProfile] UPDATE affected 0 rows. RLS policy missing?");
+    return { error: "No tienes permiso para editar tu perfil." };
   }
 
   revalidatePath("/settings/profile");
