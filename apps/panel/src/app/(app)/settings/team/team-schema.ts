@@ -36,3 +36,20 @@ export type AcceptInvitationState = {
   success?: boolean;
   error?: string;
 };
+
+// Schema para cambiar rol de miembro
+export const updateMemberRoleSchema = z.object({
+  member_id: z.string().uuid("ID inválido"),
+  new_role: z.enum(["admin", "recepcion", "veterinario"]),
+});
+
+export type UpdateMemberRoleValues = z.infer<typeof updateMemberRoleSchema>;
+export type UpdateMemberRoleState = { success?: boolean; error?: string };
+
+// Schema para eliminar miembro
+export const removeMemberSchema = z.object({
+  member_id: z.string().uuid("ID inválido"),
+});
+
+export type RemoveMemberValues = z.infer<typeof removeMemberSchema>;
+export type RemoveMemberState = { success?: boolean; error?: string };

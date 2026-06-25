@@ -8,6 +8,10 @@ import {
   type InviteMemberState,
   type AcceptInvitationState,
   acceptInvitationSchema,
+  updateMemberRoleSchema,
+  type UpdateMemberRoleState,
+  removeMemberSchema,
+  type RemoveMemberState,
 } from "./team-schema";
 
 // ---------------------------------------------------------------------------
@@ -378,5 +382,200 @@ export async function acceptInvitation(
     .update({ status: "accepted", accepted_at: new Date().toISOString() })
     .eq("id", invitation.id);
 
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// updateMemberRole — admin-only, changes a member's role
+// ---------------------------------------------------------------------------
+
+export async function updateMemberRole(
+  _prevState: UpdateMemberRoleState,
+  formData: FormData,
+): Promise<UpdateMemberRoleState> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  // Admin-only guard
+  const { data: clinicUser } = await supabase
+    .from("clinic_users")
+    .select("clinic_id, role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const cu = clinicUser as ClinicUserRow | null;
+  if (!cu) return { error: "Sin clínica asignada" };
+  if (cu.role !== "admin") return { error: "No tienes permisos" };
+
+  // Parse
+  const parsed = updateMemberRoleSchema.safeParse({
+    member_id: formData.get("member_id"),
+    new_role: formData.get("new_role"),
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const { member_id, new_role } = parsed.data;
+
+  // Verify target member exists in the same clinic
+  const { data: targetMember } = await supabase
+    .from("clinic_users")
+    .select("id, user_id, role")
+    .eq("id", member_id)
+    .eq("clinic_id", cu.clinic_id)
+    .maybeSingle();
+
+  const target = targetMember as {
+    id: string;
+    user_id: string;
+    role: string;
+  } | null;
+  if (!target) return { error: "Miembro no encontrado" };
+
+  // --- Self-protection ---
+
+  // Promotion to admin: always allowed
+  if (new_role !== "admin") {
+    // Downgrade or lateral move of an admin — check if last admin
+    if (target.role === "admin") {
+      const { count } = await supabase
+        .from("clinic_users")
+        .select("id", { count: "exact", head: true })
+        .eq("clinic_id", cu.clinic_id)
+        .eq("role", "admin");
+
+      if (count !== null && count <= 1) {
+        return { error: "No se puede dejar la clínica sin administradores" };
+      }
+    }
+
+    // Self-demotion: block even if other admins exist (avoid confusion)
+    if (target.user_id === user.id) {
+      return { error: "No puedes cambiar tu propio rol de administrador" };
+    }
+  }
+
+  // Update
+  const updateQuery = supabase.from("clinic_users") as any;
+  const { data: updated, error } = await updateQuery
+    .update({ role: new_role })
+    .eq("id", member_id)
+    .eq("clinic_id", cu.clinic_id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[updateMemberRole]", error);
+    return { error: "Error al actualizar. Intenta de nuevo." };
+  }
+
+  if (!updated) {
+    return { error: "No tienes permiso para cambiar el rol." };
+  }
+
+  revalidatePath("/settings/team");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// removeMember — admin-only, removes a member from the clinic
+// ---------------------------------------------------------------------------
+
+export async function removeMember(
+  _prevState: RemoveMemberState,
+  formData: FormData,
+): Promise<RemoveMemberState> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  // Admin-only guard
+  const { data: clinicUser } = await supabase
+    .from("clinic_users")
+    .select("clinic_id, role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const cu = clinicUser as ClinicUserRow | null;
+  if (!cu) return { error: "Sin clínica asignada" };
+  if (cu.role !== "admin") return { error: "No tienes permisos" };
+
+  // Parse
+  const parsed = removeMemberSchema.safeParse({
+    member_id: formData.get("member_id"),
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const { member_id } = parsed.data;
+
+  // Verify target member exists in the same clinic
+  const { data: targetMember } = await supabase
+    .from("clinic_users")
+    .select("id, user_id, role")
+    .eq("id", member_id)
+    .eq("clinic_id", cu.clinic_id)
+    .maybeSingle();
+
+  const target = targetMember as {
+    id: string;
+    user_id: string;
+    role: string;
+  } | null;
+  if (!target) return { error: "Miembro no encontrado" };
+
+  // --- Self-protection ---
+
+  // Cannot remove yourself
+  if (target.user_id === user.id) {
+    return {
+      error:
+        "No puedes eliminarte a ti mismo desde aquí. Cierra sesión si quieres salir.",
+    };
+  }
+
+  // Cannot remove the last admin
+  if (target.role === "admin") {
+    const { count } = await supabase
+      .from("clinic_users")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", cu.clinic_id)
+      .eq("role", "admin");
+
+    if (count !== null && count <= 1) {
+      return { error: "No se puede dejar la clínica sin administradores" };
+    }
+  }
+
+  // Delete
+  const deleteQuery = supabase.from("clinic_users") as any;
+  const { data: deleted, error } = await deleteQuery
+    .delete()
+    .eq("id", member_id)
+    .eq("clinic_id", cu.clinic_id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[removeMember]", error);
+    return { error: "Error al eliminar. Intenta de nuevo." };
+  }
+
+  if (!deleted) {
+    return { error: "No se pudo eliminar al miembro." };
+  }
+
+  revalidatePath("/settings/team");
   return { success: true };
 }

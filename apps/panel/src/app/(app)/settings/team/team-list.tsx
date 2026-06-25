@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Users } from "lucide-react";
+import { MemberActionsMenu } from "./member-actions-menu";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,13 +60,14 @@ function displayLabel(member: TeamMember, currentUserId: string): string {
 type Props = {
   members: TeamMember[];
   currentUserId: string;
+  currentUserIsAdmin: boolean;
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function TeamList({ members, currentUserId }: Props) {
+export function TeamList({ members, currentUserId, currentUserIsAdmin }: Props) {
   if (members.length === 0) {
     return (
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-6 py-12 text-center">
@@ -123,6 +125,16 @@ export function TeamList({ members, currentUserId }: Props) {
                 })}
               </p>
             </div>
+
+            {/* Actions menu (admin only, not on self) */}
+            {currentUserIsAdmin && !isCurrentUser && (
+              <div className="shrink-0">
+                <MemberActionsMenu
+                  member={member}
+                  currentUserId={currentUserId}
+                />
+              </div>
+            )}
           </div>
         );
       })}

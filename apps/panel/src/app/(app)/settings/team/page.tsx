@@ -89,7 +89,7 @@ export default async function SettingsTeamPage() {
       {/* Members */}
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-stone-900">Miembros</h3>
-        <TeamList members={members} currentUserId={user.id} />
+        <TeamList members={members} currentUserId={user.id} currentUserIsAdmin={isAdmin} />
       </div>
     </div>
   );
