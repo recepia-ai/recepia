@@ -1,15 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { CategoryBadge } from "@/app/(app)/_components/category-badge";
 import { MessageBubble } from "../_components/message-bubble";
 import { EmptyDetail } from "../_components/empty-detail";
+import { TakeControlButton } from "./take-control-button";
+import { ReturnToAgentButton } from "./return-to-agent-button";
+import { MessageInputBar } from "./message-input-bar";
 import {
   ArrowLeft,
-  Send,
   Phone,
   Mail,
   PawPrint,
@@ -127,12 +127,12 @@ export default async function ConversationDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled>
-            Tomar control
-          </Button>
-          <Button variant="ghost" size="sm" disabled>
-            Marcar resuelta
-          </Button>
+          {convData.status === "active" && (
+            <TakeControlButton conversationId={id} />
+          )}
+          {convData.status === "human_handling" && (
+            <ReturnToAgentButton conversationId={id} />
+          )}
         </div>
       </header>
 
@@ -234,21 +234,13 @@ export default async function ConversationDetailPage({
       </div>
 
       {/* Input bar */}
-      <div className="shrink-0 border-t border-stone-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Escribe un mensaje para tomar el control..."
-            className="h-10 text-sm"
-            disabled
-          />
-          <Button size="icon" variant="ghost" disabled className="shrink-0">
-            <Send className="size-4 text-stone-300" strokeWidth={1.75} />
-          </Button>
-        </div>
-        <p className="mt-1.5 text-center text-[11px] text-stone-400">
-          Esta función estará disponible en E8
-        </p>
-      </div>
+      <MessageInputBar
+        conversationId={id}
+        clientName={
+          clientData?.full_name ?? clientData?.phone ?? "el cliente"
+        }
+        status={convData.status}
+      />
     </div>
   );
 }
