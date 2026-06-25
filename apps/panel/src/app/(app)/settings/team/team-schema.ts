@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { uuidSchema } from "@/lib/uuid-schema";
 
 export const inviteMemberSchema = z.object({
   email: z.string().trim().toLowerCase().email("Email no válido"),
@@ -39,7 +40,7 @@ export type AcceptInvitationState = {
 
 // Schema para cambiar rol de miembro
 export const updateMemberRoleSchema = z.object({
-  member_id: z.string().uuid("ID inválido"),
+  member_id: uuidSchema,
   new_role: z.enum(["admin", "recepcion", "veterinario"]),
 });
 
@@ -48,7 +49,7 @@ export type UpdateMemberRoleState = { success?: boolean; error?: string };
 
 // Schema para eliminar miembro
 export const removeMemberSchema = z.object({
-  member_id: z.string().uuid("ID inválido"),
+  member_id: uuidSchema,
 });
 
 export type RemoveMemberValues = z.infer<typeof removeMemberSchema>;
