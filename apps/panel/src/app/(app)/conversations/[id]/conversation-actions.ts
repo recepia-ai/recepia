@@ -32,11 +32,22 @@ export async function takeControl(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No autenticado" };
 
+  // formData.get() can return FormDataEntryValue which may not survive
+  // Next.js Server Action serialization as a plain string. Coerce explicitly.
+  const rawId = formData.get("conversation_id");
+  const conversationIdStr = typeof rawId === "string" ? rawId : String(rawId ?? "");
+
   const parsed = takeControlSchema.safeParse({
-    conversation_id: formData.get("conversation_id"),
+    conversation_id: conversationIdStr,
   });
 
   if (!parsed.success) {
+    console.error("[takeControl] parse error:", {
+      rawId,
+      rawType: typeof rawId,
+      rawValue: String(rawId),
+      issues: parsed.error.issues,
+    });
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
@@ -102,11 +113,22 @@ export async function returnToAgent(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No autenticado" };
 
+  // formData.get() can return FormDataEntryValue which may not survive
+  // Next.js Server Action serialization as a plain string. Coerce explicitly.
+  const rawId = formData.get("conversation_id");
+  const conversationIdStr = typeof rawId === "string" ? rawId : String(rawId ?? "");
+
   const parsed = returnToAgentSchema.safeParse({
-    conversation_id: formData.get("conversation_id"),
+    conversation_id: conversationIdStr,
   });
 
   if (!parsed.success) {
+    console.error("[returnToAgent] parse error:", {
+      rawId,
+      rawType: typeof rawId,
+      rawValue: String(rawId),
+      issues: parsed.error.issues,
+    });
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
@@ -168,12 +190,24 @@ export async function sendMessage(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No autenticado" };
 
+  // formData.get() can return FormDataEntryValue which may not survive
+  // Next.js Server Action serialization as a plain string. Coerce explicitly.
+  const rawId = formData.get("conversation_id");
+  const rawContent = formData.get("content");
+  const conversationIdStr = typeof rawId === "string" ? rawId : String(rawId ?? "");
+  const contentStr = typeof rawContent === "string" ? rawContent : String(rawContent ?? "");
+
   const parsed = sendMessageSchema.safeParse({
-    conversation_id: formData.get("conversation_id"),
-    content: formData.get("content"),
+    conversation_id: conversationIdStr,
+    content: contentStr,
   });
 
   if (!parsed.success) {
+    console.error("[sendMessage] parse error:", {
+      rawIdType: typeof rawId,
+      rawContentType: typeof rawContent,
+      issues: parsed.error.issues,
+    });
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
