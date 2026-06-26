@@ -297,36 +297,42 @@ export type Database = {
       clinic_integrations: {
         Row: {
           clinic_id: string
-          config: Json
           created_at: string
-          credentials: Json
+          external_account_email: string | null
           id: string
-          integration_type: Database["public"]["Enums"]["integration_type"]
           last_synced_at: string | null
-          status: Database["public"]["Enums"]["integration_status"]
+          metadata: Json
+          provider: string
+          scope: string | null
+          token_expires_at: string
           updated_at: string
+          vault_secret_id: string
         }
         Insert: {
           clinic_id: string
-          config?: Json
           created_at?: string
-          credentials?: Json
+          external_account_email?: string | null
           id?: string
-          integration_type: Database["public"]["Enums"]["integration_type"]
           last_synced_at?: string | null
-          status?: Database["public"]["Enums"]["integration_status"]
+          metadata?: Json
+          provider: string
+          scope?: string | null
+          token_expires_at: string
           updated_at?: string
+          vault_secret_id: string
         }
         Update: {
           clinic_id?: string
-          config?: Json
           created_at?: string
-          credentials?: Json
+          external_account_email?: string | null
           id?: string
-          integration_type?: Database["public"]["Enums"]["integration_type"]
           last_synced_at?: string | null
-          status?: Database["public"]["Enums"]["integration_status"]
+          metadata?: Json
+          provider?: string
+          scope?: string | null
+          token_expires_at?: string
           updated_at?: string
+          vault_secret_id?: string
         }
         Relationships: [
           {
@@ -928,6 +934,57 @@ export type Database = {
           },
         ]
       }
+      vet_calendars: {
+        Row: {
+          calendar_summary: string | null
+          clinic_id: string
+          created_at: string
+          google_calendar_id: string
+          id: string
+          last_synced_at: string | null
+          sync_enabled: boolean
+          updated_at: string
+          vet_user_id: string
+        }
+        Insert: {
+          calendar_summary?: string | null
+          clinic_id: string
+          created_at?: string
+          google_calendar_id: string
+          id?: string
+          last_synced_at?: string | null
+          sync_enabled?: boolean
+          updated_at?: string
+          vet_user_id: string
+        }
+        Update: {
+          calendar_summary?: string | null
+          clinic_id?: string
+          created_at?: string
+          google_calendar_id?: string
+          id?: string
+          last_synced_at?: string | null
+          sync_enabled?: boolean
+          updated_at?: string
+          vet_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vet_calendars_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vet_calendars_vet_user_id_fkey"
+            columns: ["vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       v_active_conversations: {
@@ -1085,14 +1142,6 @@ export type Database = {
         | "completed"
         | "transferred"
         | "abandoned"
-      integration_status: "active" | "paused" | "error" | "pending_oauth"
-      integration_type:
-        | "google_calendar"
-        | "qvet"
-        | "vetesoft"
-        | "cliniccloud"
-        | "geclisa"
-        | "other"
       message_content_type:
         | "text"
         | "audio"
@@ -1285,15 +1334,6 @@ export const Constants = {
         "completed",
         "transferred",
         "abandoned",
-      ],
-      integration_status: ["active", "paused", "error", "pending_oauth"],
-      integration_type: [
-        "google_calendar",
-        "qvet",
-        "vetesoft",
-        "cliniccloud",
-        "geclisa",
-        "other",
       ],
       message_content_type: [
         "text",
