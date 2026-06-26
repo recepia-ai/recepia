@@ -88,16 +88,25 @@ $$;
 ALTER TABLE clinic_invitations ENABLE ROW LEVEL SECURITY;
 
 -- Solo admins de la clínica gestionan invitaciones.
-CREATE POLICY "clinic_invitations_admin_all" ON clinic_invitations
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM clinic_users
-      WHERE clinic_users.clinic_id = clinic_invitations.clinic_id
-        AND clinic_users.user_id = auth.uid()
-        AND clinic_users.role = 'admin'
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'clinic_invitations_admin_all'
+      AND tablename = 'clinic_invitations'
+  ) THEN
+    CREATE POLICY "clinic_invitations_admin_all" ON clinic_invitations
+      FOR ALL
+      USING (
+        EXISTS (
+          SELECT 1 FROM clinic_users
+          WHERE clinic_users.clinic_id = clinic_invitations.clinic_id
+            AND clinic_users.user_id = auth.uid()
+            AND clinic_users.role = 'admin'
+        )
+      );
+  END IF;
+END $$;
 
 -- -------------------------------------------------------------------
 -- 4. Backfill datos existentes
