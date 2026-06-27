@@ -407,8 +407,11 @@ export type Database = {
           invited_at: string | null
           invited_by: string | null
           role: Database["public"]["Enums"]["clinic_user_role"]
+          specialty_primary: string | null
+          specialty_secondary: string[] | null
+          staff_type: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           clinic_id: string
@@ -419,8 +422,11 @@ export type Database = {
           invited_at?: string | null
           invited_by?: string | null
           role: Database["public"]["Enums"]["clinic_user_role"]
+          specialty_primary?: string | null
+          specialty_secondary?: string[] | null
+          staff_type?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           clinic_id?: string
@@ -431,8 +437,11 @@ export type Database = {
           invited_at?: string | null
           invited_by?: string | null
           role?: Database["public"]["Enums"]["clinic_user_role"]
+          specialty_primary?: string | null
+          specialty_secondary?: string[] | null
+          staff_type?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -823,41 +832,56 @@ export type Database = {
       services: {
         Row: {
           active: boolean
-          category: Database["public"]["Enums"]["service_category"]
           clinic_id: string
           created_at: string
+          description: string | null
           duration_minutes: number
+          escalates_for_pricing: boolean
           id: string
-          metadata: Json
+          is_surgery: boolean
           name: string
-          price_estimate: number | null
-          requires_transfer: boolean
+          price_max_cents: number | null
+          price_min_cents: number | null
+          requires_fasting: boolean
+          requires_specific_vet_user_id: string | null
+          slug: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
           active?: boolean
-          category: Database["public"]["Enums"]["service_category"]
           clinic_id: string
           created_at?: string
+          description?: string | null
           duration_minutes?: number
+          escalates_for_pricing?: boolean
           id?: string
-          metadata?: Json
+          is_surgery?: boolean
           name: string
-          price_estimate?: number | null
-          requires_transfer?: boolean
+          price_max_cents?: number | null
+          price_min_cents?: number | null
+          requires_fasting?: boolean
+          requires_specific_vet_user_id?: string | null
+          slug: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
           active?: boolean
-          category?: Database["public"]["Enums"]["service_category"]
           clinic_id?: string
           created_at?: string
+          description?: string | null
           duration_minutes?: number
+          escalates_for_pricing?: boolean
           id?: string
-          metadata?: Json
+          is_surgery?: boolean
           name?: string
-          price_estimate?: number | null
-          requires_transfer?: boolean
+          price_max_cents?: number | null
+          price_min_cents?: number | null
+          requires_fasting?: boolean
+          requires_specific_vet_user_id?: string | null
+          slug?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: [
@@ -866,6 +890,13 @@ export type Database = {
             columns: ["clinic_id"]
             isOneToOne: false
             referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_requires_specific_vet_user_id_fkey"
+            columns: ["requires_specific_vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
             referencedColumns: ["id"]
           },
         ]
@@ -978,6 +1009,54 @@ export type Database = {
           },
           {
             foreignKeyName: "vet_calendars_vet_user_id_fkey"
+            columns: ["vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vet_consultation_hours: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+          updated_at: string
+          vet_user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+          updated_at?: string
+          vet_user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+          updated_at?: string
+          vet_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vet_consultation_hours_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vet_consultation_hours_vet_user_id_fkey"
             columns: ["vet_user_id"]
             isOneToOne: false
             referencedRelation: "clinic_users"
