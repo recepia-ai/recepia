@@ -48,6 +48,8 @@ function googleOAuthUrl(state: string): string {
     redirect_uri: redirectUri,
     response_type: "code",
     scope: [
+      "openid",
+      "email",
       "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/calendar.readonly",
     ].join(" "),

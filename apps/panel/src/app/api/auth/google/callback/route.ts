@@ -111,21 +111,54 @@ export async function GET(request: NextRequest) {
   }
 
   // -------------------------------------------------------------------
-  // 4. Extract email from id_token (decoded JWT — no verify needed,
-  //    we just got it directly from Google's token endpoint via HTTPS)
+  // 4. Extract email via two strategies:
+  //    a) id_token JWT decode (works when openid+email scopes are granted).
+  //    b) userinfo endpoint fallback (Bearer {access_token}).
   // -------------------------------------------------------------------
   let email: string | null = null;
-  try {
-    const [, payloadB64] = tokenData.id_token.split(".");
-    if (payloadB64) {
-      const payload = JSON.parse(
-        Buffer.from(payloadB64, "base64url").toString("utf8"),
-      );
-      email = payload.email ?? null;
+
+  // Strategy A: id_token (JWT)
+  if (tokenData.id_token) {
+    try {
+      const parts = tokenData.id_token.split(".");
+      if (parts.length === 3 && parts[1]) {
+        const payload = JSON.parse(
+          Buffer.from(parts[1], "base64url").toString("utf8"),
+        );
+        email = payload.email ?? null;
+      }
+    } catch (err) {
+      console.error("[google/callback] id_token decode failed:", err);
     }
-  } catch (err) {
-    console.error("[google/callback] id_token decode failed:", err);
-    // Non-fatal: we can proceed without email
+  }
+
+  // Strategy B: userinfo endpoint (fallback if id_token missing or decode failed)
+  if (!email) {
+    try {
+      const userinfoRes = await fetch(
+        "https://www.googleapis.com/oauth2/v2/userinfo",
+        {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        },
+      );
+      if (userinfoRes.ok) {
+        const userinfo = await userinfoRes.json();
+        email = userinfo.email ?? null;
+      } else {
+        console.error(
+          "[google/callback] userinfo endpoint failed:",
+          userinfoRes.status,
+          await userinfoRes.text(),
+        );
+      }
+    } catch (err) {
+      console.error("[google/callback] userinfo network error:", err);
+    }
+  }
+
+  if (!email) {
+    console.error("[google/callback] Could not extract email — both id_token and userinfo failed");
+    // Non-fatal: we can proceed without email, but log for debugging
   }
 
   // -------------------------------------------------------------------
