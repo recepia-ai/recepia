@@ -103,11 +103,11 @@ export async function disconnectGoogleCalendar(): Promise<IntegrationActionState
     return { error: "No hay integración de Google Calendar que desconectar" };
   }
 
-  // 2. Delete vault secret (via admin client — vault schema accessible)
+  // 2. Delete vault secret (via admin client — wrapper in public schema)
   try {
-    const { error: vaultErr } = await (supabaseAdmin.rpc as any)(
-      "delete_secret",
-      { id: intRow.vault_secret_id },
+    const { error: vaultErr } = await supabaseAdmin.rpc(
+      "vault_delete_secret",
+      { p_id: intRow.vault_secret_id },
     );
     if (vaultErr) {
       console.error("[disconnectGoogleCalendar] vault delete error:", vaultErr);

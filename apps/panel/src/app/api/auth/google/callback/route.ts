@@ -139,12 +139,12 @@ export async function GET(request: NextRequest) {
 
   let vaultSecretId: string | null = null;
   try {
-    const { data, error: vaultError } = await (supabaseAdmin.rpc as any)(
-      "create_secret",
+    const { data, error: vaultError } = await supabaseAdmin.rpc(
+      "vault_create_secret",
       {
-        secret: secretValue,
-        name: `gcal_clinic_${clinicId}`,
-        description: `Google Calendar tokens — clinic ${clinicId}`,
+        p_secret: secretValue,
+        p_name: `gcal_clinic_${clinicId}`,
+        p_description: `Google Calendar tokens — clinic ${clinicId}`,
       },
     );
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    vaultSecretId = data as unknown as string;
+    vaultSecretId = data as string;
   } catch (err) {
     console.error("[google/callback] Vault create_secret exception:", err);
     return NextResponse.redirect(
@@ -181,8 +181,8 @@ export async function GET(request: NextRequest) {
     if (existing) {
       // Delete old vault secret (best effort)
       try {
-        await (supabaseAdmin.rpc as any)("delete_secret", {
-          id: (existing as any).vault_secret_id,
+        await supabaseAdmin.rpc("vault_delete_secret", {
+          p_id: (existing as any).vault_secret_id,
         });
       } catch {
         // Orphaned secret — not fatal
