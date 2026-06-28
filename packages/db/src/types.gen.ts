@@ -1191,6 +1191,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      vault_create_secret: {
+        Args: { p_description?: string; p_name?: string; p_secret: string }
+        Returns: string
+      }
+      vault_delete_secret: { Args: { p_id: string }; Returns: boolean }
+      vault_read_secret: { Args: { p_id: string }; Returns: string }
+      vault_update_secret: {
+        Args: {
+          p_description?: string
+          p_id: string
+          p_name?: string
+          p_secret: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       appointment_status:
