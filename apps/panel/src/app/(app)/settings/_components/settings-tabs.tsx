@@ -7,6 +7,7 @@ const TABS = [
   { key: "clinic", label: "Clínica", href: "/settings/clinic" },
   { key: "profile", label: "Mi perfil", href: "/settings/profile" },
   { key: "team", label: "Equipo", href: "/settings/team" },
+  { key: "integrations", label: "Integraciones", href: "/settings/integrations" },
 ] as const;
 
 export function SettingsTabs() {
