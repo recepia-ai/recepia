@@ -143,7 +143,7 @@ export async function listVetsWithCalendars(): Promise<
     supabase
       .from("clinic_users")
       .select(
-        "id, display_name, specialty_primary, specialty_secondary",
+        "id, display_name, specialty_primary, specialty_secondary, staff_type",
       )
       .eq("clinic_id", clinicId)
       .order("display_name", { ascending: true }),
