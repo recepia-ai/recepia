@@ -105,7 +105,7 @@ export default async function ConversationDetailPage({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-stone-900">
-            {clientData?.full_name ?? clientData?.phone ?? "Cliente sin nombre"}
+            {clientData?.name ?? clientData?.phone ?? "Cliente sin nombre"}
           </p>
           <p className="flex items-center gap-1.5 text-xs text-stone-500">
             {petData && (
@@ -145,7 +145,7 @@ export default async function ConversationDetailPage({
               Cliente
             </p>
             <p className="mt-1 text-sm font-medium text-stone-900">
-              {clientData?.full_name ?? "—"}
+              {clientData?.name ?? "—"}
             </p>
             {hasContactInfo && (
               <div className="mt-1 space-y-0.5">
@@ -237,7 +237,7 @@ export default async function ConversationDetailPage({
       <MessageInputBar
         conversationId={id}
         clientName={
-          clientData?.full_name ?? clientData?.phone ?? "el cliente"
+          clientData?.name ?? clientData?.phone ?? "el cliente"
         }
         status={convData.status}
       />

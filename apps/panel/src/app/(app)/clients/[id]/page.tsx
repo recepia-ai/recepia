@@ -164,7 +164,7 @@ export default async function ClientDetailPage({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-semibold tracking-tight text-stone-900">
-            {clientData.full_name ?? "Sin nombre"}
+            {clientData.name ?? "Sin nombre"}
           </p>
           <div className="flex items-center gap-1.5 text-xs text-stone-500">
             {hasPhone && (
@@ -323,15 +323,17 @@ export default async function ClientDetailPage({
                                   pet.species.slice(1)
                                 : null,
                               pet.breed,
-                              SEX_LABELS[pet.sex] ?? null,
+                              pet.sex != null
+                                ? (SEX_LABELS[pet.sex] ?? null)
+                                : null,
                               age,
                             ]
                               .filter(Boolean)
                               .join(" · ")}
                           </p>
-                          {pet.chip_number && (
+                          {pet.microchip && (
                             <p className="mt-1.5 text-[11px] text-stone-400">
-                              Chip: {pet.chip_number}
+                              Chip: {pet.microchip}
                             </p>
                           )}
                         </div>

@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ClientsList } from "./_components/clients-list";
 
 type PetCountRow = { client_id: string; id: string };
-type ClientListRow = { id: string; full_name: string | null; phone: string; email: string | null };
+type ClientListRow = { id: string; name: string | null; phone: string; email: string | null };
 
 export default async function ClientsLayout({
   children,
@@ -53,19 +53,19 @@ export default async function ClientsLayout({
     countsByClient.set(p.client_id, (countsByClient.get(p.client_id) ?? 0) + 1);
   }
 
-  // Fetch clients (active only, ordered by full_name)
+  // Fetch clients (active only, ordered by name)
   const clientsRes = await supabase
     .from("clients")
-    .select("id, full_name, phone, email")
+    .select("id, name, phone, email")
     .eq("clinic_id", clinicId)
     .is("deleted_at", null)
-    .order("full_name", { ascending: true })
+    .order("name", { ascending: true })
     .limit(50);
   const clients = (clientsRes.data ?? []) as ClientListRow[];
 
   const rows = clients.map((c) => ({
     id: c.id,
-    full_name: c.full_name,
+    name: c.name,
     phone: c.phone,
     email: c.email,
     pet_count: countsByClient.get(c.id) ?? 0,

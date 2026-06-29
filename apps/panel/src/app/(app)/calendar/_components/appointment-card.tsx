@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils";
 import type { AppointmentWithDetails } from "./types";
 
 const STATUS_STYLES: Record<
-  AppointmentWithDetails["status"],
-  { border: string; label: string }
+  string,
+  { border: string; label: string } | undefined
 > = {
   scheduled: {
     border: "border-l-emerald-500",
@@ -56,7 +56,7 @@ export function AppointmentCard({
   className,
 }: Props) {
   const isCancelled = appointment.status === "cancelled";
-  const styles = STATUS_STYLES[appointment.status];
+  const styles = STATUS_STYLES[appointment.status] ?? { border: "border-l-stone-300", label: appointment.status };
 
   if (variant === "compact") {
     return (

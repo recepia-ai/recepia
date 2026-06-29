@@ -8,7 +8,7 @@ import { Plus, Search } from "lucide-react";
 
 type ClientRow = {
   id: string;
-  full_name: string | null;
+  name: string | null;
   phone: string;
   email: string | null;
   pet_count: number;
@@ -90,7 +90,7 @@ export function ClientsList({ clients, clinicName }: Props) {
             const href = `/clients/${client.id}`;
             const isActive = pathname === href;
             const displayName =
-              client.full_name ?? client.phone ?? "Sin nombre";
+              client.name ?? client.phone ?? "Sin nombre";
 
             return (
               <Link
