@@ -41,52 +41,67 @@ export type Database = {
     Tables: {
       appointments: {
         Row: {
+          cancellation_reason: string | null
           client_id: string
           clinic_id: string
           conversation_id: string | null
           created_at: string
+          created_by: string
+          created_by_user_id: string | null
           ends_at: string
-          external_calendar_event_id: string | null
+          google_calendar_id: string | null
+          google_event_id: string | null
           id: string
           metadata: Json
           notes: string | null
           pet_id: string | null
           service_id: string | null
           starts_at: string
-          status: Database["public"]["Enums"]["appointment_status"]
+          status: string
           updated_at: string
+          vet_user_id: string | null
         }
         Insert: {
+          cancellation_reason?: string | null
           client_id: string
           clinic_id: string
           conversation_id?: string | null
           created_at?: string
+          created_by?: string
+          created_by_user_id?: string | null
           ends_at: string
-          external_calendar_event_id?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
           id?: string
           metadata?: Json
           notes?: string | null
           pet_id?: string | null
           service_id?: string | null
           starts_at: string
-          status?: Database["public"]["Enums"]["appointment_status"]
+          status?: string
           updated_at?: string
+          vet_user_id?: string | null
         }
         Update: {
+          cancellation_reason?: string | null
           client_id?: string
           clinic_id?: string
           conversation_id?: string | null
           created_at?: string
+          created_by?: string
+          created_by_user_id?: string | null
           ends_at?: string
-          external_calendar_event_id?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
           id?: string
           metadata?: Json
           notes?: string | null
           pet_id?: string | null
           service_id?: string | null
           starts_at?: string
-          status?: Database["public"]["Enums"]["appointment_status"]
+          status?: string
           updated_at?: string
+          vet_user_id?: string | null
         }
         Relationships: [
           {
@@ -118,6 +133,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_pet_id_fkey"
             columns: ["pet_id"]
             isOneToOne: false
@@ -131,6 +153,13 @@ export type Database = {
             referencedRelation: "services"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointments_vet_user_id_fkey"
+            columns: ["vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clients: {
@@ -139,9 +168,9 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           email: string | null
-          full_name: string | null
           id: string
           metadata: Json
+          name: string
           notes: string | null
           phone: string
           preferred_language: string
@@ -152,9 +181,9 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
-          full_name?: string | null
           id?: string
           metadata?: Json
+          name: string
           notes?: string | null
           phone: string
           preferred_language?: string
@@ -165,9 +194,9 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
-          full_name?: string | null
           id?: string
           metadata?: Json
+          name?: string
           notes?: string | null
           phone?: string
           preferred_language?: string
@@ -765,52 +794,55 @@ export type Database = {
           active: boolean
           birth_date: string | null
           breed: string | null
-          chip_number: string | null
           client_id: string
           clinic_id: string
           created_at: string
           deleted_at: string | null
           id: string
           metadata: Json
+          microchip: string | null
           name: string
           notes: string | null
-          sex: Database["public"]["Enums"]["pet_sex"]
-          species: Database["public"]["Enums"]["pet_species"]
+          sex: Database["public"]["Enums"]["pet_sex"] | null
+          species: string
           updated_at: string
+          weight_kg: number | null
         }
         Insert: {
           active?: boolean
           birth_date?: string | null
           breed?: string | null
-          chip_number?: string | null
           client_id: string
           clinic_id: string
           created_at?: string
           deleted_at?: string | null
           id?: string
           metadata?: Json
+          microchip?: string | null
           name: string
           notes?: string | null
-          sex?: Database["public"]["Enums"]["pet_sex"]
-          species: Database["public"]["Enums"]["pet_species"]
+          sex?: Database["public"]["Enums"]["pet_sex"] | null
+          species: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Update: {
           active?: boolean
           birth_date?: string | null
           breed?: string | null
-          chip_number?: string | null
           client_id?: string
           clinic_id?: string
           created_at?: string
           deleted_at?: string | null
           id?: string
           metadata?: Json
+          microchip?: string | null
           name?: string
           notes?: string | null
-          sex?: Database["public"]["Enums"]["pet_sex"]
-          species?: Database["public"]["Enums"]["pet_species"]
+          sex?: Database["public"]["Enums"]["pet_sex"] | null
+          species?: string
           updated_at?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
@@ -1116,25 +1148,30 @@ export type Database = {
       }
       v_today_appointments: {
         Row: {
+          cancellation_reason: string | null
           client_id: string | null
           client_name: string | null
           client_phone: string | null
           clinic_id: string | null
           conversation_id: string | null
           created_at: string | null
+          created_by: string | null
+          created_by_user_id: string | null
           ends_at: string | null
-          external_calendar_event_id: string | null
+          google_calendar_id: string | null
+          google_event_id: string | null
           id: string | null
           metadata: Json | null
           notes: string | null
           pet_id: string | null
           pet_name: string | null
-          pet_species: Database["public"]["Enums"]["pet_species"] | null
+          pet_species: string | null
           service_id: string | null
           service_name: string | null
           starts_at: string | null
-          status: Database["public"]["Enums"]["appointment_status"] | null
+          status: string | null
           updated_at: string | null
+          vet_user_id: string | null
         }
         Relationships: [
           {
@@ -1166,6 +1203,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_pet_id_fkey"
             columns: ["pet_id"]
             isOneToOne: false
@@ -1177,6 +1221,13 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_vet_user_id_fkey"
+            columns: ["vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
             referencedColumns: ["id"]
           },
         ]
@@ -1208,12 +1259,6 @@ export type Database = {
       }
     }
     Enums: {
-      appointment_status:
-        | "scheduled"
-        | "confirmed"
-        | "cancelled"
-        | "no_show"
-        | "completed"
       channel_status: "active" | "paused" | "error" | "pending_verification"
       channel_type: "whatsapp" | "phone" | "web"
       clinic_status: "active" | "suspended" | "archived"
@@ -1247,17 +1292,6 @@ export type Database = {
       message_direction: "inbound" | "outbound"
       message_sender: "client" | "agent" | "human" | "system"
       pet_sex: "male" | "female" | "unknown"
-      pet_species:
-        | "dog"
-        | "cat"
-        | "rabbit"
-        | "ferret"
-        | "rodent"
-        | "bird"
-        | "reptile"
-        | "fish"
-        | "exotic"
-        | "other"
       service_category:
         | "consultation"
         | "vaccine"
@@ -1398,13 +1432,6 @@ export const Constants = {
   },
   public: {
     Enums: {
-      appointment_status: [
-        "scheduled",
-        "confirmed",
-        "cancelled",
-        "no_show",
-        "completed",
-      ],
       channel_status: ["active", "paused", "error", "pending_verification"],
       channel_type: ["whatsapp", "phone", "web"],
       clinic_status: ["active", "suspended", "archived"],
@@ -1441,18 +1468,6 @@ export const Constants = {
       message_direction: ["inbound", "outbound"],
       message_sender: ["client", "agent", "human", "system"],
       pet_sex: ["male", "female", "unknown"],
-      pet_species: [
-        "dog",
-        "cat",
-        "rabbit",
-        "ferret",
-        "rodent",
-        "bird",
-        "reptile",
-        "fish",
-        "exotic",
-        "other",
-      ],
       service_category: [
         "consultation",
         "vaccine",
