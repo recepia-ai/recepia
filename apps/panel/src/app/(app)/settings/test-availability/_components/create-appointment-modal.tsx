@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { AvailableSlot } from "@/app/(app)/_actions/availability-actions";
+import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 import type {
   ClientOption,
   PetOption,

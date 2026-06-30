@@ -1,39 +1,11 @@
 "use server";
 
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
-import { uuidSchema } from "@/lib/uuid-schema";
 import { revalidatePath } from "next/cache";
-
-// ---------------------------------------------------------------------------
-// Zod schemas
-// ---------------------------------------------------------------------------
-
-export const createAppointmentSchema = z.object({
-  client_id: uuidSchema,
-  pet_id: uuidSchema,
-  vet_user_id: uuidSchema,
-  service_id: uuidSchema,
-  starts_at: z.string().datetime(),
-  notes: z.string().optional(),
-  conversation_id: uuidSchema.optional(),
-  created_by: z.enum(["agent", "admin", "reception"]),
-});
-
-export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type CreateAppointmentState = {
-  success?: boolean;
-  appointment_id?: string;
-  google_event_id?: string;
-  error?: string;
-};
+import type { CreateAppointmentInput, CreateAppointmentState } from "./appointment-schemas";
+import { createAppointmentSchema } from "./appointment-schemas";
 
 // ---------------------------------------------------------------------------
 // Internal types

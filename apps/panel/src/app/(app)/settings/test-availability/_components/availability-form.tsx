@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ServiceOption, VetOption } from "../_schemas/test-schemas";
-import type { AvailableSlot } from "@/app/(app)/_actions/availability-actions";
+import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 
 // ---------------------------------------------------------------------------
 // Types

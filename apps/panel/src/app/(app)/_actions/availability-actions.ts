@@ -1,11 +1,15 @@
 "use server";
 
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
-import { uuidSchema } from "@/lib/uuid-schema";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import type {
+  CheckAvailabilityInput,
+  AvailableSlot,
+  CheckAvailabilityState,
+} from "./availability-schemas";
+import { checkAvailabilitySchema } from "./availability-schemas";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -14,35 +18,6 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 const TIMEZONE = "Europe/Madrid";
 const SLOT_GRANULARITY_MIN = 30;
 const MAX_SLOTS = 50;
-
-// ---------------------------------------------------------------------------
-// Zod schemas
-// ---------------------------------------------------------------------------
-
-export const checkAvailabilitySchema = z.object({
-  date_from: z.string().datetime(),
-  date_to: z.string().datetime(),
-  service_id: uuidSchema,
-  vet_user_id: uuidSchema.optional(),
-});
-
-export type CheckAvailabilityInput = z.infer<typeof checkAvailabilitySchema>;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type AvailableSlot = {
-  vet_user_id: string;
-  vet_name: string;
-  starts_at: string;
-  ends_at: string;
-  calendar_id: string;
-};
-
-export type CheckAvailabilityState =
-  | { slots: AvailableSlot[] }
-  | { error: string };
 
 // ---------------------------------------------------------------------------
 // Internal types

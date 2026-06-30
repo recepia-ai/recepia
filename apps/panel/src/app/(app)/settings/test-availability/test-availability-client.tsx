@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AvailabilityForm } from "./_components/availability-form";
 import { AvailabilityResults } from "./_components/availability-results";
 import { CreateAppointmentModal } from "./_components/create-appointment-modal";
-import type { AvailableSlot } from "@/app/(app)/_actions/availability-actions";
+import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 import type { ServiceOption, VetOption } from "./_schemas/test-schemas";
 import type { SearchParams } from "./_components/availability-form";
 
