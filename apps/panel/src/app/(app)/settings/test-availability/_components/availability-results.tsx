@@ -12,6 +12,7 @@ import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 type Props = {
   slots: AvailableSlot[];
   onBookSlot: (slot: AvailableSlot) => void;
+  isSurgery: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ function groupByDate(slots: AvailableSlot[]): Map<string, AvailableSlot[]> {
 // Component
 // ---------------------------------------------------------------------------
 
-export function AvailabilityResults({ slots, onBookSlot }: Props) {
+export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
   if (slots.length === 0) {
     return (
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-6 py-10 text-center">
@@ -134,7 +135,7 @@ export function AvailabilityResults({ slots, onBookSlot }: Props) {
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 text-sm font-medium text-stone-900 truncate">
                           {slot.vet_name}
-                          {isSamuel && (
+                          {isSurgery && isSamuel && (
                             <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
                               <Syringe className="size-2.5" />
                               Cirugía

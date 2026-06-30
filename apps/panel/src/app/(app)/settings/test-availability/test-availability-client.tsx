@@ -40,6 +40,8 @@ export function TestAvailabilityClient({
 
   // Service ID from last search (needed by modal)
   const serviceId = lastParams?.service_id ?? "";
+  const isSurgery =
+    services.find((s) => s.id === lastParams?.service_id)?.is_surgery ?? false;
 
   function handleResults(slots: AvailableSlot[], params: SearchParams) {
     setSlots(slots);
@@ -87,7 +89,7 @@ export function TestAvailabilityClient({
           </div>
         ) : slots !== null ? (
           <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
-            <AvailabilityResults slots={slots} onBookSlot={handleBookSlot} />
+            <AvailabilityResults slots={slots} onBookSlot={handleBookSlot} isSurgery={isSurgery} />
           </div>
         ) : (
           <div className="rounded-xl border border-stone-200 bg-stone-50 px-6 py-16 text-center">
