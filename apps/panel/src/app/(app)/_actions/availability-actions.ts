@@ -258,18 +258,15 @@ export async function checkAvailability(
   const service = serviceData as unknown as ServiceRow;
 
   // ------------------------------------------------------------------
-  // 4. Determine vet candidates
+  // 4. Determine vet candidates (ordered resolution)
   // ------------------------------------------------------------------
   let candidateVetIds: string[];
 
-  if (
-    service.is_surgery &&
-    service.requires_specific_vet_user_id
-  ) {
-    // Surgery → force the specific vet
+  // 4a. Hard override: requires_specific_vet_user_id wins over everything
+  if (service.requires_specific_vet_user_id != null) {
     candidateVetIds = [service.requires_specific_vet_user_id];
   } else if (vet_user_id) {
-    // Caller specified a vet → use it (validate it belongs to clinic)
+    // 4b. Caller explicitly requested a vet — validate it belongs to clinic
     const { data: vetCheck } = await supabaseAdmin
       .from("clinic_users")
       .select("id")
@@ -283,14 +280,28 @@ export async function checkAvailability(
     }
     candidateVetIds = [vet_user_id];
   } else {
-    // No vet specified → all vets in the clinic
-    const { data: allVets } = await supabaseAdmin
-      .from("clinic_users")
-      .select("id")
-      .eq("clinic_id", clinicId)
-      .eq("staff_type", "vet");
+    // 4c. No override, no explicit vet → consult service_vet_assignments
+    const { data: assignments } = await supabaseAdmin
+      .from("service_vet_assignments")
+      .select("vet_user_id")
+      .eq("service_id", service_id)
+      .eq("clinic_id", clinicId);
 
-    candidateVetIds = (allVets ?? []).map((v) => v.id);
+    if (assignments && assignments.length > 0) {
+      // N:M assignment exists → use those vets
+      candidateVetIds = (assignments as { vet_user_id: string }[]).map(
+        (a) => a.vet_user_id,
+      );
+    } else {
+      // Fallback Y: no assignments → all vets in the clinic
+      const { data: allVets } = await supabaseAdmin
+        .from("clinic_users")
+        .select("id")
+        .eq("clinic_id", clinicId)
+        .eq("staff_type", "vet");
+
+      candidateVetIds = (allVets ?? []).map((v) => v.id);
+    }
   }
 
   if (candidateVetIds.length === 0) {

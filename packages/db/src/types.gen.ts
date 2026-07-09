@@ -861,6 +861,52 @@ export type Database = {
           },
         ]
       }
+      service_vet_assignments: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          id: string
+          service_id: string
+          vet_user_id: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          id?: string
+          service_id: string
+          vet_user_id: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          id?: string
+          service_id?: string
+          vet_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_vet_assignments_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_vet_assignments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_vet_assignments_vet_user_id_fkey"
+            columns: ["vet_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
           active: boolean
