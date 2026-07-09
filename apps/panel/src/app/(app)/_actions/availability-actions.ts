@@ -17,7 +17,7 @@ import { checkAvailabilitySchema } from "./availability-schemas";
 
 const TIMEZONE = "Europe/Madrid";
 const SLOT_GRANULARITY_MIN = 30;
-const MAX_SLOTS = 50;
+const MAX_SLOTS = 200;
 
 // ---------------------------------------------------------------------------
 // Internal types
