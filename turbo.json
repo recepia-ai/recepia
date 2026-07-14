@@ -11,7 +11,8 @@
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_REDIRECT_URI",
-    "OAUTH_STATE_SECRET"
+    "OAUTH_STATE_SECRET",
+    "ANTHROPIC_API_KEY"
   ],
   "tasks": {
     "build": {
