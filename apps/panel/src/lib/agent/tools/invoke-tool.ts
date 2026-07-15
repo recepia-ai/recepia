@@ -40,27 +40,47 @@ export async function invokeTool<TInput, TOutput>(
 
   const durationMs = Date.now() - startedAt;
 
-  // Record to tool_invocations (fire-and-forget — don't block on DB errors)
+  // ------------------------------------------------------------------
+  // Record to tool_invocations.
+  //
+  // Fire-and-forget: el registro es para debug/auditoría, no bloquea
+  // la respuesta al usuario. Pero los errores SÍ se loguean en
+  // console.error para visibilidad inmediata en terminal dev.
+  // ------------------------------------------------------------------
   try {
-    const supabaseAdmin = ctx.supabaseAdmin;
+    const { error: insertErr } = await (ctx.supabaseAdmin
+      .from("tool_invocations") as any)
+      .insert({
+        clinic_id: ctx.clinicId,
+        conversation_id: ctx.conversationId,
+        tool_name: tool.name,
+        input,
+        output: result.success ? (result as ToolSuccess<TOutput>).data : null,
+        success: result.success,
+        error_code: result.success ? null : (result as ToolFailure).error_code ?? null,
+        error_message: result.success ? null : (result as ToolFailure).error,
+        duration_ms: durationMs,
+      });
 
-    await (supabaseAdmin.from("tool_invocations") as any).insert({
-      clinic_id: ctx.clinicId,
-      conversation_id: ctx.conversationId,
-      tool_name: tool.name,
-      input,
-      output: result.success ? (result as ToolSuccess<TOutput>).data : null,
-      success: result.success,
-      error_code: result.success ? null : (result as ToolFailure).error_code ?? null,
-      error_message: result.success ? null : (result as ToolFailure).error,
-      duration_ms: durationMs,
-    });
+    if (insertErr) {
+      console.error(
+        `[${tool.name}] tool_invocations INSERT error:`,
+        JSON.stringify(insertErr, null, 2),
+      );
+      ctx.logger(
+        `[${tool.name}] failed to record tool_invocation`,
+        insertErr,
+      );
+    }
   } catch (dbErr) {
-    ctx.logger(
-      `[${tool.name}] failed to record tool_invocation`,
+    console.error(
+      `[${tool.name}] tool_invocations INSERT exception:`,
       dbErr instanceof Error ? dbErr.message : dbErr,
     );
-    // Non-fatal — the tool result is still valid
+    ctx.logger(
+      `[${tool.name}] tool_invocations INSERT exception`,
+      dbErr instanceof Error ? dbErr.message : dbErr,
+    );
   }
 
   return result;
