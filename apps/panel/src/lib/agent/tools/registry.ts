@@ -1,4 +1,3 @@
-import { zodToJsonSchema } from "zod-to-json-schema";
 import type { Tool } from "./types";
 import { lookupClient } from "./lookup-client";
 import { registerNewClient } from "./register-new-client";
@@ -49,6 +48,6 @@ export function getAnthropicTools(): Array<{
   return tools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: zodToJsonSchema(t.inputSchema as any, { target: "jsonSchema7" }),
+    input_schema: t.inputSchema.toJSONSchema({ target: "jsonSchema7" }) as Record<string, unknown>,
   }));
 }
