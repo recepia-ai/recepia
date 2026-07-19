@@ -13,7 +13,7 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
-type ServiceMatch = {
+type ServiceRow = {
   id: string;
   name: string;
   duration_minutes: number;
@@ -31,7 +31,7 @@ type ServiceSuggestion = {
 type Output =
   | {
       found: true;
-      service: ServiceMatch;
+      service: ServiceRow;
     }
   | {
       found: false;
@@ -39,26 +39,42 @@ type Output =
       message: string;
     };
 
+// Normalize text for accent-insensitive search:
+// - Decomposes accented chars (NFD)
+// - Strips diacritical marks
+// - Lowercases
+// - Trims whitespace
+function normalizeForSearch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 async function handler(
   input: Input,
   ctx: ToolContext,
 ): Promise<ToolResult<Output>> {
+  // Fetch ALL services for this clinic — small dataset (~40 rows max).
+  // Filtering is done in TS with accent-insensitive normalization.
   const { data, error } = await ctx.supabaseAdmin
     .from("services")
     .select(
       "id, name, duration_minutes, price_min_cents, price_max_cents, is_surgery, requires_fasting",
     )
     .eq("clinic_id", ctx.clinicId)
-    .ilike("name", `%${input.name}%`)
-    .order("name")
-    .limit(6);
+    .order("name");
 
   if (error) {
     ctx.logger("[find_service_by_name] query error", error);
     return { success: false, error: "Error al buscar servicios." };
   }
 
-  if (!data || data.length === 0) {
+  const allServices = (data ?? []) as unknown as ServiceRow[];
+  const normalizedQuery = normalizeForSearch(input.name);
+
+  if (!normalizedQuery) {
     return {
       success: true,
       data: {
@@ -69,18 +85,32 @@ async function handler(
     };
   }
 
-  const rows = data as unknown as ServiceMatch[];
+  const matches = allServices.filter((s) =>
+    normalizeForSearch(s.name).includes(normalizedQuery),
+  );
 
-  // Exact case-insensitive match for single result
-  if (rows.length === 1) {
-    const first = rows[0]!;
-    if (first.name.toLowerCase() === input.name.toLowerCase()) {
-      return { success: true, data: { found: true, service: first } };
-    }
+  // Exactly 1 match (partial or exact) → found: true.
+  // This is what fixes bug: previously "cachorro" returned 1 suggestion as found:false.
+  if (matches.length === 1) {
+    return {
+      success: true,
+      data: { found: true, service: matches[0]! },
+    };
   }
 
-  // Multiple results — return suggestions (max 5)
-  const suggestions: ServiceSuggestion[] = rows.slice(0, 5).map((r) => ({
+  if (matches.length === 0) {
+    return {
+      success: true,
+      data: {
+        found: false,
+        suggestions: [],
+        message: "No hay ningun servicio con ese nombre en el catalogo.",
+      },
+    };
+  }
+
+  // Multiple matches — return top 5 suggestions.
+  const suggestions: ServiceSuggestion[] = matches.slice(0, 5).map((r) => ({
     id: r.id,
     name: r.name,
   }));
