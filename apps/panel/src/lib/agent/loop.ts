@@ -145,27 +145,46 @@ export async function runAgentLoop(params: {
 
   // ---- Main loop ----
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: anthropicMessages as Array<{
-        role: "user" | "assistant";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let response: any;
+    try {
+      response = await anthropic.messages.create({
+        model: "claude-sonnet-5",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: anthropicMessages as Array<{
+          role: "user" | "assistant";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content: any;
+        }>,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        content: any;
-      }>,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: tools as any,
-    });
+        tools: tools as any,
+      });
+    } catch (apiErr) {
+      console.error(
+        `[loop] Anthropic API error (iteration ${iteration}):`,
+        apiErr instanceof Error ? apiErr.message : apiErr,
+        apiErr instanceof Error && "status" in apiErr
+          ? `status=${(apiErr as unknown as { status: unknown }).status}`
+          : "",
+      );
+      console.error(
+        "[loop] Full error:",
+        JSON.stringify(apiErr, Object.getOwnPropertyNames(apiErr), 2),
+      );
+      throw apiErr;
+    }
 
     // Separate text and tool_use blocks
-    const textBlocks = response.content.filter((b) => b.type === "text");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const textBlocks = response.content.filter((b: any) => b.type === "text");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const toolUseBlocks = response.content.filter((b: any) => b.type === "tool_use") as any[];
 
     // ---- Case 1: Final text response ----
     if (response.stop_reason === "end_turn") {
-      finalText = textBlocks.map((b) => ("text" in b ? (b as { text: string }).text : "")).join("");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalText = textBlocks.map((b: any) => ("text" in b ? (b as { text: string }).text : "")).join("");
 
       // Save agent message to DB
       await saveMessage(supabaseAdmin, {
@@ -294,11 +313,20 @@ export async function runAgentLoop(params: {
       continue;
     }
 
-    // Unexpected stop_reason — treat as final
+    // Unexpected stop_reason — log and fall through to fallback
+    console.error(
+      `[loop] Unexpected stop_reason at iteration ${iteration}:`,
+      `stop_reason="${response.stop_reason}"`,
+      `content_blocks=${response.content.length}`,
+      `content_types=[${response.content.map((b: Record<string, unknown>) => b.type).join(", ")}]`,
+    );
     break;
   }
 
-  // Max iterations reached — force a fallback response
+  // Max iterations reached or unexpected stop_reason — force a fallback response
+  console.error(
+    `[loop] Fallback triggered — iterations exhausted or unexpected stop_reason. Tool calls made: ${allToolCalls.length}`,
+  );
   const fallbackText =
     "Lo siento, estoy teniendo dificultades para procesar tu solicitud. ¿Podrías intentarlo de nuevo?";
 
