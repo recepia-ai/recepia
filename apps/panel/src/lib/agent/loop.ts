@@ -1,5 +1,6 @@
 import { getAnthropicClient } from "./anthropic-client";
 import { buildSystemPrompt } from "./system-prompt";
+import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
 import { getTool, getAnthropicTools } from "./tools/registry";
 import { invokeTool, buildToolContext } from "./tools/invoke-tool";
 import { saveMessage } from "./conversation-store";
@@ -39,8 +40,7 @@ type AnthropicMessageParam = Record<string, any>;
 const MAX_TOOL_ITERATIONS = 10;
 
 const ESCALATION_MESSAGES: Record<string, string> = {
-  urgent_medical:
-    "Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al Hospital Veterinario Dr. Patino. Estamos en Avda Vidal i Barraquer, 34, 43002 Tarragona. Si lo prefieres, contacta con Anicura Tarragona (977 21 18 18). Te paso con el equipo para que te confirmen que todo esta preparado.",
+  urgent_medical: `Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al ${CLINIC_NAME}. Estamos en ${CLINIC_ADDRESS}. Si lo prefieres, contacta con Anicura Tarragona (${EMERGENCY_HOSPITAL_PHONE}). Te paso con el equipo para que te confirmen que todo esta preparado.`,
   complaint:
     "Lamento mucho que hayas tenido esa experiencia. Tomo nota de tu queja y la traslado al equipo. Alguien del hospital se pondra en contacto contigo hoy para resolverlo personalmente.",
   medication_query:

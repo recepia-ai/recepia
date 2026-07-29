@@ -1,4 +1,5 @@
 import { toZonedTime } from "date-fns-tz";
+import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_ADDRESS, EMERGENCY_HOSPITAL_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
 
 const WEEKDAYS = [
   "domingo",
@@ -393,7 +394,7 @@ export function buildSystemPrompt(clientPhone?: string): string {
     // -----------------------------------------------------------------
     "## HORARIOS DE CONSULTA Y URGENCIAS",
     "",
-    "Direccion: Avda Vidal i Barraquer, 34, 43002 Tarragona.",
+    `Direccion: ${CLINIC_ADDRESS}.`,
     "",
     "Horarios de consulta por veterinario (LUNES A VIERNES):",
     "- Samuel Patino (cirugia, trauma, neuro, oftalmo): 8:30-9:00 y",
@@ -412,14 +413,14 @@ export function buildSystemPrompt(clientPhone?: string): string {
     "",
     "DOMINGOS:",
     "- Cerrado. No se agendan citas los domingos.",
-    "- Urgencias 24h: contactar con Anicura Hospital Veterinario",
-    "  (Carrer de la Soledat, 4, 43001 Tarragona).",
-    "  Telefono: 977 21 18 18",
+    `- Urgencias 24h: contactar con ${EMERGENCY_HOSPITAL_NAME}`,
+    `  (${EMERGENCY_HOSPITAL_ADDRESS}).`,
+    `  Telefono: ${EMERGENCY_HOSPITAL_PHONE}`,
     "",
     "URGENCIAS FUERA DE HORARIO:",
     "Si un cliente pregunta por urgencia en horario no cubierto",
     "(domingo, sabado tarde, noche entre semana)", 
-    "indicale que vaya directamente al Hospital Veterinario Dr. Patino",
+    `indicale que vaya directamente al ${CLINIC_NAME}`,
     "o contacte con Anicura Tarragona en la direccion y telefono",
     "indicados arriba.",
     "",

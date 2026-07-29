@@ -76,12 +76,12 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
   const vetIds = [...new Set(data?.map((r: Record<string, unknown>) => r.vet_user_id as string).filter(Boolean) ?? [])];
   if (vetIds.length > 0) {
-    const { data: vets } = await supabase
+    const { data: vets } = await (supabase as unknown as ReturnType<typeof import("@supabase/supabase-js").createClient>)
       .from("users")
       .select("id, full_name")
       .in("id", vetIds);
 
-    const vetMap = new Map((vets ?? []).map((v) => [v.id, v.full_name]));
+    const vetMap = new Map(((vets ?? []) as { id: string; full_name: string }[]).map((v) => [v.id, v.full_name]));
     for (const appt of appointments) {
       const row = data?.find((r: Record<string, unknown>) => r.id === appt.id) as Record<string, unknown> | undefined;
       const vetId = row?.vet_user_id as string | undefined;
