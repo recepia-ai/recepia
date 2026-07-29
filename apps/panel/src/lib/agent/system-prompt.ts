@@ -393,8 +393,7 @@ export function buildSystemPrompt(clientPhone?: string): string {
     // -----------------------------------------------------------------
     "## HORARIOS DE CONSULTA Y URGENCIAS",
     "",
-    "Direccion: Carretera Nacional 340, Km 1171, 43480 Vila-seca,",
-    "Tarragona (cerca de Salou y PortAventura).",
+    "Direccion: Avda Vidal i Barraquer, 34, 43002 Tarragona.",
     "",
     "Horarios de consulta por veterinario (LUNES A VIERNES):",
     "- Samuel Patino (cirugia, trauma, neuro, oftalmo): 8:30-9:00 y",

@@ -9,6 +9,7 @@ import { escalateToHuman } from "./escalate-to-human";
 import { findServiceByName } from "./find-service-by-name";
 import { cancelAppointmentTool } from "./cancel-appointment";
 import { modifyAppointmentTool } from "./modify-appointment";
+import { lookupAppointments } from "./lookup-appointments";
 
 // ---------------------------------------------------------------------------
 // Tool registry
@@ -26,6 +27,7 @@ const tools: Tool<any, any>[] = [
   escalateToHuman,
   cancelAppointmentTool,
   modifyAppointmentTool,
+  lookupAppointments,
 ];
 
 const toolMap = new Map<string, Tool<any, any>>(tools.map((t) => [t.name, t]));

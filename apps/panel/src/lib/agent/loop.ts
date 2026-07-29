@@ -40,7 +40,7 @@ const MAX_TOOL_ITERATIONS = 10;
 
 const ESCALATION_MESSAGES: Record<string, string> = {
   urgent_medical:
-    "Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al Hospital Veterinario Dr. Patino. Estamos en Carretera Nacional 340, Km 1171, Vila-seca (junto a Salou). Si lo prefieres, contacta con Anicura Tarragona (977 21 18 18). Te paso con el equipo para que te confirmen que todo esta preparado.",
+    "Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al Hospital Veterinario Dr. Patino. Estamos en Avda Vidal i Barraquer, 34, 43002 Tarragona. Si lo prefieres, contacta con Anicura Tarragona (977 21 18 18). Te paso con el equipo para que te confirmen que todo esta preparado.",
   complaint:
     "Lamento mucho que hayas tenido esa experiencia. Tomo nota de tu queja y la traslado al equipo. Alguien del hospital se pondra en contacto contigo hoy para resolverlo personalmente.",
   medication_query:

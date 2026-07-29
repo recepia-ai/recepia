@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isPublicRoute =
-    pathname.startsWith("/login") || pathname.startsWith("/auth")
+    pathname.startsWith("/login") || pathname.startsWith("/auth") || pathname.startsWith("/api/test-agent")
 
   // No autenticado + ruta protegida → login
   if (!user && !isPublicRoute) {
