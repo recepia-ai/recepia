@@ -10,7 +10,7 @@ export const createAppointmentSchema = z.object({
   pet_id: uuidSchema,
   vet_user_id: uuidSchema,
   service_id: uuidSchema,
-  starts_at: z.string().datetime(),
+  starts_at: z.string().datetime({ offset: true }),
   notes: z.string().optional(),
   conversation_id: uuidSchema.optional(),
   created_by: z.enum(["agent", "admin", "reception"]),

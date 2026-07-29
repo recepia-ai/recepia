@@ -6,8 +6,8 @@ import { uuidSchema } from "@/lib/uuid-schema";
 // ---------------------------------------------------------------------------
 
 export const checkAvailabilitySchema = z.object({
-  date_from: z.string().datetime(),
-  date_to: z.string().datetime(),
+  date_from: z.string().datetime({ offset: true }),
+  date_to: z.string().datetime({ offset: true }),
   service_id: uuidSchema,
   vet_user_id: uuidSchema.optional(),
 });

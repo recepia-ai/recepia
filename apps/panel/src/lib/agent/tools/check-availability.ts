@@ -1,16 +1,12 @@
 import { z } from "zod";
 import { uuidSchema } from "@/lib/uuid-schema";
-import { checkAvailability } from "@/app/(app)/_actions/availability-actions";
+import { checkAvailabilityForClinic } from "@/lib/availability-core";
 import type { Tool, ToolResult, ToolContext } from "./types";
-
-// ---------------------------------------------------------------------------
-// check_availability
-// ---------------------------------------------------------------------------
 
 const inputSchema = z.object({
   service_id: uuidSchema,
-  date_from: z.string().datetime(),
-  date_to: z.string().datetime(),
+  date_from: z.string().datetime({ offset: true }),
+  date_to: z.string().datetime({ offset: true }),
   vet_user_id: uuidSchema.optional(),
 });
 
@@ -28,9 +24,8 @@ type Output =
   | { slots: Slot[] }
   | { error: string };
 
-async function handler(input: Input, _ctx: ToolContext): Promise<ToolResult<Output>> {
-  // checkAvailability does its own auth via getCallerClinicId()
-  const result = await checkAvailability(input);
+async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
+  const result = await checkAvailabilityForClinic(ctx.clinicId, input);
 
   if ("error" in result) {
     return { success: false, error: result.error };

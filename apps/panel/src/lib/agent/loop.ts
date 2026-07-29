@@ -38,6 +38,22 @@ type AnthropicMessageParam = Record<string, any>;
 
 const MAX_TOOL_ITERATIONS = 10;
 
+const ESCALATION_MESSAGES: Record<string, string> = {
+  urgent_medical:
+    "Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al Hospital Veterinario Dr. Patino. Estamos en Carretera Nacional 340, Km 1171, Vila-seca (junto a Salou). Si lo prefieres, contacta con Anicura Tarragona (977 21 18 18). Te paso con el equipo para que te confirmen que todo esta preparado.",
+  complaint:
+    "Lamento mucho que hayas tenido esa experiencia. Tomo nota de tu queja y la traslado al equipo. Alguien del hospital se pondra en contacto contigo hoy para resolverlo personalmente.",
+  medication_query:
+    "Entiendo tu consulta, pero por seguridad no puedo recomendar medicacion ni dosis a traves de este chat. El veterinario debe valorar el estado actual de tu mascota antes de pautar nada. Te paso con el equipo para que te atiendan.",
+  surgery_pricing:
+    "Entiendo que quieras saber el precio. Los presupuestos de cirugia dependen de cada caso concreto (peso, complejidad, pruebas previas) y prefiero que el equipo te lo confirme directamente. Te paso con ellos para que te den un presupuesto personalizado.",
+  grief:
+    "Lo siento mucho. Se que es un momento dificil. El equipo del hospital esta preparado para ayudarte con lo que necesites. Te paso ahora mismo con una persona que podra atenderte.",
+  client_request: "Te paso ahora mismo con una persona del equipo. Un momento, por favor.",
+  ambiguity_unresolved: "Te paso ahora mismo con una persona del equipo. Un momento, por favor.",
+  other: "Te paso ahora mismo con una persona del equipo. Un momento, por favor.",
+};
+
 // ---------------------------------------------------------------------------
 // DB message → Anthropic message conversion
 // ---------------------------------------------------------------------------
@@ -284,19 +300,21 @@ export async function runAgentLoop(params: {
 
         // If escalation tool was invoked, terminate the loop
         if (tu.name === "escalate_to_human" && toolResult.success) {
-          // Save a final agent message
+          const escalationReason =
+            (tu.input as Record<string, unknown> | undefined)?.reason as string | undefined ?? "other";
+          const escalationMessage =
+            ESCALATION_MESSAGES[escalationReason] ?? "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
+
           await saveMessage(supabaseAdmin, {
             conversationId,
             clinicId,
             direction: "outbound",
             sender: "agent",
-            content:
-              "Te paso ahora mismo con una persona del equipo. Un momento, por favor.",
+            content: escalationMessage,
           });
 
           return {
-            response:
-              "Te paso ahora mismo con una persona del equipo. Un momento, por favor.",
+            response: escalationMessage,
             toolCalls: allToolCalls,
             terminated: true,
           };
