@@ -124,6 +124,29 @@ function toAnthropicMessages(messages: MessageRecord[]): AnthropicMessageParam[]
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Safe wrapper around saveMessage that never throws.
+ * AI-generated message persistence is best-effort: if the DB is down, we log
+ * the error but do NOT crash the conversation. The client still gets a response.
+ */
+async function safeSaveMessage(
+  supabaseAdmin: SupabaseClient<Database>,
+  params: { conversationId: string; clinicId: string; direction: "inbound" | "outbound"; sender: "client" | "agent" | "human" | "system"; content: string | null; contentType?: string; metadata?: Record<string, unknown> },
+): Promise<void> {
+  try {
+    await saveMessage(supabaseAdmin, params);
+  } catch (err) {
+    console.error(
+      `[loop] saveMessage failed (non-fatal):`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Agent loop
 // ---------------------------------------------------------------------------
 
@@ -137,6 +160,7 @@ export async function runAgentLoop(params: {
 }): Promise<LoopResult> {
   const { conversationId, clinicId, userMessage, previousMessages, clientPhone, supabaseAdmin } = params;
 
+  try {
   const systemPrompt = buildSystemPrompt(clientPhone);
   const anthropic = getAnthropicClient();
   const tools = getAnthropicTools();
@@ -148,7 +172,7 @@ export async function runAgentLoop(params: {
   ];
 
   // Save the inbound user message to DB
-  await saveMessage(supabaseAdmin, {
+  await safeSaveMessage(supabaseAdmin, {
     conversationId,
     clinicId,
     direction: "inbound",
@@ -177,18 +201,32 @@ export async function runAgentLoop(params: {
         tools: tools as any,
       });
     } catch (apiErr) {
+      const statusCode = apiErr instanceof Error && "status" in apiErr
+        ? (apiErr as unknown as { status: number }).status
+        : undefined;
       console.error(
-        `[loop] Anthropic API error (iteration ${iteration}):`,
+        `[loop] Anthropic API error at iteration ${iteration} (status=${statusCode}):`,
         apiErr instanceof Error ? apiErr.message : apiErr,
-        apiErr instanceof Error && "status" in apiErr
-          ? `status=${(apiErr as unknown as { status: unknown }).status}`
-          : "",
       );
-      console.error(
-        "[loop] Full error:",
-        JSON.stringify(apiErr, Object.getOwnPropertyNames(apiErr), 2),
-      );
-      throw apiErr;
+
+      const isOverloaded = statusCode === 429 || statusCode === 529;
+      const errorText = isOverloaded
+        ? "Estamos recibiendo muchas consultas. He tomado nota de tu mensaje y alguien del equipo te responderá en cuanto podamos."
+        : `Estamos teniendo un problema técnico. He tomado nota de tu mensaje y alguien del equipo te responderá en breve. Si es urgente, por favor llama al ${CLINIC_NAME}.`;
+
+      await safeSaveMessage(supabaseAdmin, {
+        conversationId,
+        clinicId,
+        direction: "outbound",
+        sender: "agent",
+        content: errorText,
+      });
+
+      return {
+        response: errorText,
+        toolCalls: allToolCalls,
+        terminated: true,
+      };
     }
 
     // Separate text and tool_use blocks
@@ -203,7 +241,7 @@ export async function runAgentLoop(params: {
       finalText = textBlocks.map((b: any) => ("text" in b ? (b as { text: string }).text : "")).join("");
 
       // Save agent message to DB
-      await saveMessage(supabaseAdmin, {
+      await safeSaveMessage(supabaseAdmin, {
         conversationId,
         clinicId,
         direction: "outbound",
@@ -229,7 +267,7 @@ export async function runAgentLoop(params: {
 
       const toolUseSummary = toolUseData.map((tu) => `[tool_use: ${tu.name}]`).join(", ");
 
-      await saveMessage(supabaseAdmin, {
+      await safeSaveMessage(supabaseAdmin, {
         conversationId,
         clinicId,
         direction: "outbound",
@@ -282,7 +320,7 @@ export async function runAgentLoop(params: {
         });
 
         // Save each tool result as a system message
-        await saveMessage(supabaseAdmin, {
+        await safeSaveMessage(supabaseAdmin, {
           conversationId,
           clinicId,
           direction: "inbound",
@@ -299,22 +337,46 @@ export async function runAgentLoop(params: {
         });
 
         // If escalation tool was invoked, terminate the loop
-        if (tu.name === "escalate_to_human" && toolResult.success) {
-          const escalationReason =
-            (tu.input as Record<string, unknown> | undefined)?.reason as string | undefined ?? "other";
-          const escalationMessage =
-            ESCALATION_MESSAGES[escalationReason] ?? "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
+        if (tu.name === "escalate_to_human") {
+          if (toolResult.success) {
+            const escalationReason =
+              (tu.input as Record<string, unknown> | undefined)?.reason as string | undefined ?? "other";
+            const escalationMessage =
+              ESCALATION_MESSAGES[escalationReason] ?? "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
 
-          await saveMessage(supabaseAdmin, {
+            await safeSaveMessage(supabaseAdmin, {
+              conversationId,
+              clinicId,
+              direction: "outbound",
+              sender: "agent",
+              content: escalationMessage,
+            });
+
+            return {
+              response: escalationMessage,
+              toolCalls: allToolCalls,
+              terminated: true,
+            };
+          }
+
+          // escalate_to_human failed — send emergency message directly
+          console.error(
+            `[loop] escalate_to_human tool failed:`,
+            toolResult.error ?? "unknown error",
+          );
+
+          const failMessage = "Estoy teniendo problemas para conectar con el equipo en este momento. Por favor, llama al hospital directamente o acude sin cita si es urgente.";
+
+          await safeSaveMessage(supabaseAdmin, {
             conversationId,
             clinicId,
             direction: "outbound",
             sender: "agent",
-            content: escalationMessage,
+            content: failMessage,
           });
 
           return {
-            response: escalationMessage,
+            response: failMessage,
             toolCalls: allToolCalls,
             terminated: true,
           };
@@ -346,9 +408,9 @@ export async function runAgentLoop(params: {
     `[loop] Fallback triggered — iterations exhausted or unexpected stop_reason. Tool calls made: ${allToolCalls.length}`,
   );
   const fallbackText =
-    "Lo siento, estoy teniendo dificultades para procesar tu solicitud. ¿Podrías intentarlo de nuevo?";
+    "Disculpa las molestias. No he podido completar tu solicitud en este momento. El equipo del hospital la revisará y te responderá pronto. Si es urgente, por favor llama al hospital directamente.";
 
-  await saveMessage(supabaseAdmin, {
+  await safeSaveMessage(supabaseAdmin, {
     conversationId,
     clinicId,
     direction: "outbound",
@@ -361,4 +423,28 @@ export async function runAgentLoop(params: {
     toolCalls: allToolCalls,
     terminated: false,
   };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[loop] Unhandled error in runAgentLoop:", message, err);
+
+    const emergencyText = "Disculpa, estamos experimentando un problema técnico. Si tu consulta es urgente, por favor llama al hospital. Si no, alguien del equipo te responderá en cuanto se resuelva.";
+
+    try {
+      await saveMessage(supabaseAdmin, {
+        conversationId,
+        clinicId,
+        direction: "outbound",
+        sender: "agent",
+        content: emergencyText,
+      });
+    } catch (saveErr) {
+      console.error("[loop] Emergency message save failed:", saveErr);
+    }
+
+    return {
+      response: emergencyText,
+      toolCalls: [],
+      terminated: false,
+    };
+  }
 }
