@@ -1,6 +1,6 @@
 # Operación de Conversaciones
 
-Estado: implementación técnica compilada; activación de proveedores y E2E reales pendientes.
+Estado: implementación técnica compilada; webhook directo de Meta verificado y suscrito. Número de prueba, canal activo y E2E real pendientes.
 
 ## Puntos de entrada
 

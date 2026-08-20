@@ -69,7 +69,7 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 
 **Último commit:** 29–30 de julio de 2026 (`fix(agent): end-to-end error handling`). El proyecto lleva ~3 semanas sin actividad en el repo.
 
-**Dónde está el producto:** el agente funciona end-to-end **dentro de un chat de pruebas del panel**, contra la base de datos y el Google Calendar reales del entorno de test. Crea clientes, mascotas y citas de verdad. Lo que todavía **no** existe es el canal por el que un cliente final le habla: WhatsApp no está conectado.
+**Dónde está el producto:** el agente funciona end-to-end **dentro de un chat de pruebas del panel**, contra la base de datos y el Google Calendar reales del entorno de test. Crea clientes, mascotas y citas de verdad. El transporte directo de Meta ya tiene app, secretos, callback verificado y suscripción `messages`; falta que Meta asigne el número de prueba y configurar ese canal en Recepia para completar el E2E con un cliente final.
 
 **Panel desplegado:** https://recepia-panel.vercel.app (login por magic link de Supabase Auth).
 
@@ -81,7 +81,7 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 |---|---|---|
 | **E1 — Infra y deploy** | ✅ Hecho | Monorepo pnpm + Turborepo, Biome, Supabase (proyecto `vsnrlpfsgwwdmiyndwnl`) linkado, panel en Vercel, tipos generados con `pnpm db:gen-types`. |
 | **E2 — Schema y datos** | ✅ Hecho | 12 migraciones aplicadas: schema inicial, settings y equipo, RLS, integración Google Calendar, seed real Dr. Patiño, wrappers de Vault, schema de citas, `service_vet_assignments` (N:M servicio↔veterinario). |
-| **E3 — Pipeline WhatsApp** | 🟡 **Meta directo construido, E2E pendiente** | Parser común para 360dialog/Meta, webhook Meta con desafío y firma HMAC, inbound/outbound, idempotencia, auditoría, Vault y envío manual construidos. Faltan configurar la app/número de prueba, ventana de 24 h, plantillas, medios y E2E. |
+| **E3 — Pipeline WhatsApp** | 🟡 **Meta directo conectado, E2E pendiente** | App Meta Recepia creada, secretos sensibles activos en Vercel, callback verificado y `messages` suscrito. El GET de verificación y un POST firmado de muestra respondieron 200. Meta todavía no asigna el número gratuito de prueba; faltan canal/token de prueba, ventana de 24 h, plantillas, medios y E2E. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
 | **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento de calendarios, `vet_calendars`, CRUD de eventos. |
 | **E6 — Resúmenes y clasificación** | ❌ No empezado | Sin Edge Function de resumen, sin integración DeepSeek, sin dataset golden formalizado. |
@@ -171,8 +171,9 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 
 **Pre-requisitos de demostración:**
 
-- [ ] App de desarrollo de Meta creada con el producto WhatsApp y número de prueba.
-- [ ] Webhook de prueba suscrito al campo `messages`.
+- [x] App de desarrollo de Meta `Recepia` creada con el producto WhatsApp y vinculada al porfolio Recepia.
+- [ ] Número gratuito de prueba asignado por Meta. La solicitud vuelve al estado inicial sin número ni error visible (21-08-2026).
+- [x] Webhook verificado y suscrito al campo `messages`; prueba de Meta recibida con GET 200 y POST 200.
 - [ ] Cuenta 360dialog y número real: aplazados hasta preparar producción, sin método de pago durante la demostración.
 
 **Tareas:**

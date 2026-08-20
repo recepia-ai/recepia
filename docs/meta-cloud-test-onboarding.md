@@ -2,6 +2,19 @@
 
 > Checklist operativo iniciado el 21 de agosto de 2026. Solo autoriza el número de prueba proporcionado por Meta. No autoriza conectar el número real del hospital ni asumir gastos.
 
+## Estado verificado — 21 de agosto de 2026
+
+- Porfolio empresarial Meta: `Recepia` (`business_id=4548379128777722`), sin verificar durante la demostración.
+- Aplicación Meta: `Recepia` (`app_id=1529572905588227`), en modo desarrollo.
+- Condiciones de WhatsApp Business y Cloud API aceptadas con autorización explícita de Marc.
+- `META_WHATSAPP_VERIFY_TOKEN` y `META_WHATSAPP_APP_SECRET` guardados como variables sensibles de Production y Preview en Vercel. El App Secret se rotó antes de guardar el valor definitivo.
+- Despliegue de producción regenerado y en estado Ready.
+- Callback verificado por Meta: GET 200.
+- Campo `messages` suscrito en la versión v26.0.
+- Webhook de muestra firmado recibido: POST 200. El procesador rechazó correctamente asociarlo a una clínica porque el ejemplo usa el número ficticio `16505551111` y no existe un canal `meta_cloud` para él.
+- Bloqueo actual: el botón **Solicitar número de prueba** termina sin asignar número y vuelve a ofrecer la solicitud, sin error visible. Se ha reproducido antes y después de configurar el webhook.
+- No se ha registrado el número real del hospital ni se ha añadido método de pago.
+
 ## Objetivo
 
 Demostrar a Samuel el flujo completo de Recepia por WhatsApp sin contratar 360dialog y sin modificar la cuenta de WhatsApp Business del Hospital Veterinario Dr. Patiño.
