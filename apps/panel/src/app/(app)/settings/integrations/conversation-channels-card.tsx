@@ -2,7 +2,7 @@
 
 import { Loader2, MessageCircle, PhoneCall } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { type ChannelSettings, savePhoneChannel, saveWhatsAppChannel } from "./channel-actions";
@@ -13,6 +13,9 @@ const inputClass =
 export function ConversationChannelsCard({ settings }: { settings: ChannelSettings }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
+  const [whatsappProvider, setWhatsAppProvider] = useState<"meta_cloud" | "360dialog">(
+    settings.whatsapp?.provider ?? "meta_cloud",
+  );
 
   const submit =
     (action: (data: FormData) => Promise<{ success?: boolean; error?: string }>) =>
@@ -38,13 +41,24 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
             <MessageCircle className="size-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-stone-900">WhatsApp · 360dialog</h3>
+            <h3 className="text-sm font-semibold text-stone-900">WhatsApp</h3>
             <p className="mt-0.5 text-xs text-stone-500">
-              La clave se cifra en Vault y nunca vuelve al navegador.
+              Meta directo para pruebas; 360dialog queda preparado para producción.
             </p>
           </div>
         </div>
         <div className="mt-4 grid gap-3">
+          <select
+            className={inputClass}
+            name="provider"
+            value={whatsappProvider}
+            onChange={(event) =>
+              setWhatsAppProvider(event.target.value as "meta_cloud" | "360dialog")
+            }
+          >
+            <option value="meta_cloud">Meta Cloud API directa</option>
+            <option value="360dialog">360dialog (producción futura)</option>
+          </select>
           <input
             className={inputClass}
             name="identifier"
@@ -65,17 +79,38 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
             placeholder="WABA ID (opcional)"
             defaultValue={settings.whatsapp?.wabaId}
           />
+          {whatsappProvider === "meta_cloud" && (
+            <input
+              className={inputClass}
+              name="graph_api_version"
+              placeholder="Versión Graph API mostrada por Meta (ej. v23.0)"
+              defaultValue={settings.whatsapp?.graphApiVersion}
+              required
+            />
+          )}
           <input
             className={inputClass}
             name="api_key"
             type="password"
             autoComplete="new-password"
             placeholder={
-              settings.whatsapp?.hasSecret ? "Nueva API key (sustituirá la actual)" : "D360 API key"
+              settings.whatsapp?.hasSecret
+                ? whatsappProvider === "meta_cloud"
+                  ? "Nuevo access token (sustituirá el actual)"
+                  : "Nueva D360 API key (sustituirá la actual)"
+                : whatsappProvider === "meta_cloud"
+                  ? "Access token temporal de Meta"
+                  : "D360 API key"
             }
             required
           />
         </div>
+        {whatsappProvider === "meta_cloud" && (
+          <p className="mt-3 text-xs leading-5 text-amber-700">
+            Usa exclusivamente el número de prueba de Meta. No introduzcas aquí el número real del
+            hospital durante la demostración.
+          </p>
+        )}
         <Button className="mt-4" size="sm" disabled={busy}>
           {busy && <Loader2 className="size-3.5 animate-spin" />}Guardar WhatsApp
         </Button>

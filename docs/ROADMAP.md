@@ -1,6 +1,6 @@
 # RECEPIA — ROADMAP.md
 
-> **Hoja de ruta viva.** Versión 0.3 — 20 de agosto de 2026.
+> **Hoja de ruta viva.** Versión 0.4 — 21 de agosto de 2026.
 > Sustituye a la v0.1 (plan de 6 semanas naturales, junio 2026), que quedó obsoleta: el trabajo real se organizó por **épicas y fases**, no por semanas de calendario.
 >
 > **Para cualquier IA que empiece a trabajar en Recepia: lee este documento entero antes de tocar nada.** Después, según la tarea, lee `PROJECT.md` (visión y decisiones), `AGENT.md` (diseño del agente y config del Dr. Patiño), `SCHEMA.md` (modelo de datos), `SETUP.md` (entorno) y `LEGAL.md`.
@@ -45,7 +45,7 @@ El objetivo operativo es una única zona de conversaciones del hospital con vist
 
 1. **C1 — Centro de Conversaciones:** histórico, búsqueda, filtros, tiempo real, toma de control auditada y timeline preparado para texto, audio y llamadas.
 2. **C2 — Núcleo omnicanal:** contrato independiente del proveedor y extracción de la lógica compartida a `packages/core`.
-3. **C3 — WhatsApp real:** onboarding 360dialog/Meta, webhook inbound, outbound, adjuntos, reintentos e idempotencia.
+3. **C3 — WhatsApp:** demostración con Meta Cloud API y número de prueba; después onboarding 360dialog/Meta para el número real, adjuntos, reintentos e idempotencia.
 4. **C4 — Telefonía real:** Vapi + Twilio como referencia inicial, transcripción, grabación, transferencia en caliente a una persona real y registro en la misma zona de conversaciones. El agente carga únicamente el contexto de la clínica y del cliente identificado para responder sobre citas, operaciones, cirugías, tareas pendientes y consultas sencillas. Los casos reservados a veterinario o secretaría disparan transferencia determinística. Proveedores y gasto se confirman antes de contratar.
 5. **C5 — Agente operativo:** conectar el agente común con citas, clientes, mascotas, tareas del hospital, cierre, clasificación y resúmenes.
 
@@ -58,7 +58,7 @@ El objetivo operativo es una única zona de conversaciones del hospital con vist
 - Configuración del Dr. Patiño aún hardcodeada en partes del agente.
 - Cierre, clasificación y resúmenes automáticos pendientes.
 - Guardrails determinísticos, tests, observabilidad y cumplimiento legal pendientes antes de tráfico real.
-- Onboarding de 360dialog/Meta preparado pero no iniciado.
+- Onboarding de 360dialog aplazado hasta producción. Para la demostración se usa Meta Cloud API directa con número de prueba; el número real permanece intacto.
 - SMTP de Auth: Resend activo en producción con `recepia.iatope.com` verificado, clave restringida al dominio, plantillas alojadas y límite de 30 emails/hora. Prueba real superada con cinco entregas; las dos claves temporales sin uso ya están revocadas.
 
 Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan el orden activo si contradicen C1–C5.
@@ -81,7 +81,7 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 |---|---|---|
 | **E1 — Infra y deploy** | ✅ Hecho | Monorepo pnpm + Turborepo, Biome, Supabase (proyecto `vsnrlpfsgwwdmiyndwnl`) linkado, panel en Vercel, tipos generados con `pnpm db:gen-types`. |
 | **E2 — Schema y datos** | ✅ Hecho | 12 migraciones aplicadas: schema inicial, settings y equipo, RLS, integración Google Calendar, seed real Dr. Patiño, wrappers de Vault, schema de citas, `service_vet_assignments` (N:M servicio↔veterinario). |
-| **E3 — Pipeline WhatsApp** | 🟡 **Adaptador construido** | Webhook autenticado, inbound/outbound, idempotencia, auditoría, Vault y envío manual construidos. Faltan alta/credenciales reales, ventana de 24 h, plantillas, medios y E2E. |
+| **E3 — Pipeline WhatsApp** | 🟡 **Meta directo construido, E2E pendiente** | Parser común para 360dialog/Meta, webhook Meta con desafío y firma HMAC, inbound/outbound, idempotencia, auditoría, Vault y envío manual construidos. Faltan configurar la app/número de prueba, ventana de 24 h, plantillas, medios y E2E. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
 | **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento de calendarios, `vet_calendars`, CRUD de eventos. |
 | **E6 — Resúmenes y clasificación** | ❌ No empezado | Sin Edge Function de resumen, sin integración DeepSeek, sin dataset golden formalizado. |
@@ -169,11 +169,11 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 
 **Objetivo:** que un mensaje real de WhatsApp entre, lo procese el agente, y la respuesta salga.
 
-**Pre-requisitos, con plazos externos que hay que arrancar YA (tardan días, no horas):**
+**Pre-requisitos de demostración:**
 
-- [ ] Cuenta 360dialog creada y verificada.
-- [ ] Número de WhatsApp Business del Dr. Patiño solicitado (o número de prueba de 360dialog).
-- [ ] Display name aprobado por Meta y plantilla de bienvenida aprobada.
+- [ ] App de desarrollo de Meta creada con el producto WhatsApp y número de prueba.
+- [ ] Webhook de prueba suscrito al campo `messages`.
+- [ ] Cuenta 360dialog y número real: aplazados hasta preparar producción, sin método de pago durante la demostración.
 
 **Tareas:**
 
@@ -181,6 +181,8 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 - [ ] Outbound 360dialog: envío y persistencia con identificador real construidos; faltan reintentos persistentes y cola de fallos.
 - [ ] Poblar `clinic_channels` con el número del Dr. Patiño y `provider='360dialog'`.
 - [x] Conectar el bucle del agente común al webhook.
+- [x] Añadir Meta Cloud API directa como segundo transporte, con validación de firma y secretos separados.
+- [ ] E2E con número de prueba de Meta y toma de control manual.
 - [ ] Gestión de la ventana de 24 h de WhatsApp y de plantillas cuando se excede.
 
 **Hecho cuando:** Marc escribe un WhatsApp al número, el agente le da cita, la cita aparece en Google Calendar y la conversación aparece en el panel.
@@ -323,7 +325,7 @@ No se planifica en detalle nada de esto hasta que el piloto lleve ≥ 2 semanas 
 |---|---|---|---|
 | 1 | Punto de entrada del agente: API route del panel vs Edge Function | **Abierta — bloqueante** | Fase H |
 | 2 | ¿Se extrae la lógica a `packages/core`? | Abierta | Fase H |
-| 3 | BSP de WhatsApp: 360dialog vs Twilio | Abierta | Antes de la Fase I |
+| 3 | Transporte WhatsApp | Parcialmente cerrada 21-08-2026: Meta directo para pruebas; 360dialog previsto para producción sin contratar todavía | Antes del número real |
 | 4 | Estrategia de cierre de conversación por inactividad (timeout) | Abierta | Fase G |
 | 5 | Gestión de secretos: Doppler vs variables de entorno | Diferida | Antes de comercializar |
 | 6 | Dominio comercial definitivo (`recepia.com` / `.es` / `.ai`) + marca OEPM | Abierta | Antes de la Fase K |
@@ -339,3 +341,4 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-06-10 | 0.1 | Marc + Claude | Documento inicial. Plan de 6 semanas. Piloto Dr. Patiño confirmado. |
 | 2026-08-20 | 0.2 | Marc + Claude | Reescritura completa. Se sustituye el plan por semanas naturales por fases F–K. Se añade briefing de contexto para IAs (§0), estado real por épicas (§1), desviaciones respecto al diseño (§2), deuda técnica (§5) y reglas de trabajo para IAs (§7). |
 | 2026-08-20 | 0.3 | Marc + Codex | Reinicio operativo con Conversaciones como vertical prioritario. Se añade la ruta C1–C5 y se conserva F–K como inventario heredado. |
+| 2026-08-21 | 0.4 | Marc + Codex | Meta Cloud API directa pasa a ser el transporte de demostración con número de prueba; 360dialog se aplaza hasta producción. Se refleja el adaptador común y el E2E pendiente. |

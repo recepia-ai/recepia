@@ -8,6 +8,7 @@ Estado: implementación técnica compilada; activación de proveedores y E2E rea
 - Mensajes web: `POST /api/channels/web/message`.
 - Sincronización de respuestas humanas web: `GET /api/channels/web/messages`.
 - Webhook 360dialog: `POST /api/channels/whatsapp/360dialog`.
+- Webhook Meta Cloud API: `GET|POST /api/channels/whatsapp/meta`.
 - Server URL de Vapi: `POST /api/channels/phone/vapi`.
 
 Los tres canales escriben en las mismas tablas `conversations`, `messages` y
@@ -24,6 +25,10 @@ Los secretos de autenticación de webhooks son variables del despliegue:
 
 - `WHATSAPP_WEBHOOK_SECRET`: configurar en 360dialog como header
   `X-Recepia-Webhook-Secret`, o como `Authorization: Bearer <secreto>`.
+- `META_WHATSAPP_VERIFY_TOKEN`: token aleatorio del desafío de verificación del
+  webhook directo de Meta.
+- `META_WHATSAPP_APP_SECRET`: App Secret usado para validar la firma
+  `X-Hub-Signature-256` antes de procesar eventos de Meta.
 - `VAPI_WEBHOOK_SECRET`: configurar como credencial/header `X-Vapi-Secret`.
 - `WEB_CHAT_ALLOWED_ORIGINS`: orígenes adicionales separados por comas. El
   propio dominio del panel siempre está permitido.
@@ -42,6 +47,17 @@ endpoint acusa el evento inmediatamente y procesa la IA en segundo plano. Los
 identificadores del proveedor hacen idempotentes los reintentos. Los audios y
 adjuntos se registran y pasan a revisión humana hasta activar transcripción y
 descarga de medios.
+
+## Configuración directa de Meta para demostraciones
+
+La integración directa se limita al número de prueba de Meta. En **Ajustes →
+Integraciones → WhatsApp**, seleccionar `Meta Cloud API directa` e introducir el
+número de prueba, Phone Number ID, WABA ID opcional, versión Graph API mostrada
+por Meta y el access token temporal. El token queda cifrado en Vault.
+
+Callback: `https://recepia-panel.vercel.app/api/channels/whatsapp/meta`. El
+checklist completo vive en `meta-cloud-test-onboarding.md`. No conectar el número
+real del hospital en esta fase.
 
 ## Configuración de Vapi
 

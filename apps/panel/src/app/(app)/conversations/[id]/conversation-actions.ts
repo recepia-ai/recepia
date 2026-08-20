@@ -1,10 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import {
-  resolveClinic360DialogChannel,
-  send360DialogText,
-} from "@/lib/channels/whatsapp-360dialog";
+import { resolveClinicWhatsAppChannel, sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -251,14 +248,14 @@ export async function sendMessage(
     }
     try {
       const supabaseAdmin = createAdminClient();
-      const channel = await resolveClinic360DialogChannel(supabaseAdmin, clinicUser.clinic_id);
-      const sent = await send360DialogText(
+      const channel = await resolveClinicWhatsAppChannel(supabaseAdmin, clinicUser.clinic_id);
+      const sent = await sendWhatsAppText(
         supabaseAdmin,
         channel,
         convGuard.channel_thread_id,
         content,
       );
-      providerMessageId = `360dialog:${sent.externalMessageId}`;
+      providerMessageId = `${channel.provider}:${sent.externalMessageId}`;
       providerMetadata = { delivery_status: "accepted", accepted_at: sent.acceptedAt };
     } catch (error) {
       console.error("[sendMessage] WhatsApp delivery failed", error);

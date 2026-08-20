@@ -134,7 +134,7 @@ Decisiones cerradas. No reabrir sin justificación de cambio importante.
 
 | Capa | Tecnología | Justificación |
 |---|---|---|
-| WhatsApp Business | 360dialog (BSP oficial de Meta) | Más económico que Twilio para España, contacto directo con Meta. Alternativa: Twilio si se prefiere consolidar proveedores. |
+| WhatsApp Business | Meta Cloud API directa en pruebas; 360dialog previsto para producción | Meta permite demostrar el flujo con un número de prueba sin tocar el número real. El contrato omnicanal conserva 360dialog como transporte futuro. |
 
 ### 5.5 Automatización e integraciones
 
@@ -359,7 +359,7 @@ Listado vivo. Se cierra cada decisión con fecha y razonamiento al resolverla.
 1. **Confirmación del piloto Dr. Patiño** — pendiente reunión esta semana.
 2. **Dominio y nombre comercial** — verificar disponibilidad `recepia.com`, `.es`, `.ai` + marca OEPM.
 3. **Hosting del panel** — Vercel vs Coolify en Hetzner. Decidir en semana 1.
-4. **BSP de WhatsApp** — 360dialog vs Twilio. Decidir en semana 2 según pricing actual y cobertura España.
+4. **BSP de WhatsApp** — cerrada parcialmente el 21-08-2026: Meta Cloud API directa y número de prueba para la demostración; 360dialog queda previsto para producción, pendiente de contratación y revisión final de precio.
 5. **LLM principal del agente** — Claude Sonnet vs GPT-4o. Probar ambos con prompts de Dr. Patiño en semana 3.
 6. **Estructura monorepo** — Turborepo, pnpm workspaces simple, o Nx. Decidir en semana 1.
 7. **Estrategia de testing del agente** — datasets de conversaciones reales del Dr. Patiño + evals automatizadas. Definir en semana 4.

@@ -2,6 +2,24 @@
 
 > Checklist operativo iniciado el 20 de agosto de 2026. No activa servicios ni autoriza gasto.
 
+## Estado operativo actual — 21 de agosto de 2026
+
+- El alta de 360dialog queda aplazada hasta preparar el lanzamiento a producción.
+- No se añadirá un método de pago ni se contratará un canal durante las pruebas y demostraciones.
+- La integración existente con 360dialog se conserva para retomarla en el futuro; no se descarta ni se elimina código.
+- Para la demostración a Samuel se usará la API oficial directa de Meta con su número de prueba. Evolution API + Baileys/WhatsApp Web queda descartado como primera opción por ser un transporte no oficial y añadir infraestructura innecesaria.
+- El número real del hospital no se conectará a ningún transporte temporal sin una autorización específica de Marc.
+
+## Datos empresariales confirmados para el alta futura
+
+- **Razón social:** VAT. PATINO, S.L.
+- **CIF:** B55708507
+- **Dirección:** AV. Cardenal Vidal i Barraquer, 34, bajos, 43005 Tarragona, España.
+- **Correo operativo previsto:** hospitalpatino@gmail.com, siempre que la clínica confirme que controla la cuenta.
+- **Número de WhatsApp Business:** +34 605 413 875.
+
+Estos datos no son credenciales. Las contraseñas, códigos OTP, claves API y datos de pago no deben almacenarse en este documento ni en el repositorio.
+
 ## Objetivo
 
 Conectar un número de WhatsApp Business del Hospital Veterinario Dr. Patiño a Recepia, primero en pruebas y después con tráfico real, manteniendo la propiedad de los activos en manos de la clínica.
@@ -77,6 +95,8 @@ La contratación y cualquier cargo requieren aprobación expresa de Marc.
 2. Alta estándar frente a Coexistence.
 3. Cuenta directa de un canal para el piloto frente a cuenta Partner al escalar Recepia.
 4. Momento exacto del cambio al número real.
+
+La elección del transporte de pruebas quedó cerrada el 21 de agosto de 2026: Meta WhatsApp Cloud API directa con número de prueba. Ver `meta-cloud-test-onboarding.md`.
 
 ## Fuentes oficiales consultadas
 

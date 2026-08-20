@@ -9,12 +9,24 @@ const e164 = z
   .string()
   .trim()
   .regex(/^\+[1-9][0-9]{6,14}$/, "Usa formato +34…");
-const whatsappSchema = z.object({
-  identifier: e164,
-  phone_number_id: z.string().trim().min(1),
-  waba_id: z.string().trim().optional(),
-  api_key: z.string().trim().min(8),
-});
+const whatsappSchema = z
+  .object({
+    provider: z.enum(["meta_cloud", "360dialog"]),
+    identifier: e164,
+    phone_number_id: z.string().trim().min(1),
+    waba_id: z.string().trim().optional(),
+    graph_api_version: z.string().trim().optional(),
+    api_key: z.string().trim().min(8),
+  })
+  .superRefine((value, context) => {
+    if (value.provider === "meta_cloud" && !/^v\d+\.\d+$/.test(value.graph_api_version ?? "")) {
+      context.addIssue({
+        code: "custom",
+        path: ["graph_api_version"],
+        message: "Indica la versión que muestra Meta, por ejemplo v23.0",
+      });
+    }
+  });
 const phoneSchema = z.object({
   identifier: e164,
   vapi_phone_number_id: z.string().trim().min(1),
@@ -25,9 +37,11 @@ const phoneSchema = z.object({
 
 export type ChannelSettings = {
   whatsapp?: {
+    provider: "meta_cloud" | "360dialog";
     identifier: string;
     phoneNumberId?: string;
     wabaId?: string;
+    graphApiVersion?: string;
     status: string;
     hasSecret: boolean;
   };
@@ -50,7 +64,7 @@ async function adminClinic() {
     .select("clinic_id, role")
     .eq("user_id", auth.user.id)
     .maybeSingle();
-  if (!data || data.role !== "admin") {
+  if (data?.role !== "admin") {
     return { error: "Solo el administrador puede configurar canales" as const };
   }
   return { clinicId: data.clinic_id };
@@ -74,7 +88,9 @@ async function writeVaultSecret(
   if (currentId) {
     const { error } = await admin.rpc("vault_update_secret", {
       p_id: currentId,
-      p_secret: JSON.stringify({ api_key: apiKey }),
+      p_secret: JSON.stringify(
+        provider === "meta_cloud" ? { access_token: apiKey } : { api_key: apiKey },
+      ),
       p_name: name,
       p_description: description,
     });
@@ -82,7 +98,9 @@ async function writeVaultSecret(
     return currentId;
   }
   const { data, error } = await admin.rpc("vault_create_secret", {
-    p_secret: JSON.stringify({ api_key: apiKey }),
+    p_secret: JSON.stringify(
+      provider === "meta_cloud" ? { access_token: apiKey } : { api_key: apiKey },
+    ),
     p_name: name,
     p_description: description,
   });
@@ -105,18 +123,19 @@ export async function getChannelSettings(): Promise<ChannelSettings> {
     .select("channel_type, identifier, provider, provider_config, status, vault_secret_id")
     .eq("clinic_id", clinicUser.clinic_id);
 
-  const whatsapp = channels?.find(
-    (item) => item.channel_type === "whatsapp" && item.provider === "360dialog",
-  );
+  const whatsappChannels = channels?.filter((item) => item.channel_type === "whatsapp") ?? [];
+  const whatsapp = whatsappChannels.find((item) => item.status === "active") ?? whatsappChannels[0];
   const phone = channels?.find((item) => item.channel_type === "phone" && item.provider === "vapi");
   const whatsappConfig = config(whatsapp?.provider_config);
   const phoneConfig = config(phone?.provider_config);
   return {
     whatsapp: whatsapp
       ? {
+          provider: whatsapp.provider === "meta_cloud" ? "meta_cloud" : "360dialog",
           identifier: whatsapp.identifier,
           phoneNumberId: whatsappConfig.phone_number_id as string | undefined,
           wabaId: whatsappConfig.waba_id as string | undefined,
+          graphApiVersion: whatsappConfig.graph_api_version as string | undefined,
           status: whatsapp.status,
           hasSecret: Boolean(whatsapp.vault_secret_id),
         }
@@ -140,17 +159,18 @@ export async function saveWhatsAppChannel(formData: FormData) {
   const parsed = whatsappSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   const admin = createAdminClient();
-  const { data: current } = await admin
+  const { data: existingChannels, error: existingError } = await admin
     .from("clinic_channels")
     .select("id, vault_secret_id")
     .eq("clinic_id", access.clinicId)
-    .eq("channel_type", "whatsapp")
-    .eq("provider", "360dialog")
-    .maybeSingle();
+    .eq("channel_type", "whatsapp");
+  if (existingError) return { error: "No se pudo leer la configuración de WhatsApp" };
+  const current =
+    existingChannels?.find((item) => item.id && item.vault_secret_id) ?? existingChannels?.[0];
   try {
     const vaultId = await writeVaultSecret(
       access.clinicId,
-      "360dialog",
+      parsed.data.provider,
       parsed.data.api_key,
       current?.vault_secret_id,
     );
@@ -158,18 +178,32 @@ export async function saveWhatsAppChannel(formData: FormData) {
       clinic_id: access.clinicId,
       channel_type: "whatsapp" as const,
       identifier: parsed.data.identifier,
-      provider: "360dialog",
+      provider: parsed.data.provider,
       provider_config: {
         phone_number_id: parsed.data.phone_number_id,
         waba_id: parsed.data.waba_id || null,
+        graph_api_version:
+          parsed.data.provider === "meta_cloud" ? parsed.data.graph_api_version : null,
       },
       vault_secret_id: vaultId,
       status: "active" as const,
     };
-    const { error } = current
-      ? await admin.from("clinic_channels").update(values).eq("id", current.id)
-      : await admin.from("clinic_channels").insert(values);
+    const { data: saved, error } = current
+      ? await admin
+          .from("clinic_channels")
+          .update(values)
+          .eq("id", current.id)
+          .select("id")
+          .single()
+      : await admin.from("clinic_channels").insert(values).select("id").single();
     if (error) throw error;
+    const { error: pauseError } = await admin
+      .from("clinic_channels")
+      .update({ status: "paused" })
+      .eq("clinic_id", access.clinicId)
+      .eq("channel_type", "whatsapp")
+      .neq("id", saved.id);
+    if (pauseError) throw pauseError;
     revalidatePath("/settings/integrations");
     return { success: true };
   } catch (error) {
