@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // lookup_client
@@ -27,8 +27,7 @@ type Output = {
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
   // 1. Look up client by phone
-  const { data: client, error: clientErr } = await (ctx.supabaseAdmin
-    .from("clients") as any)
+  const { data: client, error: clientErr } = await (ctx.supabaseAdmin.from("clients") as any)
     .select("id, name, phone")
     .eq("clinic_id", ctx.clinicId)
     .eq("phone", input.phone)
@@ -44,6 +43,18 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
   }
 
   const c = client as { id: string; name: string; phone: string };
+
+  if (ctx.conversationId) {
+    const { error: linkError } = await ctx.supabaseAdmin
+      .from("conversations")
+      .update({ client_id: c.id })
+      .eq("id", ctx.conversationId)
+      .eq("clinic_id", ctx.clinicId);
+
+    if (linkError) {
+      ctx.logger("[lookup_client] conversation link error", linkError);
+    }
+  }
 
   // 2. Load associated pets
   const { data: pets, error: petsErr } = await ctx.supabaseAdmin

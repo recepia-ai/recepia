@@ -51,11 +51,11 @@ Entra en el chat de prueba, inicia cada caso escribiendo el mensaje indicado com
 
 **Qué debe pasar:**
 - Toda la respuesta del agente debe estar en inglés
-- El disclaimer final ("You are speaking with the team...") debe estar en inglés
+- La presentación como agente de IA del equipo debe estar en inglés
 
 **Qué evaluar:**
 - [ ] ¿El inglés es natural y correcto?
-- [ ] ¿El disclaimer suena bien en inglés?
+- [ ] ¿La presentación como agente de IA suena bien en inglés?
 
 ---
 

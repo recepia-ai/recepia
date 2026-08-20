@@ -27,6 +27,9 @@ Recepia es capaz de:
 - Detectar urgencias y aplicar reglas de transferencia configuradas.
 - Transferir a humano cuando las reglas lo requieren.
 - Registrar todas las conversaciones con transcripción, grabación (en llamadas) y resumen estructurado automático.
+- Presentar WhatsApp, teléfono y web como vistas separadas dentro de una única zona de conversaciones.
+- Permitir que un usuario conectado tome el control manual de cualquier conversación escrita y pueda devolverla posteriormente al agente.
+- En llamadas, responder usando el contexto aislado de la clínica y del cliente identificado; transferir en caliente a una persona real cuando la petición requiera criterio veterinario, secretaría o supervisión humana.
 - Mantener ficha de cliente y mascota con historial unificado de todos los canales.
 - Permitir intervención manual del personal en cualquier conversación en vivo.
 
@@ -70,6 +73,7 @@ Reglas operativas específicas del Dr. Patiño (no atender exóticos, horarios d
 - Schema multi-tenant en Supabase con RLS por `clinic_id`.
 - Onboarding manual de la primera clínica con `clinic_config` cargado a mano.
 - Webhook receptor de WhatsApp Business (vía 360dialog).
+- Chat web público por clínica y webhook telefónico Vapi, todos sobre el mismo contrato omnicanal y la misma bandeja.
 - Motor de agente conversacional con tools: `crear_cita`, `modificar_cita`, `cancelar_cita`, `consultar_disponibilidad`, `transferir_a_humano`, `clasificar_categoria`, `finalizar_conversacion`.
 - Integración Google Calendar (OAuth por clínica) para agenda.
 - Panel web responsive con: lista de conversaciones, detalle con timeline, ficha cliente/mascota, vista de citas, intervención manual ("tomar control"), configuración de clínica.

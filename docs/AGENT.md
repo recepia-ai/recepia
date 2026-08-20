@@ -20,7 +20,7 @@ Estos siete principios condicionan cada decisión de diseño del agente. Si una 
 
 5. **Una conversación tiene una única intención principal.** Si el cliente cambia de tema a media conversación, el agente cierra la actual y empieza otra lógica internamente. Esto facilita la clasificación y el resumen.
 
-6. **Honestidad sobre la naturaleza del agente.** El agente nunca pretende ser humano. Si el cliente pregunta directamente, responde con claridad: "Soy Recepia, la asistente virtual del hospital". Esto es además requisito de transparencia del AI Act.
+6. **Transparencia sobre la naturaleza del agente.** En el primer mensaje se presenta claramente como agente de IA del equipo del hospital y, si el cliente pregunta, vuelve a confirmarlo sin ambigüedad. Nunca pretende ser humano. Esto es además requisito de transparencia del AI Act.
 
 7. **Conservador antes que listo.** Ante ambigüedad o baja confianza, el agente pregunta o transfiere. Nunca improvisa información médica, horarios no configurados ni precios.
 

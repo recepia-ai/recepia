@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { Send, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Send, Sparkles } from "lucide-react";
 import { sendMessage } from "./conversation-actions";
 
 // ---------------------------------------------------------------------------
@@ -14,17 +14,14 @@ type Props = {
   conversationId: string;
   clientName: string;
   status: string;
+  channel: "web" | "whatsapp" | "phone";
 };
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function MessageInputBar({
-  conversationId,
-  clientName,
-  status,
-}: Props) {
+export function MessageInputBar({ conversationId, clientName, status, channel }: Props) {
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -42,7 +39,7 @@ export function MessageInputBar({
 
   useEffect(() => {
     autoResize();
-  }, [content, autoResize]);
+  });
 
   const handleSend = async () => {
     const trimmed = content.trim();
@@ -74,18 +71,24 @@ export function MessageInputBar({
 
   const canSend = content.trim().length > 0 && isHumanHandling && !busy;
 
+  if (channel === "phone") {
+    return (
+      <div className="shrink-0 border-t border-stone-200 bg-sky-50 px-4 py-3">
+        <p className="text-center text-xs text-sky-700">
+          Las llamadas se atienden por voz. Cuando el agente necesite ayuda, transferirá la llamada
+          a una persona del equipo.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="shrink-0 border-t border-stone-200 bg-white px-4 py-3">
       {/* Active: agent is responding */}
       {isActive && (
         <div className="flex items-center gap-2 rounded-lg bg-stone-50 px-4 py-2.5">
-          <Sparkles
-            className="size-4 shrink-0 text-emerald-500"
-            strokeWidth={1.75}
-          />
-          <p className="text-sm text-stone-400">
-            El agente está respondiendo a {clientName}…
-          </p>
+          <Sparkles className="size-4 shrink-0 text-emerald-500" strokeWidth={1.75} />
+          <p className="text-sm text-stone-400">El agente está respondiendo a {clientName}…</p>
         </div>
       )}
 
@@ -109,10 +112,7 @@ export function MessageInputBar({
             onClick={handleSend}
             className="mb-0.5 shrink-0"
           >
-            <Send
-              className="size-4"
-              strokeWidth={1.75}
-            />
+            <Send className="size-4" strokeWidth={1.75} />
           </Button>
         </div>
       )}
@@ -120,7 +120,9 @@ export function MessageInputBar({
       {/* Resolved or abandoned: no input */}
       {!isActive && !isHumanHandling && (
         <p className="text-center text-xs text-stone-400">
-          Esta conversación ha finalizado.
+          {status === "awaiting_human"
+            ? "Esta conversación espera que una persona del equipo tome el control."
+            : "Esta conversación ha finalizado."}
         </p>
       )}
     </div>

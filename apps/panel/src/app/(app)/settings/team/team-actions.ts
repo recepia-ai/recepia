@@ -6,8 +6,6 @@ import { revalidatePath } from "next/cache";
 import {
   inviteMemberSchema,
   type InviteMemberState,
-  type AcceptInvitationState,
-  acceptInvitationSchema,
   updateMemberRoleSchema,
   type UpdateMemberRoleState,
   removeMemberSchema,
@@ -50,8 +48,7 @@ export async function inviteMember(
 
   const cu = clinicUser as ClinicUserRow | null;
   if (!cu) return { error: "Sin clínica asignada" };
-  if (cu.role !== "admin")
-    return { error: "Solo el administrador puede invitar miembros" };
+  if (cu.role !== "admin") return { error: "Solo el administrador puede invitar miembros" };
 
   // Parse
   const parsed = inviteMemberSchema.safeParse({
@@ -123,26 +120,15 @@ export async function inviteMember(
       process.env.NEXT_PUBLIC_VERCEL_URL ??
       "https://recepia-panel.vercel.app";
 
-    // Check if the invited_by is in the invitation row via a separate query
-    // because the `invited_by` column may not be in the return type
-    const { data: fullInvitation } = (await supabase
-      .from("clinic_invitations")
-      .select("token")
-      .eq("id", invitation.id)
-      .maybeSingle()) as { data: { token: string } | null };
+    // The invite email authenticates the user and lands them on /auth/callback,
+    // which exchanges the code for a session and drops them into the app. The
+    // app layout then auto-links their pending invitation by email — no manual
+    // accept step needed.
+    const redirectTo = `${baseUrl}/auth/callback?next=/`;
 
-    const token = fullInvitation?.token;
-    if (!token) {
-      console.error("[inviteMember] Could not retrieve token for invitation", invitation.id);
-      return { error: "Invitación creada pero no se pudo enviar el email. Contacta con soporte." };
-    }
-
-    const redirectTo = `${baseUrl}/auth/accept-invitation?token=${token}`;
-
-    const { error: inviteError } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo,
-      });
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
+    });
 
     if (inviteError) {
       console.error("[inviteMember] email error:", inviteError);
@@ -159,8 +145,7 @@ export async function inviteMember(
     return {
       success: true,
       invitation_id: invitation.id,
-      error:
-        "Invitación creada pero hubo un error al enviar el email. Intenta reenviar.",
+      error: "Invitación creada pero hubo un error al enviar el email. Intenta reenviar.",
     };
   }
 
@@ -172,9 +157,7 @@ export async function inviteMember(
 // resendInvitation — admin-only, re-sends invitation email
 // ---------------------------------------------------------------------------
 
-export async function resendInvitation(
-  invitationId: string,
-): Promise<InviteMemberState> {
+export async function resendInvitation(invitationId: string): Promise<InviteMemberState> {
   const supabase = await createClient();
 
   const {
@@ -194,14 +177,13 @@ export async function resendInvitation(
 
   const { data: invitation } = (await supabase
     .from("clinic_invitations")
-    .select("id, email, token, status")
+    .select("id, email, status")
     .eq("id", invitationId)
     .eq("clinic_id", cu.clinic_id)
-    .maybeSingle()) as { data: { id: string; email: string; token: string; status: string } | null };
+    .maybeSingle()) as { data: { id: string; email: string; status: string } | null };
 
   if (!invitation) return { error: "Invitación no encontrada" };
-  if (invitation.status !== "pending")
-    return { error: "Esta invitación ya no está pendiente" };
+  if (invitation.status !== "pending") return { error: "Esta invitación ya no está pendiente" };
 
   try {
     const supabaseAdmin = createAdminClient();
@@ -210,12 +192,14 @@ export async function resendInvitation(
       process.env.NEXT_PUBLIC_VERCEL_URL ??
       "https://recepia-panel.vercel.app";
 
-    const redirectTo = `${baseUrl}/auth/accept-invitation?token=${invitation.token}`;
+    const redirectTo = `${baseUrl}/auth/callback?next=/`;
 
-    const { error: inviteError } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(invitation.email, {
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      invitation.email,
+      {
         redirectTo,
-      });
+      },
+    );
 
     if (inviteError) {
       console.error("[resendInvitation] email error:", inviteError);
@@ -233,9 +217,7 @@ export async function resendInvitation(
 // revokeInvitation — admin-only, marks invitation as revoked
 // ---------------------------------------------------------------------------
 
-export async function revokeInvitation(
-  invitationId: string,
-): Promise<InviteMemberState> {
+export async function revokeInvitation(invitationId: string): Promise<InviteMemberState> {
   const supabase = await createClient();
 
   const {
@@ -272,116 +254,6 @@ export async function revokeInvitation(
   }
 
   revalidatePath("/settings/team");
-  return { success: true };
-}
-
-// ---------------------------------------------------------------------------
-// acceptInvitation — public, called from /auth/accept-invitation
-// ---------------------------------------------------------------------------
-
-export async function acceptInvitation(
-  _prevState: AcceptInvitationState,
-  formData: FormData,
-): Promise<AcceptInvitationState> {
-  const supabaseAdmin = createAdminClient();
-
-  const parsed = acceptInvitationSchema.safeParse({
-    token: formData.get("token"),
-    display_name: formData.get("display_name"),
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  }
-
-  const { token, display_name } = parsed.data;
-
-  // Find invitation by token (via admin client to bypass RLS)
-  const { data: invitation } = (await supabaseAdmin
-    .from("clinic_invitations")
-    .select("id, clinic_id, email, role, status, expires_at")
-    .eq("token", token)
-    .eq("status", "pending")
-    .maybeSingle()) as {
-    data: {
-      id: string;
-      clinic_id: string;
-      email: string;
-      role: string;
-      status: string;
-      expires_at: string;
-    } | null;
-  };
-
-  if (!invitation) {
-    return { error: "Invitación no encontrada o ya utilizada" };
-  }
-
-  if (new Date(invitation.expires_at) < new Date()) {
-    return { error: "Esta invitación ha expirado" };
-  }
-
-  // Find the user in auth.users by email
-  const {
-    data: { users },
-    error: userError,
-  } = await supabaseAdmin.auth.admin.listUsers();
-
-  if (userError) {
-    console.error("[acceptInvitation] listUsers error:", userError);
-    return { error: "Error al verificar tu cuenta. Intenta de nuevo." };
-  }
-
-  const authUser = users?.find(
-    (u) => u.email?.toLowerCase() === invitation.email.toLowerCase(),
-  );
-
-  if (!authUser) {
-    return {
-      error:
-        "No se encontró tu cuenta. Asegúrate de haber aceptado la invitación de Supabase y haber creado tu cuenta primero.",
-    };
-  }
-
-  // Check if already a member
-  const { data: existingMember } = await supabaseAdmin
-    .from("clinic_users")
-    .select("id")
-    .eq("clinic_id", invitation.clinic_id)
-    .eq("user_id", authUser.id)
-    .maybeSingle();
-
-  if (existingMember) {
-    // Already a member, just mark invitation as accepted
-    const query = supabaseAdmin.from("clinic_invitations") as any;
-    await query
-      .update({ status: "accepted", accepted_at: new Date().toISOString() })
-      .eq("id", invitation.id);
-    return { success: true };
-  }
-
-  // Create clinic_users row
-  const { error: insertError } = await supabaseAdmin
-    .from("clinic_users")
-    .insert({
-      clinic_id: invitation.clinic_id,
-      user_id: authUser.id,
-      role: invitation.role,
-      display_name,
-      email: invitation.email,
-    } as any);
-
-  if (insertError) {
-    console.error("[acceptInvitation] insert error:", insertError);
-    return { error: "Error al unirte a la clínica. Contacta con el administrador." };
-  }
-
-  // Mark invitation as accepted
-  const query = supabaseAdmin.from("clinic_invitations") as any;
-  await query
-    .update({ status: "accepted", accepted_at: new Date().toISOString() })
-    .eq("id", invitation.id);
-
   return { success: true };
 }
 
@@ -540,8 +412,7 @@ export async function removeMember(
   // Cannot remove yourself
   if (target.user_id === user.id) {
     return {
-      error:
-        "No puedes eliminarte a ti mismo desde aquí. Cierra sesión si quieres salir.",
+      error: "No puedes eliminarte a ti mismo desde aquí. Cierra sesión si quieres salir.",
     };
   }
 

@@ -21,23 +21,6 @@ export type InviteMemberState = {
   invitation_id?: string;
 };
 
-// Schema para aceptar invitación (página pública)
-export const acceptInvitationSchema = z.object({
-  token: z.string().min(10, "Token inválido"),
-  display_name: z
-    .string()
-    .trim()
-    .min(2, "Mínimo 2 caracteres")
-    .max(60, "Máximo 60 caracteres"),
-});
-
-export type AcceptInvitationValues = z.infer<typeof acceptInvitationSchema>;
-
-export type AcceptInvitationState = {
-  success?: boolean;
-  error?: string;
-};
-
 // Schema para cambiar rol de miembro
 export const updateMemberRoleSchema = z.object({
   member_id: uuidSchema,

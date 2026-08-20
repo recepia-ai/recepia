@@ -133,6 +133,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_created_by_user_id_fkey"
             columns: ["created_by_user_id"]
             isOneToOne: false
@@ -158,6 +165,181 @@ export type Database = {
             columns: ["vet_user_id"]
             isOneToOne: false
             referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_sessions: {
+        Row: {
+          answered_at: string | null
+          clinic_id: string
+          conversation_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          duration_seconds: number | null
+          ended_at: string | null
+          from_number: string | null
+          id: string
+          metadata: Json
+          provider: string
+          provider_call_id: string
+          recording_storage_path: string | null
+          started_at: string
+          status: string
+          to_number: string | null
+          transcript_status: string
+          updated_at: string
+        }
+        Insert: {
+          answered_at?: string | null
+          clinic_id: string
+          conversation_id: string
+          created_at?: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          metadata?: Json
+          provider: string
+          provider_call_id: string
+          recording_storage_path?: string | null
+          started_at?: string
+          status: string
+          to_number?: string | null
+          transcript_status?: string
+          updated_at?: string
+        }
+        Update: {
+          answered_at?: string | null
+          clinic_id?: string
+          conversation_id?: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["message_direction"]
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_call_id?: string
+          recording_storage_path?: string | null
+          started_at?: string
+          status?: string
+          to_number?: string | null
+          transcript_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_sessions_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_events: {
+        Row: {
+          channel: Database["public"]["Enums"]["channel_type"]
+          clinic_id: string
+          conversation_id: string | null
+          created_at: string
+          error_message: string | null
+          event_id: string
+          event_type: string
+          id: string
+          occurred_at: string
+          payload: Json
+          processed_at: string | null
+          provider: string
+          result: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["channel_type"]
+          clinic_id: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id: string
+          event_type: string
+          id?: string
+          occurred_at: string
+          payload?: Json
+          processed_at?: string | null
+          provider: string
+          result?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["channel_type"]
+          clinic_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          processed_at?: string | null
+          provider?: string
+          result?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_events_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_active_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
             referencedColumns: ["id"]
           },
         ]
@@ -223,6 +405,7 @@ export type Database = {
           provider_config: Json
           status: Database["public"]["Enums"]["channel_status"]
           updated_at: string
+          vault_secret_id: string | null
         }
         Insert: {
           channel_type: Database["public"]["Enums"]["channel_type"]
@@ -234,6 +417,7 @@ export type Database = {
           provider_config?: Json
           status?: Database["public"]["Enums"]["channel_status"]
           updated_at?: string
+          vault_secret_id?: string | null
         }
         Update: {
           channel_type?: Database["public"]["Enums"]["channel_type"]
@@ -245,6 +429,7 @@ export type Database = {
           provider_config?: Json
           status?: Database["public"]["Enums"]["channel_status"]
           updated_at?: string
+          vault_secret_id?: string | null
         }
         Relationships: [
           {
@@ -586,6 +771,13 @@ export type Database = {
             referencedRelation: "v_active_conversations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "conversation_summaries_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
         ]
       }
       conversations: {
@@ -596,6 +788,8 @@ export type Database = {
           channel_thread_id: string | null
           client_id: string | null
           clinic_id: string
+          controlled_at: string | null
+          controlled_by: string | null
           created_at: string
           deleted_at: string | null
           ended_at: string | null
@@ -614,6 +808,8 @@ export type Database = {
           channel_thread_id?: string | null
           client_id?: string | null
           clinic_id: string
+          controlled_at?: string | null
+          controlled_by?: string | null
           created_at?: string
           deleted_at?: string | null
           ended_at?: string | null
@@ -632,6 +828,8 @@ export type Database = {
           channel_thread_id?: string | null
           client_id?: string | null
           clinic_id?: string
+          controlled_at?: string | null
+          controlled_by?: string | null
           created_at?: string
           deleted_at?: string | null
           ended_at?: string | null
@@ -720,6 +918,13 @@ export type Database = {
             referencedRelation: "v_active_conversations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
         ]
       }
       messages: {
@@ -785,6 +990,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "v_active_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
             referencedColumns: ["id"]
           },
         ]
@@ -982,7 +1194,7 @@ export type Database = {
       tool_invocations: {
         Row: {
           clinic_id: string
-          conversation_id: string
+          conversation_id: string | null
           created_at: string
           duration_ms: number | null
           error_code: string | null
@@ -995,7 +1207,7 @@ export type Database = {
         }
         Insert: {
           clinic_id: string
-          conversation_id: string
+          conversation_id?: string | null
           created_at?: string
           duration_ms?: number | null
           error_code?: string | null
@@ -1008,7 +1220,7 @@ export type Database = {
         }
         Update: {
           clinic_id?: string
-          conversation_id?: string
+          conversation_id?: string | null
           created_at?: string
           duration_ms?: number | null
           error_code?: string | null
@@ -1039,6 +1251,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "v_active_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tool_invocations_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
             referencedColumns: ["id"]
           },
         ]
@@ -1142,6 +1361,35 @@ export type Database = {
           },
         ]
       }
+      web_chat_rate_limits: {
+        Row: {
+          bucket_key: string
+          clinic_id: string
+          request_count: number
+          window_start: string
+        }
+        Insert: {
+          bucket_key: string
+          clinic_id: string
+          request_count?: number
+          window_start: string
+        }
+        Update: {
+          bucket_key?: string
+          clinic_id?: string
+          request_count?: number
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_chat_rate_limits_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       v_active_conversations: {
@@ -1159,6 +1407,63 @@ export type Database = {
           ended_at: string | null
           id: string | null
           last_message_at: string | null
+          message_count: number | null
+          metadata: Json | null
+          pet_id: string | null
+          pet_name: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["conversation_status"] | null
+          updated_at: string | null
+          urgency_level: Database["public"]["Enums"]["urgency_level"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_conversations_inbox: {
+        Row: {
+          assigned_to: string | null
+          call_count: number | null
+          category: Database["public"]["Enums"]["conversation_category"] | null
+          channel: Database["public"]["Enums"]["channel_type"] | null
+          channel_thread_id: string | null
+          client_id: string | null
+          client_name: string | null
+          client_phone: string | null
+          clinic_id: string | null
+          controlled_at: string | null
+          controlled_by: string | null
+          created_at: string | null
+          deleted_at: string | null
+          ended_at: string | null
+          id: string | null
+          last_call_at: string | null
+          last_call_duration_seconds: number | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_sender:
+            | Database["public"]["Enums"]["message_sender"]
+            | null
           message_count: number | null
           metadata: Json | null
           pet_id: string | null
@@ -1249,6 +1554,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_created_by_user_id_fkey"
             columns: ["created_by_user_id"]
             isOneToOne: false
@@ -1280,6 +1592,21 @@ export type Database = {
       }
     }
     Functions: {
+      consume_web_chat_rate_limit: {
+        Args: {
+          p_bucket_key: string
+          p_clinic_id: string
+          p_limit: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      search_conversation_ids: {
+        Args: { p_clinic_id: string; p_limit?: number; p_query: string }
+        Returns: {
+          conversation_id: string
+        }[]
+      }
       user_clinic_ids: { Args: never; Returns: string[] }
       user_has_role_in_clinic: {
         Args: {

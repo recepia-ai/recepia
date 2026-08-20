@@ -1,7 +1,9 @@
 import { Suspense } from "react";
-import { getIntegrationStatus } from "./integration-actions";
-import { GoogleCalendarCard } from "./google-calendar-card";
 import { listGoogleCalendars, listVetsWithCalendars } from "./calendar-discovery-actions";
+import { getChannelSettings } from "./channel-actions";
+import { ConversationChannelsCard } from "./conversation-channels-card";
+import { GoogleCalendarCard } from "./google-calendar-card";
+import { getIntegrationStatus } from "./integration-actions";
 import { VetCalendarsSection } from "./vet-calendars-section";
 
 // ---------------------------------------------------------------------------
@@ -9,7 +11,10 @@ import { VetCalendarsSection } from "./vet-calendars-section";
 // ---------------------------------------------------------------------------
 
 async function IntegrationContent() {
-  const status = await getIntegrationStatus();
+  const [status, channelSettings] = await Promise.all([
+    getIntegrationStatus(),
+    getChannelSettings(),
+  ]);
 
   // If connected, also load calendar discovery data
   let calendarsData:
@@ -33,6 +38,7 @@ async function IntegrationContent() {
   return (
     <div className="space-y-5">
       <GoogleCalendarCard status={status} />
+      <ConversationChannelsCard settings={channelSettings} />
 
       {status.connected && calendarsData && vetsData && (
         <>

@@ -1,12 +1,12 @@
-import { getAnthropicClient } from "./anthropic-client";
-import { buildSystemPrompt } from "./system-prompt";
-import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
-import { getTool, getAnthropicTools } from "./tools/registry";
-import { invokeTool, buildToolContext } from "./tools/invoke-tool";
-import { saveMessage } from "./conversation-store";
-import type { MessageRecord } from "./conversation-store";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@recepia/db";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getAnthropicClient } from "./anthropic-client";
+import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
+import type { MessageRecord } from "./conversation-store";
+import { saveMessage } from "./conversation-store";
+import { buildSystemPrompt } from "./system-prompt";
+import { buildToolContext, invokeTool } from "./tools/invoke-tool";
+import { getAnthropicTools, getTool } from "./tools/registry";
 import type { ToolResult } from "./tools/types";
 
 // ---------------------------------------------------------------------------
@@ -134,13 +134,22 @@ function toAnthropicMessages(messages: MessageRecord[]): AnthropicMessageParam[]
  */
 async function safeSaveMessage(
   supabaseAdmin: SupabaseClient<Database>,
-  params: { conversationId: string; clinicId: string; direction: "inbound" | "outbound"; sender: "client" | "agent" | "human" | "system"; content: string | null; contentType?: string; metadata?: Record<string, unknown> },
+  params: {
+    conversationId: string;
+    clinicId: string;
+    direction: "inbound" | "outbound";
+    sender: "client" | "agent" | "human" | "system";
+    content: string | null;
+    contentType?: string;
+    metadata?: Record<string, unknown>;
+    providerMessageId?: string;
+  },
 ): Promise<void> {
   try {
     await saveMessage(supabaseAdmin, params);
   } catch (err) {
     console.error(
-      `[loop] saveMessage failed (non-fatal):`,
+      "[loop] saveMessage failed (non-fatal):",
       err instanceof Error ? err.message : err,
     );
   }
@@ -156,278 +165,295 @@ export async function runAgentLoop(params: {
   userMessage: string;
   previousMessages: MessageRecord[];
   clientPhone?: string;
+  inboundProviderMessageId?: string;
   supabaseAdmin: SupabaseClient<Database>;
 }): Promise<LoopResult> {
-  const { conversationId, clinicId, userMessage, previousMessages, clientPhone, supabaseAdmin } = params;
-
-  try {
-  const systemPrompt = buildSystemPrompt(clientPhone);
-  const anthropic = getAnthropicClient();
-  const tools = getAnthropicTools();
-
-  // Build the initial messages array for Anthropic
-  const anthropicMessages: AnthropicMessageParam[] = [
-    ...toAnthropicMessages(previousMessages),
-    { role: "user", content: userMessage },
-  ];
-
-  // Save the inbound user message to DB
-  await safeSaveMessage(supabaseAdmin, {
+  const {
     conversationId,
     clinicId,
-    direction: "inbound",
-    sender: "client",
-    content: userMessage,
-  });
+    userMessage,
+    previousMessages,
+    clientPhone,
+    inboundProviderMessageId,
+    supabaseAdmin,
+  } = params;
 
-  const allToolCalls: ToolCallRecord[] = [];
-  let finalText = "";
+  try {
+    const systemPrompt = buildSystemPrompt(clientPhone);
+    const anthropic = getAnthropicClient();
+    const tools = getAnthropicTools();
 
-  // ---- Main loop ----
-  for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let response: any;
-    try {
-      response = await anthropic.messages.create({
-        model: "claude-sonnet-5",
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: anthropicMessages as Array<{
-          role: "user" | "assistant";
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          content: any;
-        }>,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tools: tools as any,
-      });
-    } catch (apiErr) {
-      const statusCode = apiErr instanceof Error && "status" in apiErr
-        ? (apiErr as unknown as { status: number }).status
-        : undefined;
-      console.error(
-        `[loop] Anthropic API error at iteration ${iteration} (status=${statusCode}):`,
-        apiErr instanceof Error ? apiErr.message : apiErr,
-      );
+    // Build the initial messages array for Anthropic
+    const anthropicMessages: AnthropicMessageParam[] = [
+      ...toAnthropicMessages(previousMessages),
+      { role: "user", content: userMessage },
+    ];
 
-      const isOverloaded = statusCode === 429 || statusCode === 529;
-      const errorText = isOverloaded
-        ? "Estamos recibiendo muchas consultas. He tomado nota de tu mensaje y alguien del equipo te responderá en cuanto podamos."
-        : `Estamos teniendo un problema técnico. He tomado nota de tu mensaje y alguien del equipo te responderá en breve. Si es urgente, por favor llama al ${CLINIC_NAME}.`;
+    // Save the inbound user message to DB
+    await safeSaveMessage(supabaseAdmin, {
+      conversationId,
+      clinicId,
+      direction: "inbound",
+      sender: "client",
+      content: userMessage,
+      providerMessageId: inboundProviderMessageId,
+    });
 
-      await safeSaveMessage(supabaseAdmin, {
-        conversationId,
-        clinicId,
-        direction: "outbound",
-        sender: "agent",
-        content: errorText,
-      });
+    const allToolCalls: ToolCallRecord[] = [];
+    let finalText = "";
 
-      return {
-        response: errorText,
-        toolCalls: allToolCalls,
-        terminated: true,
-      };
-    }
-
-    // Separate text and tool_use blocks
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const textBlocks = response.content.filter((b: any) => b.type === "text");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const toolUseBlocks = response.content.filter((b: any) => b.type === "tool_use") as any[];
-
-    // ---- Case 1: Final text response ----
-    if (response.stop_reason === "end_turn") {
+    // ---- Main loop ----
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      finalText = textBlocks.map((b: any) => ("text" in b ? (b as { text: string }).text : "")).join("");
-
-      // Save agent message to DB
-      await safeSaveMessage(supabaseAdmin, {
-        conversationId,
-        clinicId,
-        direction: "outbound",
-        sender: "agent",
-        content: finalText,
-      });
-
-      return {
-        response: finalText,
-        toolCalls: allToolCalls,
-        terminated: false,
-      };
-    }
-
-    // ---- Case 2: Tool use ----
-    if (response.stop_reason === "tool_use" && toolUseBlocks.length > 0) {
-      // Save the assistant message with tool_use metadata
-      const toolUseData = toolUseBlocks.map((tu) => ({
-        id: tu.id as string,
-        name: tu.name as string,
-        input: (tu.input as Record<string, unknown>) ?? {},
-      }));
-
-      const toolUseSummary = toolUseData.map((tu) => `[tool_use: ${tu.name}]`).join(", ");
-
-      await safeSaveMessage(supabaseAdmin, {
-        conversationId,
-        clinicId,
-        direction: "outbound",
-        sender: "system",
-        content: toolUseSummary,
-        contentType: "tool_call",
-        metadata: { tool_uses: toolUseData },
-      });
-
-      // Add assistant message (with tool_use blocks) to conversation
-      anthropicMessages.push({
-        role: "assistant",
-        content: toolUseBlocks.map((tu) => ({
-          type: "tool_use",
-          id: tu.id,
-          name: tu.name,
-          input: tu.input,
-        })),
-      });
-
-      // Execute each tool and collect results
-      const toolResultBlocks: Array<Record<string, unknown>> = [];
-
-      for (const tu of toolUseBlocks) {
-        const tool = getTool(tu.name as string);
-        let toolResult: ToolResult<unknown>;
-
-        if (!tool) {
-          toolResult = {
-            success: false,
-            error: `Tool desconocida: ${tu.name}`,
-            error_code: "UNKNOWN_TOOL",
-          };
-        } else {
-          const ctx = buildToolContext(clinicId, conversationId);
-          toolResult = await invokeTool(tool, tu.input as Record<string, unknown>, ctx);
-        }
-
-        allToolCalls.push({
-          id: tu.id as string,
-          name: tu.name as string,
-          input: (tu.input as Record<string, unknown>) ?? {},
-          output: toolResult,
+      let response: any;
+      try {
+        response = await anthropic.messages.create({
+          model: "claude-sonnet-5",
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: anthropicMessages as Array<{
+            role: "user" | "assistant";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            content: any;
+          }>,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tools: tools as any,
         });
+      } catch (apiErr) {
+        const statusCode =
+          apiErr instanceof Error && "status" in apiErr
+            ? (apiErr as unknown as { status: number }).status
+            : undefined;
+        console.error(
+          `[loop] Anthropic API error at iteration ${iteration} (status=${statusCode}):`,
+          apiErr instanceof Error ? apiErr.message : apiErr,
+        );
 
-        toolResultBlocks.push({
-          type: "tool_result",
-          tool_use_id: tu.id,
-          content: JSON.stringify(toolResult),
-        });
+        const isOverloaded = statusCode === 429 || statusCode === 529;
+        const errorText = isOverloaded
+          ? "Estamos recibiendo muchas consultas. He tomado nota de tu mensaje y alguien del equipo te responderá en cuanto podamos."
+          : `Estamos teniendo un problema técnico. He tomado nota de tu mensaje y alguien del equipo te responderá en breve. Si es urgente, por favor llama al ${CLINIC_NAME}.`;
 
-        // Save each tool result as a system message
         await safeSaveMessage(supabaseAdmin, {
           conversationId,
           clinicId,
-          direction: "inbound",
-          sender: "system",
-          content: `[tool_result: ${tu.name}]`,
-          contentType: "tool_result",
-          metadata: {
-            tool_result: {
-              tool_use_id: tu.id,
-              name: tu.name,
-              output: toolResult,
-            },
-          },
+          direction: "outbound",
+          sender: "agent",
+          content: errorText,
         });
 
-        // If escalation tool was invoked, terminate the loop
-        if (tu.name === "escalate_to_human") {
-          if (toolResult.success) {
-            const escalationReason =
-              (tu.input as Record<string, unknown> | undefined)?.reason as string | undefined ?? "other";
-            const escalationMessage =
-              ESCALATION_MESSAGES[escalationReason] ?? "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
+        return {
+          response: errorText,
+          toolCalls: allToolCalls,
+          terminated: true,
+        };
+      }
+
+      // Separate text and tool_use blocks
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const textBlocks = response.content.filter((b: any) => b.type === "text");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toolUseBlocks = response.content.filter((b: any) => b.type === "tool_use") as any[];
+
+      // ---- Case 1: Final text response ----
+      if (response.stop_reason === "end_turn") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        finalText = textBlocks
+          .map((b: any) => ("text" in b ? (b as { text: string }).text : ""))
+          .join("");
+
+        // Save agent message to DB
+        await safeSaveMessage(supabaseAdmin, {
+          conversationId,
+          clinicId,
+          direction: "outbound",
+          sender: "agent",
+          content: finalText,
+        });
+
+        return {
+          response: finalText,
+          toolCalls: allToolCalls,
+          terminated: false,
+        };
+      }
+
+      // ---- Case 2: Tool use ----
+      if (response.stop_reason === "tool_use" && toolUseBlocks.length > 0) {
+        // Save the assistant message with tool_use metadata
+        const toolUseData = toolUseBlocks.map((tu) => ({
+          id: tu.id as string,
+          name: tu.name as string,
+          input: (tu.input as Record<string, unknown>) ?? {},
+        }));
+
+        const toolUseSummary = toolUseData.map((tu) => `[tool_use: ${tu.name}]`).join(", ");
+
+        await safeSaveMessage(supabaseAdmin, {
+          conversationId,
+          clinicId,
+          direction: "outbound",
+          sender: "system",
+          content: toolUseSummary,
+          contentType: "tool_call",
+          metadata: { tool_uses: toolUseData },
+        });
+
+        // Add assistant message (with tool_use blocks) to conversation
+        anthropicMessages.push({
+          role: "assistant",
+          content: toolUseBlocks.map((tu) => ({
+            type: "tool_use",
+            id: tu.id,
+            name: tu.name,
+            input: tu.input,
+          })),
+        });
+
+        // Execute each tool and collect results
+        const toolResultBlocks: Array<Record<string, unknown>> = [];
+
+        for (const tu of toolUseBlocks) {
+          const tool = getTool(tu.name as string);
+          let toolResult: ToolResult<unknown>;
+
+          if (!tool) {
+            toolResult = {
+              success: false,
+              error: `Tool desconocida: ${tu.name}`,
+              error_code: "UNKNOWN_TOOL",
+            };
+          } else {
+            const ctx = buildToolContext(clinicId, conversationId);
+            toolResult = await invokeTool(tool, tu.input as Record<string, unknown>, ctx);
+          }
+
+          allToolCalls.push({
+            id: tu.id as string,
+            name: tu.name as string,
+            input: (tu.input as Record<string, unknown>) ?? {},
+            output: toolResult,
+          });
+
+          toolResultBlocks.push({
+            type: "tool_result",
+            tool_use_id: tu.id,
+            content: JSON.stringify(toolResult),
+          });
+
+          // Save each tool result as a system message
+          await safeSaveMessage(supabaseAdmin, {
+            conversationId,
+            clinicId,
+            direction: "inbound",
+            sender: "system",
+            content: `[tool_result: ${tu.name}]`,
+            contentType: "tool_result",
+            metadata: {
+              tool_result: {
+                tool_use_id: tu.id,
+                name: tu.name,
+                output: toolResult,
+              },
+            },
+          });
+
+          // If escalation tool was invoked, terminate the loop
+          if (tu.name === "escalate_to_human") {
+            if (toolResult.success) {
+              const escalationReason =
+                ((tu.input as Record<string, unknown> | undefined)?.reason as string | undefined) ??
+                "other";
+              const escalationMessage =
+                ESCALATION_MESSAGES[escalationReason] ??
+                "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
+
+              await safeSaveMessage(supabaseAdmin, {
+                conversationId,
+                clinicId,
+                direction: "outbound",
+                sender: "agent",
+                content: escalationMessage,
+              });
+
+              return {
+                response: escalationMessage,
+                toolCalls: allToolCalls,
+                terminated: true,
+              };
+            }
+
+            // escalate_to_human failed — send emergency message directly
+            console.error(
+              "[loop] escalate_to_human tool failed:",
+              toolResult.error ?? "unknown error",
+            );
+
+            const failMessage =
+              "Estoy teniendo problemas para conectar con el equipo en este momento. Por favor, llama al hospital directamente o acude sin cita si es urgente.";
 
             await safeSaveMessage(supabaseAdmin, {
               conversationId,
               clinicId,
               direction: "outbound",
               sender: "agent",
-              content: escalationMessage,
+              content: failMessage,
             });
 
             return {
-              response: escalationMessage,
+              response: failMessage,
               toolCalls: allToolCalls,
               terminated: true,
             };
           }
-
-          // escalate_to_human failed — send emergency message directly
-          console.error(
-            `[loop] escalate_to_human tool failed:`,
-            toolResult.error ?? "unknown error",
-          );
-
-          const failMessage = "Estoy teniendo problemas para conectar con el equipo en este momento. Por favor, llama al hospital directamente o acude sin cita si es urgente.";
-
-          await safeSaveMessage(supabaseAdmin, {
-            conversationId,
-            clinicId,
-            direction: "outbound",
-            sender: "agent",
-            content: failMessage,
-          });
-
-          return {
-            response: failMessage,
-            toolCalls: allToolCalls,
-            terminated: true,
-          };
         }
+
+        // Add tool results to conversation (as user role)
+        anthropicMessages.push({
+          role: "user",
+          content: toolResultBlocks,
+        });
+
+        // Continue to next iteration
+        continue;
       }
 
-      // Add tool results to conversation (as user role)
-      anthropicMessages.push({
-        role: "user",
-        content: toolResultBlocks,
-      });
-
-      // Continue to next iteration
-      continue;
+      // Unexpected stop_reason — log and fall through to fallback
+      console.error(
+        `[loop] Unexpected stop_reason at iteration ${iteration}:`,
+        `stop_reason="${response.stop_reason}"`,
+        `content_blocks=${response.content.length}`,
+        `content_types=[${response.content.map((b: Record<string, unknown>) => b.type).join(", ")}]`,
+      );
+      break;
     }
 
-    // Unexpected stop_reason — log and fall through to fallback
+    // Max iterations reached or unexpected stop_reason — force a fallback response
     console.error(
-      `[loop] Unexpected stop_reason at iteration ${iteration}:`,
-      `stop_reason="${response.stop_reason}"`,
-      `content_blocks=${response.content.length}`,
-      `content_types=[${response.content.map((b: Record<string, unknown>) => b.type).join(", ")}]`,
+      `[loop] Fallback triggered — iterations exhausted or unexpected stop_reason. Tool calls made: ${allToolCalls.length}`,
     );
-    break;
-  }
+    const fallbackText =
+      "Disculpa las molestias. No he podido completar tu solicitud en este momento. El equipo del hospital la revisará y te responderá pronto. Si es urgente, por favor llama al hospital directamente.";
 
-  // Max iterations reached or unexpected stop_reason — force a fallback response
-  console.error(
-    `[loop] Fallback triggered — iterations exhausted or unexpected stop_reason. Tool calls made: ${allToolCalls.length}`,
-  );
-  const fallbackText =
-    "Disculpa las molestias. No he podido completar tu solicitud en este momento. El equipo del hospital la revisará y te responderá pronto. Si es urgente, por favor llama al hospital directamente.";
+    await safeSaveMessage(supabaseAdmin, {
+      conversationId,
+      clinicId,
+      direction: "outbound",
+      sender: "agent",
+      content: fallbackText,
+    });
 
-  await safeSaveMessage(supabaseAdmin, {
-    conversationId,
-    clinicId,
-    direction: "outbound",
-    sender: "agent",
-    content: fallbackText,
-  });
-
-  return {
-    response: fallbackText,
-    toolCalls: allToolCalls,
-    terminated: false,
-  };
+    return {
+      response: fallbackText,
+      toolCalls: allToolCalls,
+      terminated: false,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[loop] Unhandled error in runAgentLoop:", message, err);
 
-    const emergencyText = "Disculpa, estamos experimentando un problema técnico. Si tu consulta es urgente, por favor llama al hospital. Si no, alguien del equipo te responderá en cuanto se resuelva.";
+    const emergencyText =
+      "Disculpa, estamos experimentando un problema técnico. Si tu consulta es urgente, por favor llama al hospital. Si no, alguien del equipo te responderá en cuanto se resuelva.";
 
     try {
       await saveMessage(supabaseAdmin, {

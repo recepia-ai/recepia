@@ -57,7 +57,7 @@ Cada caso tiene el mismo esquema: preguntas concretas y un espacio para notas li
 ```
 
 - [ ] ¿El inglés es natural y correcto?
-- [ ] ¿El disclaimer final está en inglés y suena bien?
+- [ ] ¿La presentación como agente de IA está en inglés y suena bien?
 - [ ] Si fueras un cliente inglés, ¿te sentirías cómodo?
 
 **Notas libres:**

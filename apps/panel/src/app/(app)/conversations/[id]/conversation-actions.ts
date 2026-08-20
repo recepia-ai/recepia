@@ -1,21 +1,20 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
-  sendMessageSchema,
-  type SendMessageState,
-  takeControlSchema,
-  type TakeControlState,
-  returnToAgentSchema,
+  resolveClinic360DialogChannel,
+  send360DialogText,
+} from "@/lib/channels/whatsapp-360dialog";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import {
   type ReturnToAgentState,
+  returnToAgentSchema,
+  type SendMessageState,
+  sendMessageSchema,
+  type TakeControlState,
+  takeControlSchema,
 } from "./conversation-schema";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type ClinicUserRow = { clinic_id: string; role: string };
 
 // ---------------------------------------------------------------------------
 // takeControl — sets status to human_handling
@@ -60,27 +59,29 @@ export async function takeControl(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const cu = clinicUser as ClinicUserRow | null;
-  if (!cu) return { error: "Sin clínica asignada" };
+  if (!clinicUser) return { error: "Sin clínica asignada" };
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, channel")
     .eq("id", conversation_id)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", clinicUser.clinic_id)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
+  if (convGuard.channel === "phone") {
+    return { error: "Las llamadas se transfieren al equipo; no admiten control por chat." };
+  }
 
-  // TODO(E3): when controlled_by and controlled_at columns are added, set:
-  //   controlled_by = user.id, controlled_at = now()
-  // For now we only change the status.
-
-  const query = supabase.from("conversations") as any;
-  const { data: updated, error } = await query
-    .update({ status: "human_handling" })
+  const { data: updated, error } = await supabase
+    .from("conversations")
+    .update({
+      status: "human_handling",
+      controlled_by: user.id,
+      controlled_at: new Date().toISOString(),
+    })
     .eq("id", conversation_id)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", clinicUser.clinic_id)
     .select()
     .maybeSingle();
 
@@ -141,23 +142,26 @@ export async function returnToAgent(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const cu = clinicUser as ClinicUserRow | null;
-  if (!cu) return { error: "Sin clínica asignada" };
+  if (!clinicUser) return { error: "Sin clínica asignada" };
 
   const { data: convGuard } = await supabase
     .from("conversations")
     .select("id")
     .eq("id", conversation_id)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", clinicUser.clinic_id)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
 
-  const query = supabase.from("conversations") as any;
-  const { data: updated, error } = await query
-    .update({ status: "active" })
+  const { data: updated, error } = await supabase
+    .from("conversations")
+    .update({
+      status: "active",
+      controlled_by: null,
+      controlled_at: null,
+    })
     .eq("id", conversation_id)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", clinicUser.clinic_id)
     .select()
     .maybeSingle();
 
@@ -220,37 +224,59 @@ export async function sendMessage(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const cu = clinicUser as ClinicUserRow | null;
-  if (!cu) return { error: "Sin clínica asignada" };
+  if (!clinicUser) return { error: "Sin clínica asignada" };
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id, status")
+    .select("id, status, channel, channel_thread_id")
     .eq("id", conversation_id)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", clinicUser.clinic_id)
     .maybeSingle();
 
-  const cg = convGuard as { id: string; status: string } | null;
-  if (!cg) return { error: "Conversación no encontrada" };
+  if (!convGuard) return { error: "Conversación no encontrada" };
+  if (convGuard.channel === "phone") {
+    return { error: "No se pueden enviar mensajes de texto dentro de una llamada." };
+  }
 
   // Only allow sending when the human is in control
-  if (cg.status !== "human_handling") {
+  if (convGuard.status !== "human_handling") {
     return { error: "Toma el control primero para enviar mensajes." };
   }
 
-  // Insert message — clinic_id is auto-populated by DB trigger
-  // using `as any` because the typed Insert requires clinic_id but the
-  // trigger fills it from the parent conversation.
-  const { error: insertError } = await (supabase.from("messages") as any).insert(
-    {
-      conversation_id,
-      content,
-      sender: "human",
-      direction: "outbound",
-      content_type: "text",
-      sender_user_id: user.id,
-    },
-  );
+  let providerMessageId: string | undefined;
+  let providerMetadata: Record<string, string> = {};
+  if (convGuard.channel === "whatsapp") {
+    if (!convGuard.channel_thread_id) {
+      return { error: "La conversación no tiene destinatario de WhatsApp." };
+    }
+    try {
+      const supabaseAdmin = createAdminClient();
+      const channel = await resolveClinic360DialogChannel(supabaseAdmin, clinicUser.clinic_id);
+      const sent = await send360DialogText(
+        supabaseAdmin,
+        channel,
+        convGuard.channel_thread_id,
+        content,
+      );
+      providerMessageId = `360dialog:${sent.externalMessageId}`;
+      providerMetadata = { delivery_status: "accepted", accepted_at: sent.acceptedAt };
+    } catch (error) {
+      console.error("[sendMessage] WhatsApp delivery failed", error);
+      return { error: "WhatsApp no ha aceptado el mensaje. No se ha marcado como enviado." };
+    }
+  }
+
+  const { error: insertError } = await supabase.from("messages").insert({
+    clinic_id: clinicUser.clinic_id,
+    conversation_id,
+    content,
+    sender: "human",
+    direction: "outbound",
+    content_type: "text",
+    sender_user_id: user.id,
+    provider_message_id: providerMessageId,
+    metadata: providerMetadata,
+  });
 
   if (insertError) {
     console.error("[sendMessage]", insertError);

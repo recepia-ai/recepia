@@ -1,26 +1,23 @@
-import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/app/(app)/_components/status-badge";
-import { CategoryBadge } from "@/app/(app)/_components/category-badge";
-import { MessageBubble } from "../_components/message-bubble";
-import { EmptyDetail } from "../_components/empty-detail";
-import { TakeControlButton } from "./take-control-button";
-import { ReturnToAgentButton } from "./return-to-agent-button";
-import { MessageInputBar } from "./message-input-bar";
-import {
-  ArrowLeft,
-  Phone,
-  Mail,
-  PawPrint,
-  MessageSquare,
-} from "lucide-react";
 import type { Database } from "@recepia/db";
+import { ArrowLeft, Mail, MessageSquare, PawPrint, Phone } from "lucide-react";
+import Link from "next/link";
+import { CategoryBadge } from "@/app/(app)/_components/category-badge";
+import { StatusBadge } from "@/app/(app)/_components/status-badge";
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/server";
+import { ChannelBadge } from "../_components/channel-badge";
+import { EmptyDetail } from "../_components/empty-detail";
+import { MessageBubble } from "../_components/message-bubble";
+import { CallSessionCard } from "./call-session-card";
+import { MessageInputBar } from "./message-input-bar";
+import { ReturnToAgentButton } from "./return-to-agent-button";
+import { TakeControlButton } from "./take-control-button";
 
 type ConvRow = Database["public"]["Tables"]["conversations"]["Row"];
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type PetRow = Database["public"]["Tables"]["pets"]["Row"];
 type MsgRow = Database["public"]["Tables"]["messages"]["Row"];
+type CallSessionRow = Database["public"]["Tables"]["call_sessions"]["Row"];
 
 const SPECIES_ICONS: Record<string, string> = {
   dog: "🐕",
@@ -43,10 +40,6 @@ export default async function ConversationDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   // Fetch conversation with client and pet joins.
   const { data: conv } = await supabase
     .from("conversations")
@@ -62,20 +55,12 @@ export default async function ConversationDetailPage({
 
   // Fetch client
   const { data: client } = convData.client_id
-    ? await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", convData.client_id)
-        .maybeSingle()
+    ? await supabase.from("clients").select("*").eq("id", convData.client_id).maybeSingle()
     : { data: null };
 
   // Fetch pet
   const { data: pet } = convData.pet_id
-    ? await supabase
-        .from("pets")
-        .select("*")
-        .eq("id", convData.pet_id)
-        .maybeSingle()
+    ? await supabase.from("pets").select("*").eq("id", convData.pet_id).maybeSingle()
     : { data: null };
 
   // Fetch messages
@@ -85,9 +70,28 @@ export default async function ConversationDetailPage({
     .eq("conversation_id", id)
     .order("created_at", { ascending: true });
 
+  const { data: callSessions } =
+    convData.channel === "phone"
+      ? await supabase
+          .from("call_sessions")
+          .select("*")
+          .eq("conversation_id", id)
+          .order("started_at", { ascending: false })
+      : { data: null };
+
+  const { data: controller } = convData.controlled_by
+    ? await supabase
+        .from("clinic_users")
+        .select("display_name, email")
+        .eq("clinic_id", convData.clinic_id)
+        .eq("user_id", convData.controlled_by)
+        .maybeSingle()
+    : { data: null };
+
   const clientData = client as ClientRow | null;
   const petData = pet as PetRow | null;
   const msgs = (messages ?? []) as MsgRow[];
+  const calls = (callSessions ?? []) as CallSessionRow[];
 
   const hasPhone = Boolean(clientData?.phone);
   const hasEmail = Boolean(clientData?.email);
@@ -127,12 +131,11 @@ export default async function ConversationDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {convData.status === "active" && (
-            <TakeControlButton conversationId={id} />
-          )}
-          {convData.status === "human_handling" && (
-            <ReturnToAgentButton conversationId={id} />
-          )}
+          {convData.channel !== "phone" &&
+            (convData.status === "active" || convData.status === "awaiting_human") && (
+              <TakeControlButton conversationId={id} />
+            )}
+          {convData.status === "human_handling" && <ReturnToAgentButton conversationId={id} />}
         </div>
       </header>
 
@@ -144,9 +147,7 @@ export default async function ConversationDetailPage({
             <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
               Cliente
             </p>
-            <p className="mt-1 text-sm font-medium text-stone-900">
-              {clientData?.name ?? "—"}
-            </p>
+            <p className="mt-1 text-sm font-medium text-stone-900">{clientData?.name ?? "—"}</p>
             {hasContactInfo && (
               <div className="mt-1 space-y-0.5">
                 {clientData?.phone && (
@@ -200,14 +201,12 @@ export default async function ConversationDetailPage({
             </p>
             <div className="mt-1 space-y-1.5">
               <StatusBadge status={convData.status} />
-              <p className="flex items-center gap-1 text-xs text-stone-500">
-                <MessageSquare className="size-3" strokeWidth={1.75} />
-                {convData.channel === "whatsapp"
-                  ? "WhatsApp"
-                  : convData.channel === "phone"
-                    ? "Teléfono"
-                    : "Web"}
-              </p>
+              <ChannelBadge channel={convData.channel} />
+              {controller && (
+                <p className="text-xs text-stone-500">
+                  En control: {controller.display_name ?? controller.email ?? "miembro del equipo"}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -215,6 +214,13 @@ export default async function ConversationDetailPage({
 
       {/* Messages timeline */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
+        {calls.length > 0 && (
+          <div className="mx-auto mb-4 max-w-3xl space-y-3">
+            {calls.map((call) => (
+              <CallSessionCard key={call.id} call={call} />
+            ))}
+          </div>
+        )}
         {msgs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <EmptyDetail />
@@ -236,10 +242,9 @@ export default async function ConversationDetailPage({
       {/* Input bar */}
       <MessageInputBar
         conversationId={id}
-        clientName={
-          clientData?.name ?? clientData?.phone ?? "el cliente"
-        }
+        clientName={clientData?.name ?? clientData?.phone ?? "el cliente"}
         status={convData.status}
+        channel={convData.channel}
       />
     </div>
   );
@@ -249,14 +254,9 @@ function NotFound() {
   return (
     <div className="flex h-full flex-col items-center justify-center p-8">
       <div className="flex size-16 items-center justify-center rounded-full bg-rose-50">
-        <MessageSquare
-          className="size-7 text-rose-400"
-          strokeWidth={1.75}
-        />
+        <MessageSquare className="size-7 text-rose-400" strokeWidth={1.75} />
       </div>
-      <h3 className="mt-5 text-base font-semibold text-stone-900">
-        Conversación no encontrada
-      </h3>
+      <h3 className="mt-5 text-base font-semibold text-stone-900">Conversación no encontrada</h3>
       <p className="mt-1.5 text-sm text-stone-500">
         Esta conversación no existe o no pertenece a tu clínica.
       </p>
