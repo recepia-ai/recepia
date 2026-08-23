@@ -72,6 +72,11 @@ o se acuerde otro procedimiento.
 8. Comparar recuentos y una muestra funcional.
 9. Activar `sync_enabled` y programar el trabajador de salida.
 
+El botón **Ejecutar inventario** de Ajustes → Integraciones cubre los pasos 2 y
+3. Consulta los recursos en memoria y persiste exclusivamente recuentos, nombres
+de campos y recursos fallidos en `integration_sync_runs` y en los metadatos de
+la integración. No almacena respuestas, nombres, teléfonos ni historiales.
+
 ## Mapeo previsto
 
 | GestorVet | Recepia | Estrategia |

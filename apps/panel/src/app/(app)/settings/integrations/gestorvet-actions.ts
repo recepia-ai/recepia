@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { GestorVetClient } from "@/lib/gestorvet/client";
+import {
+  discoverGestorVet,
+  type GestorVetDiscoveryReport,
+  type GestorVetDiscoveryResource,
+} from "@/lib/gestorvet/discovery";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,7 +21,46 @@ export type GestorVetSettings = {
   noc?: string;
   syncEnabled: boolean;
   connectedAt?: string;
+  discovery?: GestorVetDiscoveryReport;
 };
+
+function discoveryResource(value: unknown): GestorVetDiscoveryResource | null {
+  const record = objectValue(value);
+  if (
+    typeof record.resource !== "string" ||
+    (record.status !== "succeeded" && record.status !== "failed")
+  ) {
+    return null;
+  }
+  return {
+    resource: record.resource,
+    count: typeof record.count === "number" ? record.count : null,
+    fields: Array.isArray(record.fields)
+      ? record.fields.filter((field): field is string => typeof field === "string")
+      : [],
+    status: record.status,
+  };
+}
+
+function discoveryReport(value: unknown): GestorVetDiscoveryReport | undefined {
+  const record = objectValue(value);
+  if (
+    (record.status !== "succeeded" && record.status !== "partial" && record.status !== "failed") ||
+    typeof record.completedAt !== "string" ||
+    typeof record.totalRecords !== "number" ||
+    !Array.isArray(record.resources)
+  ) {
+    return undefined;
+  }
+  return {
+    status: record.status,
+    completedAt: record.completedAt,
+    totalRecords: record.totalRecords,
+    resources: record.resources
+      .map(discoveryResource)
+      .filter((resource): resource is GestorVetDiscoveryResource => resource !== null),
+  };
+}
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -59,7 +103,21 @@ export async function getGestorVetSettings(): Promise<GestorVetSettings> {
     syncEnabled: metadata.sync_enabled === true,
     connectedAt:
       typeof metadata.connected_at === "string" ? metadata.connected_at : data.created_at,
+    discovery: discoveryReport(metadata.discovery),
   };
+}
+
+export async function runGestorVetDiscovery() {
+  const access = await adminClinic();
+  if ("error" in access) return { error: access.error };
+
+  try {
+    const report = await discoverGestorVet(createAdminClient(), access.clinicId);
+    revalidatePath("/settings/integrations");
+    return { success: true, report };
+  } catch {
+    return { error: "No se pudo completar el inventario de GestorVet" };
+  }
 }
 
 export async function saveGestorVetIntegration(formData: FormData) {

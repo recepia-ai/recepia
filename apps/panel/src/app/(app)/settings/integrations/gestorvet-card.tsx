@@ -1,12 +1,16 @@
 "use client";
 
-import { Database, Loader2 } from "lucide-react";
+import { Database, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type GestorVetSettings, saveGestorVetIntegration } from "./gestorvet-actions";
+import {
+  type GestorVetSettings,
+  runGestorVetDiscovery,
+  saveGestorVetIntegration,
+} from "./gestorvet-actions";
 
 const inputClass =
   "h-10 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100";
@@ -25,6 +29,18 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
       toast.success(
         "GestorVet conectado; la sincronización permanece pausada hasta completar mapeos",
       );
+      router.refresh();
+    });
+  }
+
+  function discover() {
+    startTransition(async () => {
+      const result = await runGestorVetDiscovery();
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Inventario de GestorVet completado sin modificar datos");
       router.refresh();
     });
   }
@@ -84,6 +100,57 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
         {busy && <Loader2 className="size-3.5 animate-spin" />}
         {settings.connected ? "Verificar y actualizar" : "Conectar GestorVet"}
       </Button>
+
+      {settings.connected && (
+        <div className="mt-4 border-t border-stone-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-stone-700">Inventario de solo lectura</p>
+              <p className="mt-0.5 text-xs text-stone-500">
+                Guarda solo cantidades y nombres de campos, nunca datos personales.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={discover}>
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Search className="size-3.5" />
+              )}
+              Ejecutar inventario
+            </Button>
+          </div>
+
+          {settings.discovery && (
+            <div className="mt-3 rounded-lg bg-stone-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-medium text-stone-700">
+                  {settings.discovery.totalRecords.toLocaleString("es-ES")} registros leídos
+                </span>
+                <span className="text-stone-500">
+                  {new Date(settings.discovery.completedAt).toLocaleString("es-ES")}
+                </span>
+              </div>
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {settings.discovery.resources.map((resource) => (
+                  <div
+                    className="flex items-center justify-between rounded-md bg-white px-2.5 py-1.5 text-xs"
+                    key={resource.resource}
+                  >
+                    <span className="text-stone-600">{resource.resource}</span>
+                    <span
+                      className={
+                        resource.status === "succeeded" ? "text-stone-900" : "text-red-600"
+                      }
+                    >
+                      {resource.count?.toLocaleString("es-ES") ?? "Error"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </form>
   );
 }
