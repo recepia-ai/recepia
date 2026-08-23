@@ -25,6 +25,8 @@ Los secretos de autenticación de webhooks son variables del despliegue:
 
 - `WHATSAPP_WEBHOOK_SECRET`: configurar en 360dialog como header
   `X-Recepia-Webhook-Secret`, o como `Authorization: Bearer <secreto>`.
+- `EVOLUTION_WEBHOOK_SECRET`: configurar en Evolution como header
+  `x-recepia-webhook-secret` para el endpoint `/api/channels/whatsapp/evolution`.
 - `META_WHATSAPP_VERIFY_TOKEN`: token aleatorio del desafío de verificación del
   webhook directo de Meta.
 - `META_WHATSAPP_APP_SECRET`: App Secret usado para validar la firma

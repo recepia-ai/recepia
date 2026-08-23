@@ -65,11 +65,11 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 
 ---
 
-## 1. Estado real a 20 de agosto de 2026
+## 1. Estado real a 21 de agosto de 2026
 
 **Último commit:** 29–30 de julio de 2026 (`fix(agent): end-to-end error handling`). El proyecto lleva ~3 semanas sin actividad en el repo.
 
-**Dónde está el producto:** el agente funciona end-to-end **dentro de un chat de pruebas del panel**, contra la base de datos y el Google Calendar reales del entorno de test. Crea clientes, mascotas y citas de verdad. El transporte directo de Meta ya tiene app, secretos, callback verificado y suscripción `messages`; falta que Meta asigne el número de prueba y configurar ese canal en Recepia para completar el E2E con un cliente final.
+**Dónde está el producto:** el agente funciona end-to-end **dentro de un chat de pruebas del panel**, contra la base de datos y el Google Calendar reales del entorno de test. Crea clientes, mascotas y citas de verdad. El transporte directo de Meta tiene app, secretos, callback verificado, número de prueba, canal activo en Recepia y la aplicación suscrita a la WABA. Falta ejecutar el E2E con un destinatario permitido y validar la toma de control manual.
 
 **Panel desplegado:** https://recepia-panel.vercel.app (login por magic link de Supabase Auth).
 
@@ -81,7 +81,7 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 |---|---|---|
 | **E1 — Infra y deploy** | ✅ Hecho | Monorepo pnpm + Turborepo, Biome, Supabase (proyecto `vsnrlpfsgwwdmiyndwnl`) linkado, panel en Vercel, tipos generados con `pnpm db:gen-types`. |
 | **E2 — Schema y datos** | ✅ Hecho | 12 migraciones aplicadas: schema inicial, settings y equipo, RLS, integración Google Calendar, seed real Dr. Patiño, wrappers de Vault, schema de citas, `service_vet_assignments` (N:M servicio↔veterinario). |
-| **E3 — Pipeline WhatsApp** | 🟡 **Meta directo conectado, E2E pendiente** | App Meta Recepia creada, secretos sensibles activos en Vercel, callback verificado y `messages` suscrito. El GET de verificación y un POST firmado de muestra respondieron 200. Meta todavía no asigna el número gratuito de prueba; faltan canal/token de prueba, ventana de 24 h, plantillas, medios y E2E. |
+| **E3 — Pipeline WhatsApp** | 🟡 **Evolution construido, despliegue y E2E pendientes** | Meta directo permanece conectado pero su E2E está bloqueado por el aprovisionamiento de Meta, reproducido incluso en un porfolio sandbox. Marc aprobó Evolution API/Baileys como transporte temporal de demostración. El adaptador inbound/outbound, webhook autenticado y configuración multi-proveedor están construidos; los canales oficiales se conservan pausados al activar Evolution. Faltan ejecutar el servicio, conectar un número prescindible, configurar el secreto en Vercel y completar el E2E. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
 | **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento de calendarios, `vet_calendars`, CRUD de eventos. |
 | **E6 — Resúmenes y clasificación** | ❌ No empezado | Sin Edge Function de resumen, sin integración DeepSeek, sin dataset golden formalizado. |
@@ -172,8 +172,12 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 **Pre-requisitos de demostración:**
 
 - [x] App de desarrollo de Meta `Recepia` creada con el producto WhatsApp y vinculada al porfolio Recepia.
-- [ ] Número gratuito de prueba asignado por Meta. La solicitud vuelve al estado inicial sin número ni error visible (21-08-2026).
+- [x] Número gratuito de prueba asignado por Meta: `+1 555-668-8613` (la pantalla de solicitud conserva un estado visual obsoleto).
 - [x] Webhook verificado y suscrito al campo `messages`; prueba de Meta recibida con GET 200 y POST 200.
+- [x] Usuario del sistema `Recepia API` creado con acceso total a la app y a la WABA; token permanente con los tres permisos mínimos guardado en Vault.
+- [x] Canal `meta_cloud` activo y aplicación Recepia suscrita a la WABA de prueba, verificado con `POST` y `GET /subscribed_apps`.
+- [x] Fallo aislado con una segunda app limpia (`Recepia Messaging Test`, `1106710908689488`); reproduce la ausencia del número y confirma un bloqueo de aprovisionamiento del porfolio/WABA. Caso Meta `27395235070154712` abierto.
+- [x] Fallo reproducido en un porfolio completamente separado (`Recepia Sandbox`, `1611080270728854`) y una aplicación nueva (`Recepia Sandbox Messaging`, `957295927423465`); queda descartada la configuración del porfolio original.
 - [ ] Cuenta 360dialog y número real: aplazados hasta preparar producción, sin método de pago durante la demostración.
 
 **Tareas:**
@@ -183,6 +187,8 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 - [ ] Poblar `clinic_channels` con el número del Dr. Patiño y `provider='360dialog'`.
 - [x] Conectar el bucle del agente común al webhook.
 - [x] Añadir Meta Cloud API directa como segundo transporte, con validación de firma y secretos separados.
+- [x] Añadir Evolution API/Baileys como tercer transporte temporal, con webhook autenticado, adaptación al contrato omnicanal, envío saliente y configuración protegida en Vault.
+- [ ] Ejecutar Evolution estable, conectar por QR un número exclusivo de pruebas y activar su canal sin borrar la configuración oficial.
 - [ ] E2E con número de prueba de Meta y toma de control manual.
 - [ ] Gestión de la ventana de 24 h de WhatsApp y de plantillas cuando se excede.
 
@@ -343,3 +349,7 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-08-20 | 0.2 | Marc + Claude | Reescritura completa. Se sustituye el plan por semanas naturales por fases F–K. Se añade briefing de contexto para IAs (§0), estado real por épicas (§1), desviaciones respecto al diseño (§2), deuda técnica (§5) y reglas de trabajo para IAs (§7). |
 | 2026-08-20 | 0.3 | Marc + Codex | Reinicio operativo con Conversaciones como vertical prioritario. Se añade la ruta C1–C5 y se conserva F–K como inventario heredado. |
 | 2026-08-21 | 0.4 | Marc + Codex | Meta Cloud API directa pasa a ser el transporte de demostración con número de prueba; 360dialog se aplaza hasta producción. Se refleja el adaptador común y el E2E pendiente. |
+| 2026-08-21 | 0.5 | Marc + Codex | Número de prueba, usuario del sistema, token mínimo en Vault, canal `meta_cloud` y suscripción de la aplicación a la WABA verificados. El siguiente hito es el E2E con un destinatario permitido. |
+| 2026-08-23 | 0.6 | Marc + Codex | El fallo del Public Test Number se reproduce en una segunda app limpia y queda aislado al porfolio/WABA de Meta. Se abre el caso de soporte `27395235070154712` sin alterar la integración activa de Recepia. |
+| 2026-08-23 | 0.7 | Marc + Codex | Un porfolio sandbox y una tercera aplicación creados desde cero reproducen el fallo. El bloqueo queda aislado a la cuenta de desarrollador o al aprovisionamiento de Meta; se abre la decisión de usar un transporte temporal para completar la demostración sin tocar el WhatsApp real del hospital. |
+| 2026-08-23 | 0.8 | Marc + Codex | Marc aprueba Evolution API/Baileys como transporte temporal. Se construyen el adaptador inbound/outbound, webhook autenticado y configuración que pausa —sin borrar— Meta/360dialog. Quedan el servicio, número de pruebas y E2E. |

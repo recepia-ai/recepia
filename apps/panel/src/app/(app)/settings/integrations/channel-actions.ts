@@ -11,20 +11,51 @@ const e164 = z
   .regex(/^\+[1-9][0-9]{6,14}$/, "Usa formato +34…");
 const whatsappSchema = z
   .object({
-    provider: z.enum(["meta_cloud", "360dialog"]),
+    provider: z.enum(["meta_cloud", "360dialog", "evolution"]),
     identifier: e164,
-    phone_number_id: z.string().trim().min(1),
+    phone_number_id: z.string().trim().optional(),
     waba_id: z.string().trim().optional(),
     graph_api_version: z.string().trim().optional(),
+    evolution_base_url: z.string().trim().optional(),
+    evolution_instance_name: z.string().trim().optional(),
     api_key: z.string().trim().min(8),
   })
   .superRefine((value, context) => {
+    if (value.provider !== "evolution" && !value.phone_number_id) {
+      context.addIssue({
+        code: "custom",
+        path: ["phone_number_id"],
+        message: "Indica el Phone Number ID",
+      });
+    }
     if (value.provider === "meta_cloud" && !/^v\d+\.\d+$/.test(value.graph_api_version ?? "")) {
       context.addIssue({
         code: "custom",
         path: ["graph_api_version"],
         message: "Indica la versión que muestra Meta, por ejemplo v23.0",
       });
+    }
+    if (value.provider === "evolution") {
+      let url: URL | null = null;
+      try {
+        url = new URL(value.evolution_base_url ?? "");
+      } catch {
+        // Zod issue below provides the user-facing error.
+      }
+      if (!url || !["http:", "https:"].includes(url.protocol)) {
+        context.addIssue({
+          code: "custom",
+          path: ["evolution_base_url"],
+          message: "Indica una URL válida de Evolution API",
+        });
+      }
+      if (!value.evolution_instance_name) {
+        context.addIssue({
+          code: "custom",
+          path: ["evolution_instance_name"],
+          message: "Indica el nombre de la instancia Evolution",
+        });
+      }
     }
   });
 const phoneSchema = z.object({
@@ -37,11 +68,13 @@ const phoneSchema = z.object({
 
 export type ChannelSettings = {
   whatsapp?: {
-    provider: "meta_cloud" | "360dialog";
+    provider: "meta_cloud" | "360dialog" | "evolution";
     identifier: string;
     phoneNumberId?: string;
     wabaId?: string;
     graphApiVersion?: string;
+    evolutionBaseUrl?: string;
+    evolutionInstanceName?: string;
     status: string;
     hasSecret: boolean;
   };
@@ -131,11 +164,18 @@ export async function getChannelSettings(): Promise<ChannelSettings> {
   return {
     whatsapp: whatsapp
       ? {
-          provider: whatsapp.provider === "meta_cloud" ? "meta_cloud" : "360dialog",
+          provider:
+            whatsapp.provider === "meta_cloud"
+              ? "meta_cloud"
+              : whatsapp.provider === "evolution"
+                ? "evolution"
+                : "360dialog",
           identifier: whatsapp.identifier,
           phoneNumberId: whatsappConfig.phone_number_id as string | undefined,
           wabaId: whatsappConfig.waba_id as string | undefined,
           graphApiVersion: whatsappConfig.graph_api_version as string | undefined,
+          evolutionBaseUrl: whatsappConfig.base_url as string | undefined,
+          evolutionInstanceName: whatsappConfig.instance_name as string | undefined,
           status: whatsapp.status,
           hasSecret: Boolean(whatsapp.vault_secret_id),
         }
@@ -161,12 +201,11 @@ export async function saveWhatsAppChannel(formData: FormData) {
   const admin = createAdminClient();
   const { data: existingChannels, error: existingError } = await admin
     .from("clinic_channels")
-    .select("id, vault_secret_id")
+    .select("id, provider, vault_secret_id")
     .eq("clinic_id", access.clinicId)
     .eq("channel_type", "whatsapp");
   if (existingError) return { error: "No se pudo leer la configuración de WhatsApp" };
-  const current =
-    existingChannels?.find((item) => item.id && item.vault_secret_id) ?? existingChannels?.[0];
+  const current = existingChannels?.find((item) => item.provider === parsed.data.provider);
   try {
     const vaultId = await writeVaultSecret(
       access.clinicId,
@@ -180,10 +219,16 @@ export async function saveWhatsAppChannel(formData: FormData) {
       identifier: parsed.data.identifier,
       provider: parsed.data.provider,
       provider_config: {
-        phone_number_id: parsed.data.phone_number_id,
-        waba_id: parsed.data.waba_id || null,
+        phone_number_id: parsed.data.provider === "evolution" ? null : parsed.data.phone_number_id,
+        waba_id: parsed.data.provider === "evolution" ? null : parsed.data.waba_id || null,
         graph_api_version:
           parsed.data.provider === "meta_cloud" ? parsed.data.graph_api_version : null,
+        base_url:
+          parsed.data.provider === "evolution"
+            ? parsed.data.evolution_base_url?.replace(/\/$/, "")
+            : null,
+        instance_name:
+          parsed.data.provider === "evolution" ? parsed.data.evolution_instance_name : null,
       },
       vault_secret_id: vaultId,
       status: "active" as const,

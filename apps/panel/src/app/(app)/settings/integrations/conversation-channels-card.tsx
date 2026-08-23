@@ -13,9 +13,9 @@ const inputClass =
 export function ConversationChannelsCard({ settings }: { settings: ChannelSettings }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
-  const [whatsappProvider, setWhatsAppProvider] = useState<"meta_cloud" | "360dialog">(
-    settings.whatsapp?.provider ?? "meta_cloud",
-  );
+  const [whatsappProvider, setWhatsAppProvider] = useState<
+    "meta_cloud" | "360dialog" | "evolution"
+  >(settings.whatsapp?.provider ?? "meta_cloud");
 
   const submit =
     (action: (data: FormData) => Promise<{ success?: boolean; error?: string }>) =>
@@ -43,7 +43,7 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
           <div>
             <h3 className="text-sm font-semibold text-stone-900">WhatsApp</h3>
             <p className="mt-0.5 text-xs text-stone-500">
-              Meta directo para pruebas; 360dialog queda preparado para producción.
+              Evolution para la demostración; Meta y 360dialog quedan preparados.
             </p>
           </div>
         </div>
@@ -53,11 +53,12 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
             name="provider"
             value={whatsappProvider}
             onChange={(event) =>
-              setWhatsAppProvider(event.target.value as "meta_cloud" | "360dialog")
+              setWhatsAppProvider(event.target.value as "meta_cloud" | "360dialog" | "evolution")
             }
           >
             <option value="meta_cloud">Meta Cloud API directa</option>
             <option value="360dialog">360dialog (producción futura)</option>
+            <option value="evolution">Evolution API (demostración temporal)</option>
           </select>
           <input
             className={inputClass}
@@ -66,19 +67,23 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
             defaultValue={settings.whatsapp?.identifier}
             required
           />
-          <input
-            className={inputClass}
-            name="phone_number_id"
-            placeholder="Phone Number ID de Meta"
-            defaultValue={settings.whatsapp?.phoneNumberId}
-            required
-          />
-          <input
-            className={inputClass}
-            name="waba_id"
-            placeholder="WABA ID (opcional)"
-            defaultValue={settings.whatsapp?.wabaId}
-          />
+          {whatsappProvider !== "evolution" && (
+            <>
+              <input
+                className={inputClass}
+                name="phone_number_id"
+                placeholder="Phone Number ID de Meta"
+                defaultValue={settings.whatsapp?.phoneNumberId}
+                required
+              />
+              <input
+                className={inputClass}
+                name="waba_id"
+                placeholder="WABA ID (opcional)"
+                defaultValue={settings.whatsapp?.wabaId}
+              />
+            </>
+          )}
           {whatsappProvider === "meta_cloud" && (
             <input
               className={inputClass}
@@ -87,6 +92,25 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
               defaultValue={settings.whatsapp?.graphApiVersion}
               required
             />
+          )}
+          {whatsappProvider === "evolution" && (
+            <>
+              <input
+                className={inputClass}
+                name="evolution_base_url"
+                type="url"
+                placeholder="URL de Evolution API (https://…)"
+                defaultValue={settings.whatsapp?.evolutionBaseUrl}
+                required
+              />
+              <input
+                className={inputClass}
+                name="evolution_instance_name"
+                placeholder="Nombre de la instancia (ej. recepia-demo)"
+                defaultValue={settings.whatsapp?.evolutionInstanceName}
+                required
+              />
+            </>
           )}
           <input
             className={inputClass}
@@ -97,10 +121,14 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
               settings.whatsapp?.hasSecret
                 ? whatsappProvider === "meta_cloud"
                   ? "Nuevo access token (sustituirá el actual)"
-                  : "Nueva D360 API key (sustituirá la actual)"
+                  : whatsappProvider === "evolution"
+                    ? "Nueva API key de Evolution (sustituirá la actual)"
+                    : "Nueva D360 API key (sustituirá la actual)"
                 : whatsappProvider === "meta_cloud"
                   ? "Access token temporal de Meta"
-                  : "D360 API key"
+                  : whatsappProvider === "evolution"
+                    ? "API key de Evolution"
+                    : "D360 API key"
             }
             required
           />
@@ -109,6 +137,12 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
           <p className="mt-3 text-xs leading-5 text-amber-700">
             Usa exclusivamente el número de prueba de Meta. No introduzcas aquí el número real del
             hospital durante la demostración.
+          </p>
+        )}
+        {whatsappProvider === "evolution" && (
+          <p className="mt-3 text-xs leading-5 text-amber-700">
+            Usa solo un número de pruebas prescindible. Evolution utiliza WhatsApp Web y no debe
+            conectarse al número real del hospital.
           </p>
         )}
         <Button className="mt-4" size="sm" disabled={busy}>

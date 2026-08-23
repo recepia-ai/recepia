@@ -1,6 +1,7 @@
 import type { SendResult } from "@recepia/core";
 import { send360DialogText } from "@/lib/channels/whatsapp-360dialog";
 import type { AdminClient, ChannelRow } from "@/lib/channels/whatsapp-cloud";
+import { sendEvolutionText } from "@/lib/channels/whatsapp-evolution";
 import { sendMetaWhatsAppText } from "@/lib/channels/whatsapp-meta";
 
 export async function resolveClinicWhatsAppChannel(
@@ -36,6 +37,9 @@ export function sendWhatsAppText(
   }
   if (channel.provider === "meta_cloud") {
     return sendMetaWhatsAppText(supabaseAdmin, channel, recipient, text);
+  }
+  if (channel.provider === "evolution") {
+    return sendEvolutionText(supabaseAdmin, channel, recipient, text);
   }
   throw new Error(`Proveedor de WhatsApp no soportado: ${channel.provider}`);
 }
