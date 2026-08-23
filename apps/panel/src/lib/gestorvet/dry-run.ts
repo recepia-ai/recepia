@@ -14,6 +14,8 @@ export type GestorVetDryRunReport = {
   totalRecords: number;
   clients: {
     total: number;
+    requiresDetailedRead: boolean;
+    detailFields: string[];
     eligibleAfterReview: number;
     existingPhoneMatches: number;
     missingPhone: number;
@@ -25,6 +27,8 @@ export type GestorVetDryRunReport = {
   };
   pets: {
     total: number;
+    requiresDetailedRead: boolean;
+    detailFields: string[];
     eligibleAfterReview: number;
     existingMicrochipMatches: number;
     orphanOwner: number;
@@ -35,6 +39,7 @@ export type GestorVetDryRunReport = {
   };
   appointments: {
     total: number;
+    requiresDetailedRead: boolean;
     eligibleAfterMapping: number;
     orphanClient: number;
     orphanPet: number;
@@ -215,6 +220,12 @@ function externalIds(records: GestorVetRecord[], candidates: readonly string[]):
   );
 }
 
+function allFields(records: GestorVetRecord[]): string[] {
+  return [...new Set(records.flatMap((record) => Object.keys(record)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 export async function dryRunGestorVet(
   db: AdminDb,
   clinicId: string,
@@ -249,28 +260,47 @@ export async function dryRunGestorVet(
   const petIds = externalIds(pets, aliases.pet.id);
   const userIds = externalIds(users, aliases.userId);
   const reasonIds = externalIds(reasons, aliases.reasonId);
+  const clientsRequireDetailedRead = fieldFor(clients, aliases.client.phone) === null;
+  const petsRequireDetailedRead =
+    fieldFor(pets, aliases.pet.clientId) === null || fieldFor(pets, aliases.pet.species) === null;
+  const appointmentsRequireDetailedRead =
+    fieldFor(appointments, aliases.appointment.clientId) === null ||
+    fieldFor(appointments, aliases.appointment.petId) === null ||
+    fieldFor(appointments, aliases.appointment.userId) === null ||
+    fieldFor(appointments, aliases.appointment.reasonId) === null;
+
+  const sampleClientId = clients[0] ? valueFor(clients[0], aliases.client.id) : null;
+  const samplePetId = pets[0] ? valueFor(pets[0], aliases.pet.id) : null;
+  const [sampleClientDetails, samplePetDetails] = await Promise.all([
+    sampleClientId ? client.getClient(sampleClientId) : Promise.resolve([]),
+    samplePetId ? client.getPet(samplePetId) : Promise.resolve([]),
+  ]);
 
   const clientPhones = clients.map((record) =>
     normalizedPhone(valueFor(record, aliases.client.phone)),
   );
   const clientPhoneDuplicates = duplicateStats(clientPhones);
-  const clientMissingRawPhone = clients.filter(
-    (record) => valueFor(record, aliases.client.phone) === null,
-  ).length;
-  const clientInvalidPhone = clients.filter((record) => {
-    const raw = valueFor(record, aliases.client.phone);
-    return raw !== null && normalizedPhone(raw) === null;
-  }).length;
+  const clientMissingRawPhone = clientsRequireDetailedRead
+    ? 0
+    : clients.filter((record) => valueFor(record, aliases.client.phone) === null).length;
+  const clientInvalidPhone = clientsRequireDetailedRead
+    ? 0
+    : clients.filter((record) => {
+        const raw = valueFor(record, aliases.client.phone);
+        return raw !== null && normalizedPhone(raw) === null;
+      }).length;
   const existingPhoneMatches = clientPhones.filter(
     (phone) => phone !== null && recepiaPhones.has(phone),
   ).length;
-  const eligibleClients = clientPhones.filter(
-    (phone, index) =>
-      phone !== null &&
-      !recepiaPhones.has(phone) &&
-      clientPhoneDuplicates.counts.get(phone) === 1 &&
-      valueFor(clients[index] ?? {}, aliases.client.name) !== null,
-  ).length;
+  const eligibleClients = clientsRequireDetailedRead
+    ? 0
+    : clientPhones.filter(
+        (phone, index) =>
+          phone !== null &&
+          !recepiaPhones.has(phone) &&
+          clientPhoneDuplicates.counts.get(phone) === 1 &&
+          valueFor(clients[index] ?? {}, aliases.client.name) !== null,
+      ).length;
 
   const petChips = pets.map((record) =>
     normalizedMicrochip(valueFor(record, aliases.pet.microchip)),
@@ -279,59 +309,73 @@ export async function dryRunGestorVet(
   const existingMicrochipMatches = petChips.filter(
     (chip) => chip !== null && recepiaChips.has(chip),
   ).length;
-  const orphanOwner = pets.filter((record) => {
-    const ownerId = valueFor(record, aliases.pet.clientId);
-    return ownerId === null || !clientIds.has(ownerId);
-  }).length;
-  const eligiblePets = pets.filter((record, index) => {
-    const ownerId = valueFor(record, aliases.pet.clientId);
-    const chip = petChips[index] ?? null;
-    return (
-      ownerId !== null &&
-      clientIds.has(ownerId) &&
-      valueFor(record, aliases.pet.name) !== null &&
-      valueFor(record, aliases.pet.species) !== null &&
-      !(chip && recepiaChips.has(chip)) &&
-      !(chip && (petChipDuplicates.counts.get(chip) ?? 0) > 1)
-    );
-  }).length;
+  const orphanOwner = petsRequireDetailedRead
+    ? 0
+    : pets.filter((record) => {
+        const ownerId = valueFor(record, aliases.pet.clientId);
+        return ownerId === null || !clientIds.has(ownerId);
+      }).length;
+  const eligiblePets = petsRequireDetailedRead
+    ? 0
+    : pets.filter((record, index) => {
+        const ownerId = valueFor(record, aliases.pet.clientId);
+        const chip = petChips[index] ?? null;
+        return (
+          ownerId !== null &&
+          clientIds.has(ownerId) &&
+          valueFor(record, aliases.pet.name) !== null &&
+          valueFor(record, aliases.pet.species) !== null &&
+          !(chip && recepiaChips.has(chip)) &&
+          !(chip && (petChipDuplicates.counts.get(chip) ?? 0) > 1)
+        );
+      }).length;
 
-  const orphanAppointmentClient = appointments.filter((record) => {
-    const id = valueFor(record, aliases.appointment.clientId);
-    return id === null || !clientIds.has(id);
-  }).length;
-  const orphanAppointmentPet = appointments.filter((record) => {
-    const id = valueFor(record, aliases.appointment.petId);
-    return id === null || !petIds.has(id);
-  }).length;
-  const unknownAppointmentUser = appointments.filter((record) => {
-    const id = valueFor(record, aliases.appointment.userId);
-    return id === null || !userIds.has(id);
-  }).length;
-  const unknownAppointmentReason = appointments.filter((record) => {
-    const id = valueFor(record, aliases.appointment.reasonId);
-    return id === null || !reasonIds.has(id);
-  }).length;
+  const orphanAppointmentClient = appointmentsRequireDetailedRead
+    ? 0
+    : appointments.filter((record) => {
+        const id = valueFor(record, aliases.appointment.clientId);
+        return id === null || !clientIds.has(id);
+      }).length;
+  const orphanAppointmentPet = appointmentsRequireDetailedRead
+    ? 0
+    : appointments.filter((record) => {
+        const id = valueFor(record, aliases.appointment.petId);
+        return id === null || !petIds.has(id);
+      }).length;
+  const unknownAppointmentUser = appointmentsRequireDetailedRead
+    ? 0
+    : appointments.filter((record) => {
+        const id = valueFor(record, aliases.appointment.userId);
+        return id === null || !userIds.has(id);
+      }).length;
+  const unknownAppointmentReason = appointmentsRequireDetailedRead
+    ? 0
+    : appointments.filter((record) => {
+        const id = valueFor(record, aliases.appointment.reasonId);
+        return id === null || !reasonIds.has(id);
+      }).length;
   const missingAppointmentDate = appointments.filter(
     (record) => valueFor(record, aliases.appointment.date) === null,
   ).length;
-  const eligibleAppointments = appointments.filter((record) => {
-    const clientId = valueFor(record, aliases.appointment.clientId);
-    const petId = valueFor(record, aliases.appointment.petId);
-    const userId = valueFor(record, aliases.appointment.userId);
-    const reasonId = valueFor(record, aliases.appointment.reasonId);
-    return (
-      clientId !== null &&
-      clientIds.has(clientId) &&
-      petId !== null &&
-      petIds.has(petId) &&
-      userId !== null &&
-      userIds.has(userId) &&
-      reasonId !== null &&
-      reasonIds.has(reasonId) &&
-      valueFor(record, aliases.appointment.date) !== null
-    );
-  }).length;
+  const eligibleAppointments = appointmentsRequireDetailedRead
+    ? 0
+    : appointments.filter((record) => {
+        const clientId = valueFor(record, aliases.appointment.clientId);
+        const petId = valueFor(record, aliases.appointment.petId);
+        const userId = valueFor(record, aliases.appointment.userId);
+        const reasonId = valueFor(record, aliases.appointment.reasonId);
+        return (
+          clientId !== null &&
+          clientIds.has(clientId) &&
+          petId !== null &&
+          petIds.has(petId) &&
+          userId !== null &&
+          userIds.has(userId) &&
+          reasonId !== null &&
+          reasonIds.has(reasonId) &&
+          valueFor(record, aliases.appointment.date) !== null
+        );
+      }).length;
 
   const completedAt = new Date().toISOString();
   const report: GestorVetDryRunReport = {
@@ -340,6 +384,8 @@ export async function dryRunGestorVet(
     totalRecords: clients.length + pets.length + appointments.length,
     clients: {
       total: clients.length,
+      requiresDetailedRead: clientsRequireDetailedRead,
+      detailFields: allFields(sampleClientDetails),
       eligibleAfterReview: eligibleClients,
       existingPhoneMatches,
       missingPhone: clientMissingRawPhone,
@@ -356,6 +402,8 @@ export async function dryRunGestorVet(
     },
     pets: {
       total: pets.length,
+      requiresDetailedRead: petsRequireDetailedRead,
+      detailFields: allFields(samplePetDetails),
       eligibleAfterReview: eligiblePets,
       existingMicrochipMatches,
       orphanOwner,
@@ -373,6 +421,7 @@ export async function dryRunGestorVet(
     },
     appointments: {
       total: appointments.length,
+      requiresDetailedRead: appointmentsRequireDetailedRead,
       eligibleAfterMapping: eligibleAppointments,
       orphanClient: orphanAppointmentClient,
       orphanPet: orphanAppointmentPet,

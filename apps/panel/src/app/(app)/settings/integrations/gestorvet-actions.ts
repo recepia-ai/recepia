@@ -24,6 +24,8 @@ const dryRunReportSchema = z.object({
   totalRecords: z.number(),
   clients: z.object({
     total: z.number(),
+    requiresDetailedRead: z.boolean(),
+    detailFields: z.array(z.string()),
     eligibleAfterReview: z.number(),
     existingPhoneMatches: z.number(),
     missingPhone: z.number(),
@@ -35,6 +37,8 @@ const dryRunReportSchema = z.object({
   }),
   pets: z.object({
     total: z.number(),
+    requiresDetailedRead: z.boolean(),
+    detailFields: z.array(z.string()),
     eligibleAfterReview: z.number(),
     existingMicrochipMatches: z.number(),
     orphanOwner: z.number(),
@@ -45,6 +49,7 @@ const dryRunReportSchema = z.object({
   }),
   appointments: z.object({
     total: z.number(),
+    requiresDetailedRead: z.boolean(),
     eligibleAfterMapping: z.number(),
     orphanClient: z.number(),
     orphanPet: z.number(),

@@ -195,45 +195,47 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
                   <div className="grid gap-2 sm:grid-cols-3">
                     <div className="rounded-md bg-white p-2.5">
                       <p className="font-medium text-stone-700">Clientes</p>
-                      <p className="mt-1 text-stone-500">
-                        {settings.dryRun.clients.eligibleAfterReview.toLocaleString("es-ES")} aptos
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.clients.missingPhone.toLocaleString("es-ES")} sin teléfono
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.clients.duplicatePhoneGroups.toLocaleString("es-ES")}{" "}
-                        grupos duplicados
-                      </p>
+                      {settings.dryRun.clients.requiresDetailedRead ? (
+                        <p className="mt-1 text-amber-700">Requiere lectura detallada</p>
+                      ) : (
+                        <p className="mt-1 text-stone-500">
+                          {settings.dryRun.clients.eligibleAfterReview.toLocaleString("es-ES")}{" "}
+                          aptos · {settings.dryRun.clients.missingPhone.toLocaleString("es-ES")} sin
+                          teléfono ·{" "}
+                          {settings.dryRun.clients.duplicatePhoneGroups.toLocaleString("es-ES")}{" "}
+                          grupos duplicados
+                        </p>
+                      )}
                     </div>
                     <div className="rounded-md bg-white p-2.5">
                       <p className="font-medium text-stone-700">Mascotas</p>
-                      <p className="mt-1 text-stone-500">
-                        {settings.dryRun.pets.eligibleAfterReview.toLocaleString("es-ES")} aptas
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.pets.orphanOwner.toLocaleString("es-ES")} sin propietario
-                        válido
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.pets.duplicateMicrochipGroups.toLocaleString("es-ES")}{" "}
-                        chips duplicados
-                      </p>
+                      {settings.dryRun.pets.requiresDetailedRead ? (
+                        <p className="mt-1 text-amber-700">Requiere lectura detallada</p>
+                      ) : (
+                        <p className="mt-1 text-stone-500">
+                          {settings.dryRun.pets.eligibleAfterReview.toLocaleString("es-ES")} aptas ·{" "}
+                          {settings.dryRun.pets.orphanOwner.toLocaleString("es-ES")} sin propietario
+                          válido ·{" "}
+                          {settings.dryRun.pets.duplicateMicrochipGroups.toLocaleString("es-ES")}{" "}
+                          chips duplicados
+                        </p>
+                      )}
                     </div>
                     <div className="rounded-md bg-white p-2.5">
                       <p className="font-medium text-stone-700">Citas</p>
-                      <p className="mt-1 text-stone-500">
-                        {settings.dryRun.appointments.eligibleAfterMapping.toLocaleString("es-ES")}{" "}
-                        aptas tras mapeo
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.appointments.orphanPet.toLocaleString("es-ES")} con mascota
-                        no localizada
-                      </p>
-                      <p className="text-stone-500">
-                        {settings.dryRun.appointments.unknownUser.toLocaleString("es-ES")} sin
-                        veterinario mapeado
-                      </p>
+                      {settings.dryRun.appointments.requiresDetailedRead ? (
+                        <p className="mt-1 text-amber-700">El listado no incluye referencias</p>
+                      ) : (
+                        <p className="mt-1 text-stone-500">
+                          {settings.dryRun.appointments.eligibleAfterMapping.toLocaleString(
+                            "es-ES",
+                          )}{" "}
+                          aptas · {settings.dryRun.appointments.orphanPet.toLocaleString("es-ES")}{" "}
+                          sin mascota ·{" "}
+                          {settings.dryRun.appointments.unknownUser.toLocaleString("es-ES")} sin
+                          veterinario
+                        </p>
+                      )}
                     </div>
                   </div>
                   <p className="text-stone-500">
@@ -252,9 +254,16 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
                           "ninguno"}
                       </p>
                       <p>
+                        detalle cliente:{" "}
+                        {settings.dryRun.clients.detailFields.join(", ") || "ninguno"}
+                      </p>
+                      <p>
                         mascotas:{" "}
                         {Object.values(settings.dryRun.pets.fields).filter(Boolean).join(", ") ||
                           "ninguno"}
+                      </p>
+                      <p>
+                        detalle mascota: {settings.dryRun.pets.detailFields.join(", ") || "ninguno"}
                       </p>
                       <p>
                         citas:{" "}
