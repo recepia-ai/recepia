@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { listGoogleCalendars, listVetsWithCalendars } from "./calendar-discovery-actions";
 import { getChannelSettings } from "./channel-actions";
 import { ConversationChannelsCard } from "./conversation-channels-card";
+import { getGestorVetSettings } from "./gestorvet-actions";
+import { GestorVetCard } from "./gestorvet-card";
 import { GoogleCalendarCard } from "./google-calendar-card";
 import { getIntegrationStatus } from "./integration-actions";
 import { VetCalendarsSection } from "./vet-calendars-section";
@@ -11,9 +13,10 @@ import { VetCalendarsSection } from "./vet-calendars-section";
 // ---------------------------------------------------------------------------
 
 async function IntegrationContent() {
-  const [status, channelSettings] = await Promise.all([
+  const [status, channelSettings, gestorVetSettings] = await Promise.all([
     getIntegrationStatus(),
     getChannelSettings(),
+    getGestorVetSettings(),
   ]);
 
   // If connected, also load calendar discovery data
@@ -38,40 +41,33 @@ async function IntegrationContent() {
   return (
     <div className="space-y-5">
       <GoogleCalendarCard status={status} />
+      <GestorVetCard settings={gestorVetSettings} />
       <ConversationChannelsCard settings={channelSettings} />
 
-      {status.connected && calendarsData && vetsData && (
-        <>
-          {"error" in calendarsData ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-              <p className="text-sm font-medium text-amber-800">
-                No se pudieron cargar los calendarios
-              </p>
-              <p className="mt-1 text-xs text-amber-600">
-                {calendarsData.error === "REAUTH_REQUIRED"
-                  ? "La conexión con Google Calendar ha expirado. Reconecta la integración."
-                  : calendarsData.error}
-              </p>
-            </div>
-          ) : (
-            <>
-              {"error" in vetsData ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-                  <p className="text-sm font-medium text-amber-800">
-                    No se pudieron cargar los veterinarios
-                  </p>
-                  <p className="mt-1 text-xs text-amber-600">{vetsData.error}</p>
-                </div>
-              ) : (
-                <VetCalendarsSection
-                  vets={vetsData.vets}
-                  availableCalendars={calendarsData.calendars}
-                />
-              )}
-            </>
-          )}
-        </>
-      )}
+      {status.connected &&
+        calendarsData &&
+        vetsData &&
+        ("error" in calendarsData ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-medium text-amber-800">
+              No se pudieron cargar los calendarios
+            </p>
+            <p className="mt-1 text-xs text-amber-600">
+              {calendarsData.error === "REAUTH_REQUIRED"
+                ? "La conexión con Google Calendar ha expirado. Reconecta la integración."
+                : calendarsData.error}
+            </p>
+          </div>
+        ) : "error" in vetsData ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-medium text-amber-800">
+              No se pudieron cargar los veterinarios
+            </p>
+            <p className="mt-1 text-xs text-amber-600">{vetsData.error}</p>
+          </div>
+        ) : (
+          <VetCalendarsSection vets={vetsData.vets} availableCalendars={calendarsData.calendars} />
+        ))}
     </div>
   );
 }

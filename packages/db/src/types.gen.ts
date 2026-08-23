@@ -518,7 +518,7 @@ export type Database = {
           metadata: Json
           provider: string
           scope: string | null
-          token_expires_at: string
+          token_expires_at: string | null
           updated_at: string
           vault_secret_id: string
         }
@@ -531,7 +531,7 @@ export type Database = {
           metadata?: Json
           provider: string
           scope?: string | null
-          token_expires_at: string
+          token_expires_at?: string | null
           updated_at?: string
           vault_secret_id: string
         }
@@ -544,7 +544,7 @@ export type Database = {
           metadata?: Json
           provider?: string
           scope?: string | null
-          token_expires_at?: string
+          token_expires_at?: string | null
           updated_at?: string
           vault_secret_id?: string
         }
@@ -923,6 +923,186 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "v_conversations_inbox"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_external_links: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          entity_type: string
+          external_id: string
+          external_parent_id: string | null
+          id: string
+          last_seen_at: string | null
+          local_id: string | null
+          metadata: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          entity_type: string
+          external_id: string
+          external_parent_id?: string | null
+          id?: string
+          last_seen_at?: string | null
+          local_id?: string | null
+          metadata?: Json
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          entity_type?: string
+          external_id?: string
+          external_parent_id?: string | null
+          id?: string
+          last_seen_at?: string | null
+          local_id?: string | null
+          metadata?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_external_links_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_outbox: {
+        Row: {
+          attempts: number
+          clinic_id: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          next_attempt_at: string
+          operation: string
+          payload: Json
+          processed_at: string | null
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          clinic_id: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string
+          operation: string
+          payload?: Json
+          processed_at?: string | null
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          clinic_id?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string
+          operation?: string
+          payload?: Json
+          processed_at?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_outbox_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_sync_runs: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          cursor: Json
+          direction: string
+          error_summary: string | null
+          finished_at: string | null
+          id: string
+          provider: string
+          records_created: number
+          records_failed: number
+          records_read: number
+          records_skipped: number
+          records_updated: number
+          resource: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          cursor?: Json
+          direction: string
+          error_summary?: string | null
+          finished_at?: string | null
+          id?: string
+          provider: string
+          records_created?: number
+          records_failed?: number
+          records_read?: number
+          records_skipped?: number
+          records_updated?: number
+          resource: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          cursor?: Json
+          direction?: string
+          error_summary?: string | null
+          finished_at?: string | null
+          id?: string
+          provider?: string
+          records_created?: number
+          records_failed?: number
+          records_read?: number
+          records_skipped?: number
+          records_updated?: number
+          resource?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_sync_runs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
@@ -1592,6 +1772,33 @@ export type Database = {
       }
     }
     Functions: {
+      claim_integration_outbox: {
+        Args: { p_limit?: number; p_provider: string; p_worker_id: string }
+        Returns: {
+          attempts: number
+          clinic_id: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          next_attempt_at: string
+          operation: string
+          payload: Json
+          processed_at: string | null
+          provider: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "integration_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       consume_web_chat_rate_limit: {
         Args: {
           p_bucket_key: string
