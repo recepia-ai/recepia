@@ -241,6 +241,29 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
                     {settings.dryRun.mappingsPending.users} usuarios y{" "}
                     {settings.dryRun.mappingsPending.consultationReasons} motivos de consulta.
                   </p>
+                  <details className="rounded-md bg-white p-2.5 text-stone-500">
+                    <summary className="cursor-pointer font-medium text-stone-700">
+                      Campos detectados
+                    </summary>
+                    <div className="mt-2 space-y-1 break-words font-mono text-[11px]">
+                      <p>
+                        clientes:{" "}
+                        {Object.values(settings.dryRun.clients.fields).filter(Boolean).join(", ") ||
+                          "ninguno"}
+                      </p>
+                      <p>
+                        mascotas:{" "}
+                        {Object.values(settings.dryRun.pets.fields).filter(Boolean).join(", ") ||
+                          "ninguno"}
+                      </p>
+                      <p>
+                        citas:{" "}
+                        {Object.values(settings.dryRun.appointments.fields)
+                          .filter(Boolean)
+                          .join(", ") || "ninguno"}
+                      </p>
+                    </div>
+                  </details>
                 </div>
               )}
             </div>

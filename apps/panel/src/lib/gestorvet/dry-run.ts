@@ -111,21 +111,34 @@ function scalar(value: unknown): string | null {
   return result && result !== "0" ? result : null;
 }
 
+function matchingField(record: GestorVetRecord, candidates: readonly string[]): string | null {
+  const fields = Object.keys(record).map((field) => ({ field, normalized: normalizedKey(field) }));
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizedKey(candidate);
+    const exact = fields.find((entry) => entry.normalized === normalizedCandidate);
+    if (exact) return exact.field;
+  }
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizedKey(candidate);
+    if (normalizedCandidate.length < 4) continue;
+    const partial = fields.find((entry) => entry.normalized.includes(normalizedCandidate));
+    if (partial) return partial.field;
+  }
+  return null;
+}
+
 function fieldFor(records: GestorVetRecord[], candidates: readonly string[]): string | null {
-  const candidateKeys = new Set(candidates.map(normalizedKey));
   for (const record of records.slice(0, 100)) {
-    const field = Object.keys(record).find((key) => candidateKeys.has(normalizedKey(key)));
+    const field = matchingField(record, candidates);
     if (field) return field;
   }
   return null;
 }
 
 function valueFor(record: GestorVetRecord, candidates: readonly string[]): string | null {
-  const values = new Map(
-    Object.entries(record).map(([key, value]) => [normalizedKey(key), scalar(value)]),
-  );
   for (const candidate of candidates) {
-    const value = values.get(normalizedKey(candidate));
+    const field = matchingField(record, [candidate]);
+    const value = field ? scalar(record[field]) : null;
     if (value) return value;
   }
   return null;
