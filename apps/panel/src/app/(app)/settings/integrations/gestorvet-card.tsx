@@ -1,6 +1,7 @@
 "use client";
 
 import { ClipboardCheck, Database, Loader2, Search } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -116,6 +117,12 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
 
       {settings.connected && (
         <div className="mt-4 border-t border-stone-100 pt-4">
+          <Link
+            className="mb-4 inline-flex text-sm font-medium text-emerald-700 hover:underline"
+            href="/gestorvet"
+          >
+            Abrir espacio operativo de GestorVet
+          </Link>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-medium text-stone-700">Inventario de solo lectura</p>

@@ -32,6 +32,17 @@ preparar la migración y reflejar en GestorVet las escrituras compatibles:
 
 ## Modelo de convivencia
 
+El área `/gestorvet` permite trabajar desde RECEPIA durante la transición:
+
+- muestra inventario, estado e historial de ejecuciones;
+- pagina el listado de clientes y abre su ficha detallada en vivo;
+- busca mascotas por nombre o ID y abre su ficha detallada;
+- muestra la agenda disponible, señalando los campos que la API no entrega.
+
+Las búsquedas por nombre usan acciones de servidor y no se incluyen en la URL ni
+en el historial del navegador. Estas consultas no convierten todavía los
+registros en entidades locales ni activan escrituras hacia GestorVet.
+
 Recepia guarda primero sus datos. Un trigger transaccional crea una operación en
 `integration_outbox` cuando cambia un cliente, mascota o cita. El trabajador
 `POST /api/integrations/gestorvet/outbox` reclama operaciones de forma atómica,

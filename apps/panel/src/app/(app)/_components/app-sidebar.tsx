@@ -1,20 +1,10 @@
 "use client";
 
+import { Calendar, Database, LayoutDashboard, MessageSquare, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Calendar,
-  Users,
-  Settings,
-} from "lucide-react";
 
 // -- Navigation definition ------------------------------------------------
 
@@ -35,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { href: "/calendar", label: "Calendario", icon: Calendar, enabled: true },
   { href: "/clients", label: "Clientes", icon: Users, enabled: true },
+  { href: "/gestorvet", label: "GestorVet", icon: Database, enabled: true },
   { href: "/settings", label: "Ajustes", icon: Settings, enabled: true },
 ];
 
@@ -55,9 +46,7 @@ export function AppSidebar({ clinicName }: Props) {
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-700">
             <span className="text-sm font-bold text-white">R</span>
           </div>
-          <span className="text-base font-semibold text-stone-900">
-            Recepia
-          </span>
+          <span className="text-base font-semibold text-stone-900">Recepia</span>
         </div>
       </div>
 
@@ -73,10 +62,7 @@ export function AppSidebar({ clinicName }: Props) {
       <nav className="flex-1 space-y-0.5 px-3 py-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
           const link = (
             <Link
@@ -92,8 +78,7 @@ export function AppSidebar({ clinicName }: Props) {
                 item.enabled &&
                   !isActive &&
                   "text-stone-600 hover:bg-stone-50 hover:text-stone-900",
-                !item.enabled &&
-                  "cursor-not-allowed text-stone-400 opacity-50 select-none",
+                !item.enabled && "cursor-not-allowed text-stone-400 opacity-50 select-none",
               )}
             >
               <Icon className="size-4 shrink-0" strokeWidth={1.75} />
