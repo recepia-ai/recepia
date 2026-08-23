@@ -77,6 +77,11 @@ El botón **Ejecutar inventario** de Ajustes → Integraciones cubre los pasos 2
 de campos y recursos fallidos en `integration_sync_runs` y en los metadatos de
 la integración. No almacena respuestas, nombres, teléfonos ni historiales.
 
+El botón **Ejecutar análisis** realiza el `dry run` contra los datos actuales de
+Recepia. Normaliza teléfonos y microchips en memoria para contar coincidencias,
+duplicados, campos obligatorios ausentes y referencias huérfanas. El informe
+persistido solo contiene agregados y nombres de campos detectados.
+
 ## Mapeo previsto
 
 | GestorVet | Recepia | Estrategia |

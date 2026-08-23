@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Loader2, Search } from "lucide-react";
+import { ClipboardCheck, Database, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   type GestorVetSettings,
   runGestorVetDiscovery,
+  runGestorVetDryRun,
   saveGestorVetIntegration,
 } from "./gestorvet-actions";
 
@@ -41,6 +42,18 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
         return;
       }
       toast.success("Inventario de GestorVet completado sin modificar datos");
+      router.refresh();
+    });
+  }
+
+  function dryRun() {
+    startTransition(async () => {
+      const result = await runGestorVetDryRun();
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Análisis previo completado sin importar ni modificar datos");
       router.refresh();
     });
   }
@@ -147,6 +160,89 @@ export function GestorVetCard({ settings }: { settings: GestorVetSettings }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {settings.discovery?.status === "succeeded" && (
+            <div className="mt-3 border-t border-stone-200 pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-stone-700">Análisis previo a migración</p>
+                  <p className="mt-0.5 text-xs text-stone-500">
+                    Detecta duplicados, campos incompletos y referencias huérfanas.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={dryRun}>
+                  {busy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ClipboardCheck className="size-3.5" />
+                  )}
+                  Ejecutar análisis
+                </Button>
+              </div>
+
+              {settings.dryRun && (
+                <div className="mt-3 space-y-2 rounded-lg bg-stone-50 p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-stone-700">
+                      {settings.dryRun.totalRecords.toLocaleString("es-ES")} registros analizados
+                    </span>
+                    <span className="text-stone-500">
+                      {new Date(settings.dryRun.completedAt).toLocaleString("es-ES")}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-md bg-white p-2.5">
+                      <p className="font-medium text-stone-700">Clientes</p>
+                      <p className="mt-1 text-stone-500">
+                        {settings.dryRun.clients.eligibleAfterReview.toLocaleString("es-ES")} aptos
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.clients.missingPhone.toLocaleString("es-ES")} sin teléfono
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.clients.duplicatePhoneGroups.toLocaleString("es-ES")}{" "}
+                        grupos duplicados
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-white p-2.5">
+                      <p className="font-medium text-stone-700">Mascotas</p>
+                      <p className="mt-1 text-stone-500">
+                        {settings.dryRun.pets.eligibleAfterReview.toLocaleString("es-ES")} aptas
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.pets.orphanOwner.toLocaleString("es-ES")} sin propietario
+                        válido
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.pets.duplicateMicrochipGroups.toLocaleString("es-ES")}{" "}
+                        chips duplicados
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-white p-2.5">
+                      <p className="font-medium text-stone-700">Citas</p>
+                      <p className="mt-1 text-stone-500">
+                        {settings.dryRun.appointments.eligibleAfterMapping.toLocaleString("es-ES")}{" "}
+                        aptas tras mapeo
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.appointments.orphanPet.toLocaleString("es-ES")} con mascota
+                        no localizada
+                      </p>
+                      <p className="text-stone-500">
+                        {settings.dryRun.appointments.unknownUser.toLocaleString("es-ES")} sin
+                        veterinario mapeado
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-stone-500">
+                    Mapeos pendientes: {settings.dryRun.mappingsPending.species} especies,{" "}
+                    {settings.dryRun.mappingsPending.users} usuarios y{" "}
+                    {settings.dryRun.mappingsPending.consultationReasons} motivos de consulta.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

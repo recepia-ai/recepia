@@ -8,6 +8,7 @@ import {
   type GestorVetDiscoveryReport,
   type GestorVetDiscoveryResource,
 } from "@/lib/gestorvet/discovery";
+import { dryRunGestorVet, type GestorVetDryRunReport } from "@/lib/gestorvet/dry-run";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,12 +17,56 @@ const settingsSchema = z.object({
   api_key: z.string().trim().min(8, "La API key no parece válida").max(500),
 });
 
+const fieldMapSchema = z.record(z.string(), z.string().nullable());
+const dryRunReportSchema = z.object({
+  status: z.literal("succeeded"),
+  completedAt: z.string(),
+  totalRecords: z.number(),
+  clients: z.object({
+    total: z.number(),
+    eligibleAfterReview: z.number(),
+    existingPhoneMatches: z.number(),
+    missingPhone: z.number(),
+    invalidPhone: z.number(),
+    missingName: z.number(),
+    duplicatePhoneGroups: z.number(),
+    duplicatePhoneRecords: z.number(),
+    fields: fieldMapSchema,
+  }),
+  pets: z.object({
+    total: z.number(),
+    eligibleAfterReview: z.number(),
+    existingMicrochipMatches: z.number(),
+    orphanOwner: z.number(),
+    missingName: z.number(),
+    missingSpecies: z.number(),
+    duplicateMicrochipGroups: z.number(),
+    fields: fieldMapSchema,
+  }),
+  appointments: z.object({
+    total: z.number(),
+    eligibleAfterMapping: z.number(),
+    orphanClient: z.number(),
+    orphanPet: z.number(),
+    unknownUser: z.number(),
+    unknownReason: z.number(),
+    missingDate: z.number(),
+    fields: fieldMapSchema,
+  }),
+  mappingsPending: z.object({
+    species: z.number(),
+    users: z.number(),
+    consultationReasons: z.number(),
+  }),
+});
+
 export type GestorVetSettings = {
   connected: boolean;
   noc?: string;
   syncEnabled: boolean;
   connectedAt?: string;
   discovery?: GestorVetDiscoveryReport;
+  dryRun?: GestorVetDryRunReport;
 };
 
 function discoveryResource(value: unknown): GestorVetDiscoveryResource | null {
@@ -60,6 +105,11 @@ function discoveryReport(value: unknown): GestorVetDiscoveryReport | undefined {
       .map(discoveryResource)
       .filter((resource): resource is GestorVetDiscoveryResource => resource !== null),
   };
+}
+
+function dryRunReport(value: unknown): GestorVetDryRunReport | undefined {
+  const parsed = dryRunReportSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -104,6 +154,7 @@ export async function getGestorVetSettings(): Promise<GestorVetSettings> {
     connectedAt:
       typeof metadata.connected_at === "string" ? metadata.connected_at : data.created_at,
     discovery: discoveryReport(metadata.discovery),
+    dryRun: dryRunReport(metadata.dry_run),
   };
 }
 
@@ -117,6 +168,19 @@ export async function runGestorVetDiscovery() {
     return { success: true, report };
   } catch {
     return { error: "No se pudo completar el inventario de GestorVet" };
+  }
+}
+
+export async function runGestorVetDryRun() {
+  const access = await adminClinic();
+  if ("error" in access) return { error: access.error };
+
+  try {
+    const report = await dryRunGestorVet(createAdminClient(), access.clinicId);
+    revalidatePath("/settings/integrations");
+    return { success: true, report };
+  } catch {
+    return { error: "No se pudo completar el análisis previo de GestorVet" };
   }
 }
 

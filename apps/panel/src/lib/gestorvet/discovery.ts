@@ -33,7 +33,7 @@ function fieldNames(records: GestorVetRecord[]): string[] {
   return [...fields].sort((a, b) => a.localeCompare(b));
 }
 
-async function readClient(db: AdminDb, clinicId: string) {
+export async function readGestorVetClient(db: AdminDb, clinicId: string) {
   const { data: integration, error } = await db
     .from("clinic_integrations")
     .select("id, vault_secret_id, metadata")
@@ -67,7 +67,7 @@ export async function discoverGestorVet(
   db: AdminDb,
   clinicId: string,
 ): Promise<GestorVetDiscoveryReport> {
-  const { client, integration } = await readClient(db, clinicId);
+  const { client, integration } = await readGestorVetClient(db, clinicId);
   const { data: run, error: runError } = await db
     .from("integration_sync_runs")
     .insert({
