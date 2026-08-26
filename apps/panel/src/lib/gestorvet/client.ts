@@ -226,6 +226,38 @@ export class GestorVetClient {
     return recordsFromGestorVet(await this.get("getmascotasespecifico", [id, 0, 0, 0]));
   }
 
+  async getPopulations(
+    filters: { id?: string | number; name?: string } = {},
+  ): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(
+      await this.get("getpoblaciones", [filters.id ?? 0, filters.name ?? 0]),
+    );
+  }
+
+  async getProvinces(
+    filters: { id?: string | number; name?: string } = {},
+  ): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(
+      await this.get("getprovincias", [filters.id ?? 0, filters.name ?? 0]),
+    );
+  }
+
+  async getClientGroups(): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(await this.get("getgrupocliente", [0, 0]));
+  }
+
+  async getMessageLanguages(): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(await this.get("getidiomamensajes", [0, 0]));
+  }
+
+  async getPetStatuses(): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(await this.get("getestadosmascotas", [0, 0]));
+  }
+
+  async getPetSexes(): Promise<GestorVetRecord[]> {
+    return recordsFromGestorVet(await this.get("getsexomascotas", [0, 0]));
+  }
+
   async getAppointments(
     filters: {
       clientId?: string | number;

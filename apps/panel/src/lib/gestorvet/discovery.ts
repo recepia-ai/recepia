@@ -86,11 +86,17 @@ export async function discoverGestorVet(
     read: () => Promise<GestorVetRecord[]>;
   }> = [
     { resource: "clinic", read: () => client.getClinicData() },
+    { resource: "populations", read: () => client.getPopulations() },
+    { resource: "provinces", read: () => client.getProvinces() },
+    { resource: "client_groups", read: () => client.getClientGroups() },
+    { resource: "message_languages", read: () => client.getMessageLanguages() },
     { resource: "clients", read: () => client.getAllClients(1_000) },
     { resource: "pets", read: () => client.getPets() },
     { resource: "appointments", read: () => client.getAppointments() },
     { resource: "species", read: () => client.getSpecies() },
     { resource: "breeds", read: () => client.getBreeds() },
+    { resource: "pet_statuses", read: () => client.getPetStatuses() },
+    { resource: "pet_sexes", read: () => client.getPetSexes() },
     { resource: "users", read: () => client.getUsers() },
     { resource: "consultation_reasons", read: () => client.getConsultationReasons() },
     { resource: "centers", read: () => client.getCenters() },

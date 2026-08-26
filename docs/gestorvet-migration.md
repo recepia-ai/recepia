@@ -26,6 +26,8 @@ preparar la migración y reflejar en GestorVet las escrituras compatibles:
 - desparasitaciones;
 - historial de pesos;
 - maestros de especies, razas, usuarios y motivos de consulta.
+- maestros de poblaciones, provincias, grupos de cliente, idiomas, estados y
+  sexos de mascota;
 - creación y actualización de clientes;
 - creación de mascotas;
 - creación de citas.
@@ -44,7 +46,10 @@ convivencia:
 
 - **Clientes** combina los registros locales con la primera página de
   GestorVet, permite buscar en ambos orígenes y abre una ficha externa de solo
-  lectura con sus mascotas vinculadas;
+  lectura con sus mascotas vinculadas. Los identificadores de población,
+  provincia, grupo, idioma, especie, raza, estado, sexo y veterinario se
+  resuelven contra sus maestros y se muestran como nombre legible, conservando
+  debajo el código original para trazabilidad;
 - **Calendario** combina las citas locales y externas dentro de la misma vista,
   identificando GestorVet en violeta y sin permitir modificaciones.
 

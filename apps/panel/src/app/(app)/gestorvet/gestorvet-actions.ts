@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { GestorVetRecord } from "@/lib/gestorvet/client";
 import { readGestorVetClient } from "@/lib/gestorvet/discovery";
+import { gestorVetLookup, gestorVetResolvedValue } from "@/lib/gestorvet/native-adapters";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -70,10 +71,54 @@ export async function getGestorVetRecordDetails(input: {
 
   try {
     const client = await liveClient();
-    const records =
-      parsed.data.resource === "clients"
-        ? await client.getClient(parsed.data.id)
-        : await client.getPet(parsed.data.id);
+    let records: GestorVetRecord[];
+    if (parsed.data.resource === "clients") {
+      const [details, populationRows, provinceRows, groupRows, languageRows] = await Promise.all([
+        client.getClient(parsed.data.id),
+        client.getPopulations(),
+        client.getProvinces(),
+        client.getClientGroups(),
+        client.getMessageLanguages(),
+      ]);
+      const populations = gestorVetLookup(populationRows);
+      const provinces = gestorVetLookup(provinceRows);
+      const groups = gestorVetLookup(groupRows);
+      const languages = gestorVetLookup(languageRows);
+      records = details.map((record) => ({
+        ...record,
+        POBLACION_NOMBRE: gestorVetResolvedValue(record, populations, "POBLACION").label,
+        PROVINCIA_NOMBRE: gestorVetResolvedValue(record, provinces, "PROVINCIA").label,
+        GRUPO_NOMBRE: gestorVetResolvedValue(record, groups, "GRUPO", "TIPO_CLIENTE_ID").label,
+        IDIOMA_NOMBRE: gestorVetResolvedValue(record, languages, "IDIOMA").label,
+      }));
+    } else {
+      const [details, speciesRows, breedRows, statusRows, sexRows, userRows] = await Promise.all([
+        client.getPet(parsed.data.id),
+        client.getSpecies(),
+        client.getBreeds(),
+        client.getPetStatuses(),
+        client.getPetSexes(),
+        client.getUsers(),
+      ]);
+      const species = gestorVetLookup(speciesRows);
+      const breeds = gestorVetLookup(breedRows);
+      const statuses = gestorVetLookup(statusRows);
+      const sexes = gestorVetLookup(sexRows);
+      const users = gestorVetLookup(userRows);
+      records = details.map((record) => ({
+        ...record,
+        ESPECIE_NOMBRE: gestorVetResolvedValue(record, species, "ESPECIE").label,
+        RAZA_NOMBRE: gestorVetResolvedValue(record, breeds, "RAZA").label,
+        ESTADO_NOMBRE: gestorVetResolvedValue(record, statuses, "ESTADO").label,
+        SEXO_NOMBRE: gestorVetResolvedValue(record, sexes, "SEXO").label,
+        VETERINARIO_NOMBRE: gestorVetResolvedValue(
+          record,
+          users,
+          "VETERINARIO",
+          "VETERINARIO_HABITUAL",
+        ).label,
+      }));
+    }
     return { records };
   } catch {
     return { error: "No se pudo consultar el detalle en GestorVet" };

@@ -21,6 +21,26 @@ export type GestorVetClientSummary = {
   name: string;
 };
 
+export function gestorVetLookup(records: GestorVetRecord[]): Map<string, string> {
+  const lookup = new Map<string, string>();
+  for (const record of records) {
+    const id = gestorVetValue(record, "ID");
+    const name = gestorVetValue(record, "NOMBRE", "DESCRIPCION");
+    if (id && name) lookup.set(id, name);
+  }
+  return lookup;
+}
+
+export function gestorVetResolvedValue(
+  record: GestorVetRecord,
+  lookup: Map<string, string>,
+  ...keys: string[]
+): { code: string | null; label: string } {
+  const code = gestorVetValue(record, ...keys);
+  if (!code) return { code: null, label: "—" };
+  return { code, label: lookup.get(code) ?? `Código ${code}` };
+}
+
 export function gestorVetClientSummary(record: GestorVetRecord): GestorVetClientSummary | null {
   const externalId = gestorVetValue(record, "ID");
   if (!externalId) return null;
