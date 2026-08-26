@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recepia — recepción veterinaria con IA</title>
+<meta name="description" content="Recepia atiende los WhatsApp de tu clínica veterinaria 24/7: gestiona citas en tu agenda, detecta urgencias y avisa a tu equipo cuando de verdad hace falta. Sin que suene a robot.">
+<meta property="og:title" content="Recepia — recepción veterinaria con IA">
+<meta property="og:description" content="La recepcionista virtual que atiende los WhatsApp de tu clínica veterinaria las 24 horas y agenda las citas en tu calendario.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://recepia.iatope.com">
+<link rel="canonical" href="https://recepia.iatope.com/">
+<meta name="theme-color" content="#16704e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316704e'/%3E%3Ctext x='50' y='72' font-size='62' text-anchor='middle' fill='%23fbfcf8' font-family='system-ui,sans-serif' font-weight='700'%3ER%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --paper:#f1f4ec;
+  --surface:#fbfcf8;
+  --surface-2:#ffffff;
+  --ink:#12201a;
+  --muted:#586a5f;
+  --faint:#7f8f84;
+  --line:#dbe3d4;
+  --line-strong:#c7d2bd;
+  --green:#16704e;
+  --green-bright:#2c9c6d;
+  --green-soft:#e4efe6;
+  --honey:#d6982f;
+  --honey-soft:#f6ead0;
+  --urgent:#c0503a;
+  --urgent-soft:#f6e2dc;
+  --shadow-sm:0 1px 2px rgba(18,32,26,.05), 0 2px 8px rgba(18,32,26,.04);
+  --shadow-md:0 4px 14px rgba(18,32,26,.07), 0 14px 40px rgba(18,32,26,.08);
+  --shadow-lg:0 10px 30px rgba(18,32,26,.10), 0 30px 70px rgba(18,32,26,.12);
+  --radius:14px;
+  --radius-lg:22px;
+  --maxw:1140px;
+  --font-display:"Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+  --font-body:"Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme: dark){
+    --paper:#0d1511;
+    --surface:#141f19;
+    --surface-2:#1a2720;
+    --ink:#e7efe6;
+    --muted:#9fb0a3;
+    --faint:#83958a;
+    --line:#26332b;
+    --line-strong:#334138;
+    --green:#3ab787;
+    --green-bright:#4ecb96;
+    --green-soft:#193028;
+    --honey:#e6b45c;
+    --honey-soft:#2b2416;
+    --urgent:#e0725c;
+    --urgent-soft:#2f1e19;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:0 6px 20px rgba(0,0,0,.35);
+    --shadow-lg:0 20px 60px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0d1511;
+  --surface:#141f19;
+  --surface-2:#1a2720;
+  --ink:#e7efe6;
+  --muted:#9fb0a3;
+  --faint:#83958a;
+  --line:#26332b;
+  --line-strong:#334138;
+  --green:#3ab787;
+  --green-bright:#4ecb96;
+  --green-soft:#193028;
+  --honey:#e6b45c;
+  --honey-soft:#2b2416;
+  --urgent:#e0725c;
+  --urgent-soft:#2f1e19;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:0 6px 20px rgba(0,0,0,.35);
+  --shadow-lg:0 20px 60px rgba(0,0,0,.5);
+}
+
+/* ============ BASE ============ */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.6;
+  font-size:17px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:700;line-height:1.08;letter-spacing:-0.02em;text-wrap:balance;margin:0}
+p{margin:0}
+a{color:inherit;text-decoration:none}
+img,svg{max-width:100%;display:block}
+:focus-visible{outline:2.5px solid var(--green-bright);outline-offset:3px;border-radius:4px}
+::selection{background:var(--green);color:#fff}
+
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:24px}
+.eyebrow{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--green);
+  font-weight:500;
+  display:inline-flex;align-items:center;gap:8px;
+}
+.eyebrow::before{content:"";width:22px;height:1.5px;background:var(--green);display:inline-block}
+.section{padding:96px 0}
+.section-head{max-width:640px;margin-bottom:52px}
+.section-head h2{font-size:clamp(30px,4.6vw,46px);margin:18px 0 0}
+.section-head p{margin-top:18px;color:var(--muted);font-size:19px}
+
+/* ============ BUTTONS ============ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  font-family:var(--font-body);font-weight:600;font-size:16px;
+  padding:14px 24px;border-radius:999px;border:1.5px solid transparent;
+  cursor:pointer;transition:transform .18s ease, background .18s ease, box-shadow .18s ease, border-color .18s ease;
+  white-space:nowrap;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--green);color:#fff;box-shadow:var(--shadow-sm)}
+.btn-primary:hover{background:var(--green-bright);box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--line-strong)}
+.btn-ghost:hover{border-color:var(--green);color:var(--green)}
+.btn svg{width:17px;height:17px}
+
+/* ============ NAV ============ */
+header.nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--paper) 82%, transparent);backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid transparent;transition:border-color .3s}
+header.nav.scrolled{border-color:var(--line)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:70px;gap:24px}
+.brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:-0.03em}
+.brand .mark{width:34px;height:34px;flex:none}
+.nav-links{display:flex;gap:30px;align-items:center}
+.nav-links a{font-size:15.5px;color:var(--muted);font-weight:500;transition:color .15s}
+.nav-links a:hover{color:var(--ink)}
+.nav-right{display:flex;align-items:center;gap:14px}
+.theme-toggle{width:40px;height:40px;border-radius:999px;border:1.5px solid var(--line-strong);background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;transition:border-color .15s,background .15s}
+.theme-toggle:hover{border-color:var(--green)}
+.theme-toggle svg{width:18px;height:18px}
+.theme-toggle .moon{display:none}
+:root[data-theme="dark"] .theme-toggle .sun{display:none}
+:root[data-theme="dark"] .theme-toggle .moon{display:block}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .theme-toggle .sun{display:none}:root:not([data-theme="light"]) .theme-toggle .moon{display:block}}
+@media(max-width:900px){.nav-links{display:none}}
+
+/* ============ HERO ============ */
+.hero{position:relative;padding:64px 0 90px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:
+   radial-gradient(60% 60% at 82% 8%, color-mix(in srgb,var(--green) 12%,transparent), transparent 70%),
+   radial-gradient(50% 45% at 0% 100%, color-mix(in srgb,var(--honey) 12%,transparent), transparent 70%);
+   pointer-events:none;z-index:0}
+.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.02fr .98fr;gap:60px;align-items:center}
+.hero-copy h1{font-size:clamp(40px,6.2vw,68px);font-weight:800;margin:22px 0 0}
+.hero-copy h1 .hl{color:var(--green);position:relative;white-space:nowrap}
+.hero-copy .lede{font-size:clamp(18px,2.2vw,21px);color:var(--muted);margin-top:24px;max-width:33ch}
+.hero-cta{display:flex;gap:14px;margin-top:34px;flex-wrap:wrap}
+.hero-trust{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:34px;font-size:14px;color:var(--faint);font-family:var(--font-mono)}
+.hero-trust span{display:inline-flex;align-items:center;gap:8px}
+.hero-trust .dot{width:7px;height:7px;border-radius:999px;background:var(--green-bright)}
+@media(max-width:920px){.hero-grid{grid-template-columns:1fr;gap:44px}.hero-copy{max-width:640px}.hero-copy .lede{max-width:48ch}}
+
+/* ============ CHAT MOCK ============ */
+.phone{
+  background:var(--surface);border:1px solid var(--line);border-radius:26px;
+  box-shadow:var(--shadow-lg);overflow:hidden;position:relative;
+  max-width:400px;margin-inline:auto;width:100%;
+}
+.phone-head{display:flex;align-items:center;gap:12px;padding:15px 18px;background:var(--green);color:#fff}
+.phone-head .avatar{width:40px;height:40px;border-radius:999px;background:rgba(255,255,255,.16);display:grid;place-items:center;flex:none}
+.phone-head .avatar svg{width:23px;height:23px}
+.phone-head .who{font-family:var(--font-display);font-weight:600;font-size:15.5px;line-height:1.15}
+.phone-head .status{font-size:12px;opacity:.85;font-family:var(--font-mono);display:flex;align-items:center;gap:6px;margin-top:1px}
+.phone-head .status .live{width:7px;height:7px;border-radius:999px;background:#7ff0b8;box-shadow:0 0 0 0 rgba(127,240,184,.7);animation:pulse 2.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(127,240,184,.6)}70%{box-shadow:0 0 0 7px rgba(127,240,184,0)}100%{box-shadow:0 0 0 0 rgba(127,240,184,0)}}
+.phone-body{padding:20px 16px 22px;display:flex;flex-direction:column;gap:11px;min-height:430px;
+  background:
+   linear-gradient(var(--surface),var(--surface)),
+   radial-gradient(circle at 20% 10%, color-mix(in srgb,var(--green) 6%,transparent), transparent 40%);
+  background-blend-mode:normal;}
+.msg{max-width:82%;padding:10px 14px;border-radius:16px;font-size:14.5px;line-height:1.45;box-shadow:var(--shadow-sm);
+  opacity:0;transform:translateY(9px) scale(.99);}
+.msg.show{opacity:1;transform:none;transition:opacity .4s ease, transform .4s cubic-bezier(.2,.8,.3,1)}
+.msg .t{display:block;font-family:var(--font-mono);font-size:10.5px;color:var(--faint);margin-top:5px;text-align:right}
+.msg.in{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:5px;color:var(--ink)}
+.msg.out{align-self:flex-end;background:var(--green-soft);border:1px solid color-mix(in srgb,var(--green) 22%,transparent);border-bottom-right-radius:5px;color:var(--ink)}
+:root[data-theme="dark"] .msg.out{background:var(--green-soft)}
+.msg.out .t{color:color-mix(in srgb,var(--green) 55%, var(--faint))}
+.sys{align-self:center;font-family:var(--font-mono);font-size:11px;color:var(--green);background:var(--green-soft);
+  border:1px dashed color-mix(in srgb,var(--green) 35%,transparent);padding:6px 12px;border-radius:999px;display:inline-flex;gap:7px;align-items:center;
+  opacity:0;transform:translateY(6px)}
+.sys.show{opacity:1;transform:none;transition:opacity .4s ease,transform .4s ease}
+.sys svg{width:13px;height:13px}
+.typing{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:5px;padding:13px 16px;border-radius:16px;display:none;gap:4px;align-items:center;box-shadow:var(--shadow-sm)}
+.typing.show{display:inline-flex}
+.typing i{width:7px;height:7px;border-radius:999px;background:var(--faint);animation:blink 1.3s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+.phone-cap{text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--faint);margin-top:16px}
+
+/* ============ LOGOS / PILOT STRIP ============ */
+.trust-band{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface)}
+.trust-band .wrap{display:flex;align-items:center;justify-content:space-between;gap:28px;padding-block:22px;flex-wrap:wrap}
+.trust-band .label{font-family:var(--font-mono);font-size:12.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint)}
+.trust-band .clinic{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
+.trust-band .clinic .badge{font-family:var(--font-mono);font-size:11px;color:var(--green);background:var(--green-soft);padding:4px 10px;border-radius:999px;font-weight:500}
+
+/* ============ PROBLEM ============ */
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.problem-grid .big{font-family:var(--font-display);font-size:clamp(26px,3.4vw,34px);font-weight:600;line-height:1.25;letter-spacing:-0.02em}
+.problem-grid .big em{font-style:normal;color:var(--green);position:relative}
+.problem-list{display:flex;flex-direction:column;gap:2px}
+.problem-list .row{display:flex;gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.problem-list .row:last-child{border-bottom:0}
+.problem-list .n{font-family:var(--font-mono);font-size:13px;color:var(--honey);font-weight:600;padding-top:2px}
+.problem-list .row h4{font-size:17.5px;margin-bottom:3px}
+.problem-list .row p{font-size:15px;color:var(--muted)}
+@media(max-width:820px){.problem-grid{grid-template-columns:1fr;gap:32px}}
+
+/* ============ STEPS ============ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:step}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:32px 28px;position:relative;transition:transform .25s ease,box-shadow .25s ease,border-color .25s}
+.step:hover{transform:translateY(-4px);box-shadow:var(--shadow-md);border-color:var(--line-strong)}
+.step .num{counter-increment:step;font-family:var(--font-mono);font-size:13px;color:var(--green);font-weight:600;display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.step .num::before{content:"0" counter(step);font-size:34px;font-family:var(--font-display);font-weight:700;color:var(--ink);letter-spacing:-0.03em}
+.step .ic{width:44px;height:44px;border-radius:12px;background:var(--green-soft);display:grid;place-items:center;color:var(--green);margin-bottom:18px}
+.step .ic svg{width:23px;height:23px}
+.step h3{font-size:20px;margin-bottom:9px}
+.step p{color:var(--muted);font-size:15.5px}
+@media(max-width:820px){.steps{grid-template-columns:1fr}}
+
+/* ============ FEATURES ============ */
+.features{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden}
+.feat{background:var(--surface-2);padding:30px 28px;transition:background .2s}
+.feat:hover{background:var(--surface)}
+.feat .ic{width:40px;height:40px;border-radius:11px;background:var(--green-soft);color:var(--green);display:grid;place-items:center;margin-bottom:16px}
+.feat .ic svg{width:21px;height:21px}
+.feat h3{font-size:17.5px;margin-bottom:7px}
+.feat p{font-size:14.5px;color:var(--muted);line-height:1.5}
+.feat .tag{display:inline-block;margin-top:12px;font-family:var(--font-mono);font-size:11px;color:var(--honey);background:var(--honey-soft);padding:3px 9px;border-radius:999px}
+@media(max-width:900px){.feat-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.feat-grid{grid-template-columns:1fr}}
+
+/* ============ STATS ============ */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.stat{text-align:center;padding:14px}
+.stat .big{font-family:var(--font-display);font-weight:800;font-size:clamp(38px,5vw,56px);color:var(--green);letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums}
+.stat .lab{margin-top:12px;font-size:14.5px;color:var(--muted)}
+@media(max-width:760px){.stats{grid-template-columns:1fr 1fr;gap:34px 20px}}
+
+/* ============ HONESTY / NO ============ */
+.honesty{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:center}
+.honesty .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:8px;box-shadow:var(--shadow-sm)}
+.honesty .card .line{display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:14px}
+.honesty .card .line + .line{border-top:1px solid var(--line)}
+.honesty .card .x{width:26px;height:26px;border-radius:999px;background:var(--urgent-soft);color:var(--urgent);display:grid;place-items:center;flex:none;margin-top:1px}
+.honesty .card .x svg{width:14px;height:14px}
+.honesty .card .line strong{display:block;font-size:15.5px;font-weight:600}
+.honesty .card .line span{font-size:14px;color:var(--muted)}
+@media(max-width:820px){.honesty{grid-template-columns:1fr;gap:34px}}
+
+/* ============ SECURITY ============ */
+.secure{background:var(--ink);color:var(--paper);border-radius:var(--radius-lg);padding:clamp(38px,5vw,60px);position:relative;overflow:hidden}
+:root[data-theme="dark"] .secure{background:var(--surface-2);border:1px solid var(--line)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .secure{background:var(--surface-2);border:1px solid var(--line)}}
+.secure::after{content:"";position:absolute;right:-80px;top:-80px;width:320px;height:320px;border-radius:999px;background:radial-gradient(circle,color-mix(in srgb,var(--green) 40%,transparent),transparent 65%);opacity:.5}
+.secure .eyebrow{color:var(--green-bright)}
+.secure .eyebrow::before{background:var(--green-bright)}
+.secure h2{color:#fff;font-size:clamp(28px,4vw,40px);margin:16px 0 0;position:relative}
+:root[data-theme="dark"] .secure h2{color:var(--ink)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .secure h2{color:var(--ink)}}
+.secure .sub{color:color-mix(in srgb,var(--paper) 70%, transparent);margin-top:16px;max-width:56ch;position:relative}
+.secure-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px 40px;margin-top:40px;position:relative}
+.secure-grid .item{display:flex;gap:14px;align-items:flex-start}
+.secure-grid .item .ic{width:38px;height:38px;border-radius:11px;background:color-mix(in srgb,#fff 12%,transparent);color:var(--green-bright);display:grid;place-items:center;flex:none}
+:root[data-theme="dark"] .secure-grid .item .ic{background:var(--green-soft)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .secure-grid .item .ic{background:var(--green-soft)}}
+.secure-grid .item .ic svg{width:19px;height:19px}
+.secure-grid .item h4{font-size:16.5px;color:#fff}
+:root[data-theme="dark"] .secure-grid .item h4{color:var(--ink)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .secure-grid .item h4{color:var(--ink)}}
+.secure-grid .item p{font-size:14px;color:color-mix(in srgb,var(--paper) 62%, transparent);margin-top:3px}
+@media(max-width:720px){.secure-grid{grid-template-columns:1fr}}
+
+/* ============ PILOT QUOTE ============ */
+.pilot{display:grid;grid-template-columns:1fr 1.3fr;gap:50px;align-items:center}
+.pilot .portrait{background:var(--green);border-radius:var(--radius-lg);aspect-ratio:1/1;display:grid;place-items:center;position:relative;overflow:hidden;box-shadow:var(--shadow-md)}
+.pilot .portrait::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.18),transparent 55%)}
+.pilot .portrait svg{width:44%;height:44%;color:rgba(255,255,255,.92);position:relative}
+.pilot blockquote{margin:0;font-family:var(--font-display);font-weight:500;font-size:clamp(21px,2.8vw,29px);line-height:1.35;letter-spacing:-0.02em}
+.pilot blockquote .q{color:var(--green)}
+.pilot .who{margin-top:26px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pilot .who .nm{font-weight:700}
+.pilot .who .rl{color:var(--muted);font-size:15px}
+.pilot .who .sep{width:5px;height:5px;border-radius:999px;background:var(--line-strong)}
+.pilot .meta{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap}
+.pilot .meta .chip{font-family:var(--font-mono);font-size:12px;color:var(--muted);border:1px solid var(--line);padding:6px 12px;border-radius:999px;background:var(--surface)}
+@media(max-width:820px){.pilot{grid-template-columns:1fr;gap:32px}.pilot .portrait{max-width:220px}}
+
+/* ============ PRICING ============ */
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;align-items:stretch}
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:32px 28px;display:flex;flex-direction:column;transition:transform .25s,box-shadow .25s}
+.plan:hover{transform:translateY(-4px);box-shadow:var(--shadow-md)}
+.plan.feat-plan{border-color:var(--green);box-shadow:0 0 0 1.5px var(--green), var(--shadow-md);position:relative}
+.plan.feat-plan::before{content:"Recomendado";position:absolute;top:-12px;left:28px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--green);color:#fff;padding:4px 12px;border-radius:999px}
+.plan .pname{font-family:var(--font-display);font-weight:700;font-size:20px}
+.plan .pdesc{color:var(--muted);font-size:14px;margin-top:6px;min-height:40px}
+.plan .price{margin:22px 0 4px;font-family:var(--font-display);font-weight:800;font-size:42px;letter-spacing:-0.03em;color:var(--ink)}
+.plan .price small{font-size:16px;font-weight:500;color:var(--muted);font-family:var(--font-body)}
+.plan .price .from{display:block;font-family:var(--font-mono);font-size:12px;color:var(--faint);font-weight:400;letter-spacing:.04em;margin-bottom:2px}
+.plan ul{list-style:none;padding:0;margin:22px 0 26px;display:flex;flex-direction:column;gap:12px}
+.plan li{display:flex;gap:11px;align-items:flex-start;font-size:15px}
+.plan li svg{width:18px;height:18px;color:var(--green);flex:none;margin-top:3px}
+.plan li.soon svg{color:var(--honey)}
+.plan li .soon-tag{font-family:var(--font-mono);font-size:10px;color:var(--honey);border:1px solid color-mix(in srgb,var(--honey) 40%,transparent);padding:1px 6px;border-radius:999px;margin-left:2px}
+.plan .btn{margin-top:auto;width:100%}
+.plans-note{text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--faint);margin-top:26px}
+@media(max-width:900px){.plans{grid-template-columns:1fr}.plan.feat-plan{order:-1}}
+
+/* ============ FAQ ============ */
+.faq{max-width:820px;margin-inline:auto}
+.faq details{border-bottom:1px solid var(--line);padding:6px 0}
+.faq summary{list-style:none;cursor:pointer;padding:20px 44px 20px 4px;position:relative;font-family:var(--font-display);font-weight:600;font-size:18.5px;letter-spacing:-0.01em}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";position:absolute;right:6px;top:50%;width:11px;height:11px;border-right:2px solid var(--green);border-bottom:2px solid var(--green);transform:translateY(-70%) rotate(45deg);transition:transform .25s}
+.faq details[open] summary::after{transform:translateY(-30%) rotate(225deg)}
+.faq .ans{padding:0 44px 22px 4px;color:var(--muted);font-size:16px}
+.faq .ans a{color:var(--green);text-decoration:underline;text-underline-offset:3px}
+
+/* ============ FINAL CTA ============ */
+.final{text-align:center;padding:100px 0}
+.final h2{font-size:clamp(32px,5vw,54px);font-weight:800}
+.final p{color:var(--muted);font-size:19px;margin:20px auto 0;max-width:52ch}
+.final .hero-cta{justify-content:center}
+.final .mail{margin-top:26px;font-family:var(--font-mono);font-size:14px;color:var(--faint)}
+.final .mail a{color:var(--green)}
+
+/* ============ FOOTER ============ */
+footer.ft{background:var(--surface);border-top:1px solid var(--line);padding:56px 0 34px}
+.ft-top{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap;padding-bottom:36px;border-bottom:1px solid var(--line)}
+.ft-brand{max-width:320px}
+.ft-brand .brand{margin-bottom:14px}
+.ft-brand p{color:var(--muted);font-size:14.5px}
+.ft-cols{display:flex;gap:60px;flex-wrap:wrap}
+.ft-col h5{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:0 0 16px;font-weight:500}
+.ft-col a{display:block;color:var(--muted);font-size:15px;margin-bottom:11px;transition:color .15s}
+.ft-col a:hover{color:var(--green)}
+.ft-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:24px;font-size:13.5px;color:var(--faint);font-family:var(--font-mono)}
+.ft-bottom a{color:var(--faint)}
+.ft-bottom a:hover{color:var(--green)}
+
+.reveal{opacity:0;transform:translateY(22px)}
+.reveal.in{opacity:1;transform:none;transition:opacity .7s ease, transform .7s cubic-bezier(.2,.8,.3,1)}
+@media(prefers-reduced-motion:reduce){.reveal,.msg,.sys{opacity:1!important;transform:none!important}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="Recepia, inicio">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="var(--green)"/>
+        <path d="M9 27.5V15.5C9 12.4 11.4 10 14.5 10H25.5C28.6 10 31 12.4 31 15.5C31 18.6 28.6 21 25.5 21H16L11 26.5C10.3 27.3 9 26.8 9 25.7" fill="#fff" opacity=".95"/>
+        <circle cx="16.5" cy="15.6" r="1.7" fill="var(--green)"/>
+        <circle cx="21.6" cy="15.6" r="1.7" fill="var(--green)"/>
+        <path d="M15.6 18.2c1 1.4 4.2 1.4 5.2 0" stroke="var(--green)" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      Recepia
+    </a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="#como">Cómo funciona</a>
+      <a href="#funciones">Funciones</a>
+      <a href="#seguridad">Seguridad</a>
+      <a href="#planes">Planes</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-right">
+      <button class="theme-toggle" id="themeBtn" aria-label="Cambiar tema claro/oscuro">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.5 12h3M19.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a.7.7 0 0 0-.9-.9A9.5 9.5 0 1 0 20.9 15.4a.7.7 0 0 0-.9-.9Z"/></svg>
+      </button>
+      <a class="btn btn-primary" href="#contacto">Solicita una demo</a>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">Recepción veterinaria con IA</span>
+      <h1>Tu recepción, <span class="hl">disponible 24&nbsp;horas.</span></h1>
+      <p class="lede">Recepia atiende los WhatsApp de tu clínica, agenda las citas en tu calendario y avisa a tu equipo cuando de verdad hace falta. Sin que suene a robot.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#contacto">Solicita una demo
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="#como">Ver cómo funciona</a>
+      </div>
+      <div class="hero-trust">
+        <span><i class="dot"></i>En marcha en el Hospital Vet. Dr.&nbsp;Patino</span>
+        <span><i class="dot"></i>Datos alojados en la UE · RGPD</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="phone" id="chat" aria-label="Ejemplo de conversación de Recepia por WhatsApp">
+        <div class="phone-head">
+          <div class="avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <div>
+            <div class="who">Recepia · Hospital Dr.&nbsp;Patino</div>
+            <div class="status"><span class="live"></span> en línea · responde al instante</div>
+          </div>
+        </div>
+        <div class="phone-body" id="chatBody">
+          <div class="msg in" data-delay="0">Hola, buenas noches. Luna lleva vomitando desde esta tarde 😟<span class="t">21:47</span></div>
+          <div class="msg out" data-delay="1100">¡Hola! Sentimos lo de Luna. Retira comida y agua unas 12&nbsp;h para que descanse el estómago. Si sigue vomitando, la ves muy decaída o hay sangre, mejor que la traigáis. ¿Te busco cita?<span class="t">21:47</span></div>
+          <div class="msg in" data-delay="2600">Sí, mejor mañana por la mañana</div>
+          <div class="msg out" data-delay="3700">Perfecto. Mañana tengo hueco con la Dra.&nbsp;Pascual a las <strong>8:40</strong> o a las <strong>16:30</strong>. ¿Cuál te va mejor?<span class="t">21:48</span></div>
+          <div class="msg in" data-delay="5100">A las 8:40 👍</div>
+          <div class="msg out" data-delay="6100">¡Hecho! ✅ Cita mañana a las 8:40 con la Dra.&nbsp;Pascual. Te llegará un recordatorio. Cuidad a Luna 🐾<span class="t">21:48</span></div>
+          <div class="sys" data-delay="7100">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Cita creada en Google Calendar · Dra. Pascual
+          </div>
+        </div>
+      </div>
+      <p class="phone-cap">Conversación de ejemplo · atendida en WhatsApp, sin intervención humana</p>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST BAND -->
+<div class="trust-band">
+  <div class="wrap">
+    <span class="label">Primer centro en producción</span>
+    <div class="clinic">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9C.8 8.7 2.6 5 6 5c2 0 3.2 1.1 4 2.3C10.8 6.1 12 5 14 5c3.4 0 5.2 3.7 3.5 7-2.5 4.5-9.5 9-9.5 9z" fill="var(--green-soft)"/></svg>
+      Hospital Veterinario Dr.&nbsp;Patino
+      <span class="badge">Tarragona</span>
+    </div>
+    <span class="label">Piloto · feedback semanal</span>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section class="section">
+  <div class="wrap problem-grid reveal">
+    <div>
+      <span class="eyebrow">El problema</span>
+      <p class="big" style="margin-top:20px">Una clínica media dedica <em>de 1 a 3 personas</em> a contestar el teléfono y el WhatsApp. Y aun así, la mitad de los mensajes llega fuera de horario.</p>
+    </div>
+    <div class="problem-list">
+      <div class="row"><span class="n">A</span><div><h4>El WhatsApp no descansa</h4><p>Los clientes escriben a cualquier hora. Por la noche, los findes y en plena consulta, los mensajes se acumulan sin respuesta.</p></div></div>
+      <div class="row"><span class="n">B</span><div><h4>Recepción saturada</h4><p>Contestar citas rutinarias roba tiempo a lo que de verdad importa: la atención presencial y el cuidado del animal.</p></div></div>
+      <div class="row"><span class="n">C</span><div><h4>Urgencias que se pierden</h4><p>Entre decenas de mensajes iguales, un caso grave puede tardar demasiado en llegar a la persona adecuada.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="como" style="padding-top:20px">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Cómo funciona</span>
+      <h2>De un mensaje suelto a una cita en tu agenda.</h2>
+      <p>Recepia se ocupa del ida y vuelta. Tu equipo solo entra cuando aporta algo que la IA no debe decidir.</p>
+    </div>
+    <div class="steps reveal">
+      <div class="step">
+        <div class="num"></div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+        <h3>Llega un mensaje</h3>
+        <p>Un cliente escribe al WhatsApp de la clínica. Recepia responde al instante, identifica a la persona y a su mascota, y entiende qué necesita.</p>
+      </div>
+      <div class="step">
+        <div class="num"></div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 14.5l2 2 4-4"/></svg></div>
+        <h3>Propone y agenda</h3>
+        <p>Cruza las franjas de consulta de cada veterinario con su Google Calendar y ofrece solo huecos reales. Al confirmar, crea la cita automáticamente.</p>
+      </div>
+      <div class="step">
+        <div class="num"></div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg></div>
+        <h3>Tu equipo toma el mando</h3>
+        <p>Ante una urgencia, una queja o una duda clínica, Recepia se aparta y avisa a tu equipo. Desde el panel, cualquiera retoma la conversación en vivo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features section" id="funciones">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Funciones</span>
+      <h2>Todo lo que hace una buena recepción. Sin horarios.</h2>
+    </div>
+    <div class="feat-grid reveal">
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></div>
+        <h3>Gestión de citas completa</h3>
+        <p>Crea, modifica y cancela citas conversando. Se sincroniza con Google Calendar en tiempo real.</p>
+        <span class="tag">Google Calendar</span>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.2 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+        <h3>Detección de urgencias</h3>
+        <p>Ante síntomas graves, deja de gestionar y avisa de inmediato al equipo. Las reglas críticas nunca las decide la IA.</p>
+        <span class="tag">Escalado a humano</span>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.8 3 4 6.2 4 9.5s-1.2 6.5-4 9.5c-2.8-3-4-6.2-4-9.5s1.2-6.5 4-9.5z"/></svg></div>
+        <h3>Atiende en 5 idiomas</h3>
+        <p>Español, catalán, inglés, francés e italiano. Responde en el idioma en que le escriben, sin cambiar nada.</p>
+        <span class="tag">es · ca · en · fr · it</span>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h9l5 5v10.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M14 4v5h5M8.5 13.5c1 1.3 5 1.3 6 0"/><circle cx="9.3" cy="11" r=".9" fill="currentColor"/><circle cx="14.7" cy="11" r=".9" fill="currentColor"/></svg></div>
+        <h3>Ficha unificada</h3>
+        <p>Cada cliente y cada mascota, con su historial de todos los canales en un solo sitio. Recepia lo recuerda por ti.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></div>
+        <h3>Resumen automático</h3>
+        <p>Al cerrar cada conversación genera un resumen estructurado. Tu equipo se pone al día en segundos.</p>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c3 2 6 2.5 8 2.5v6c0 5-3.5 8.5-8 10.5C7.5 19.5 4 16 4 11V5c2 0 5-.5 8-2.5z"/><path d="M9 11.5l2 2 4-4"/></svg></div>
+        <h3>Honesta por diseño</h3>
+        <p>Nunca finge ser una persona. Si le preguntan, lo dice con claridad. Transparencia real, como pide el AI Act.</p>
+        <span class="tag">Nunca improvisa</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="section">
+  <div class="wrap stats reveal">
+    <div class="stat"><div class="big">24/7</div><div class="lab">Disponible cada día del año, a cualquier hora</div></div>
+    <div class="stat"><div class="big">5</div><div class="lab">Idiomas atendidos de forma nativa</div></div>
+    <div class="stat"><div class="big">60&#8211;80%</div><div class="lab">De las conversaciones, resueltas sin intervención</div></div>
+    <div class="stat"><div class="big">100%</div><div class="lab">De las conversaciones, con un humano al mando</div></div>
+  </div>
+</section>
+
+<!-- HONESTY / WHAT IT DOESN'T DO -->
+<section class="section" style="padding-top:20px">
+  <div class="wrap honesty reveal">
+    <div>
+      <span class="eyebrow">Con los pies en el suelo</span>
+      <h2 style="font-size:clamp(28px,4vw,40px);margin:16px 0 0">Lo que Recepia <span style="color:var(--green)">no</span> hace es tan importante como lo que hace.</h2>
+      <p style="color:var(--muted);margin-top:18px;font-size:18px">Es una recepcionista, no un veterinario. Sus límites son deliberados: dan seguridad clínica y legal, y hacen que tu equipo confíe en ella desde el primer día.</p>
+    </div>
+    <div class="card">
+      <div class="line"><span class="x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span><div><strong>No diagnostica ni prescribe</strong><span>Ninguna decisión médica. Solo los 3 consejos básicos que Samuel ha autorizado.</span></div></div>
+      <div class="line"><span class="x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span><div><strong>No inventa precios ni horarios</strong><span>Solo informa de lo aprobado. Cirugías y casos atípicos van directos a Samuel.</span></div></div>
+      <div class="line"><span class="x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span><div><strong>No gestiona urgencias sola</strong><span>Ante un síntoma grave, transfiere al instante. La regla es determinista, no una interpretación.</span></div></div>
+      <div class="line"><span class="x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span><div><strong>No opera a puerta cerrada</strong><span>Toda conversación es interrumpible en vivo por tu equipo desde el panel.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<section class="section" id="seguridad" style="padding-top:20px">
+  <div class="wrap reveal">
+    <div class="secure">
+      <span class="eyebrow">Seguridad y cumplimiento</span>
+      <h2>Datos de tus clientes, tratados con el rigor de una clínica.</h2>
+      <p class="sub">Recepia gestiona datos personales de los propietarios. Está construida desde el primer día pensando en el RGPD y en el marco europeo de IA, no como un parche posterior.</p>
+      <div class="secure-grid">
+        <div class="item"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 4 6v6c0 5 3.4 8.5 8 9.5 4.6-1 8-4.5 8-9.5V6l-8-3.5z"/><path d="M9 12l2 2 4-4"/></svg></span><div><h4>Alojado en la Unión Europea</h4><p>Infraestructura en región europea. Cifrado en reposo y en tránsito.</p></div></div>
+        <div class="item"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><div><h4>Aislamiento por clínica</h4><p>Cada centro, con sus datos separados. Nadie ve lo que no es suyo.</p></div></div>
+        <div class="item"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c3 2 6 2.5 8 2.5v6c0 5-3.5 8.5-8 10.5C7.5 19.5 4 16 4 11V5c2 0 5-.5 8-2.5z"/></svg></span><div><h4>Transparencia (AI Act)</h4><p>El cliente siempre puede saber que habla con una IA. Nunca lo oculta.</p></div></div>
+        <div class="item"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span><div><h4>Supervisión humana</h4><p>Las decisiones críticas siempre pasan por una persona. Derechos ARSULIPO operativos.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PILOT -->
+<section class="section">
+  <div class="wrap pilot reveal">
+    <div class="portrait" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-9.5-9C.8 8.7 2.6 5 6 5c2 0 3.2 1.1 4 2.3C10.8 6.1 12 5 14 5c3.4 0 5.2 3.7 3.5 7-2.5 4.5-9.5 9-9.5 9z"/></svg>
+    </div>
+    <div>
+      <span class="eyebrow">Cliente piloto</span>
+      <blockquote style="margin-top:20px"><span class="q">“</span>Somos un centro de referencia: nos derivan casos de toda la zona. Necesitábamos una recepción que estuviera a la altura, también fuera de horario.<span class="q">”</span></blockquote>
+      <div class="who">
+        <span class="nm">Hospital Veterinario Dr.&nbsp;Patino</span>
+        <span class="sep"></span>
+        <span class="rl">Tarragona · perros y gatos</span>
+      </div>
+      <div class="meta">
+        <span class="chip">5 veterinarios</span>
+        <span class="chip">37 servicios</span>
+        <span class="chip">Láser · TAC · cirugía</span>
+        <span class="chip">Piloto de 3 meses</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="planes" style="padding-top:20px">
+  <div class="wrap">
+    <div class="section-head reveal" style="max-width:none;text-align:center;margin-inline:auto">
+      <span class="eyebrow" style="justify-content:center">Planes</span>
+      <h2 style="margin-top:16px">Un precio por debajo de lo que cuesta una hora de recepción al día.</h2>
+      <p style="margin-inline:auto">Se ajustan al volumen de tu clínica. Empieza con una demo y decidimos juntos el plan que encaja.</p>
+    </div>
+    <div class="plans reveal">
+      <div class="plan">
+        <div class="pname">Inicial</div>
+        <div class="pdesc">Para clínicas que quieren dejar de perder mensajes de WhatsApp.</div>
+        <div class="price"><span class="from">desde</span>199€ <small>/mes</small></div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>WhatsApp 24/7 con IA</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Gestión de citas + Google Calendar</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Panel de control y toma de mando</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Detección de urgencias</li>
+        </ul>
+        <a class="btn btn-ghost" href="#contacto">Empezar con una demo</a>
+      </div>
+      <div class="plan feat-plan">
+        <div class="pname">Profesional</div>
+        <div class="pdesc">Para centros con mucho volumen que quieren cubrir también el teléfono.</div>
+        <div class="price"><span class="from">desde</span>399€ <small>/mes</small></div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Todo lo del plan Inicial</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Volumen ampliado de conversaciones</li>
+          <li class="soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9.5"/></svg>Atención telefónica con voz IA <span class="soon-tag">pronto</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Soporte prioritario</li>
+        </ul>
+        <a class="btn btn-primary" href="#contacto">Empezar con una demo</a>
+      </div>
+      <div class="plan">
+        <div class="pname">Premium</div>
+        <div class="pdesc">Para grupos y hospitales con necesidades a medida.</div>
+        <div class="price"><span class="from">desde</span>699€ <small>/mes</small></div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Todo lo del plan Profesional</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Volumen alto y voz premium</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Configuración y onboarding a medida</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Acompañamiento dedicado</li>
+        </ul>
+        <a class="btn btn-ghost" href="#contacto">Hablar con nosotros</a>
+      </div>
+    </div>
+    <p class="plans-note">Precios orientativos, sin permanencia. El plan definitivo se cierra tras la demo, según el volumen real de tu clínica.</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head reveal" style="text-align:center;margin-inline:auto">
+      <span class="eyebrow" style="justify-content:center">Preguntas frecuentes</span>
+      <h2 style="margin-top:16px">Lo que suelen preguntarnos.</h2>
+    </div>
+    <div class="faq reveal">
+      <details><summary>¿Los clientes notan que hablan con una IA?</summary><div class="ans">Recepia habla de forma cordial y cercana, con el tono de la clínica. Pasa desapercibida en una conversación normal, pero si alguien pregunta directamente responde con honestidad: es la asistente virtual del centro. Nunca finge ser una persona.</div></details>
+      <details><summary>¿Qué pasa con una urgencia de verdad?</summary><div class="ans">Ante síntomas graves —convulsiones, sangrado, dificultad para respirar, un accidente— Recepia da un primer consejo de qué hacer y transfiere de inmediato al equipo, o indica el hospital 24h más cercano si la clínica está cerrada. Las reglas de urgencia son deterministas: no las decide el modelo.</div></details>
+      <details><summary>¿Se integra con mi agenda actual?</summary><div class="ans">Sí. Recepia trabaja sobre Google Calendar, con un calendario por veterinario. Respeta las franjas de consulta reales de cada profesional y solo ofrece huecos en los que de verdad se pueden atender citas.</div></details>
+      <details><summary>¿Mi equipo pierde el control de las conversaciones?</summary><div class="ans">Al contrario. Desde el panel, cualquier persona del equipo puede ver todas las conversaciones y tomar el control de una en vivo cuando quiera. Recepia trabaja para tu equipo, no lo sustituye en las decisiones importantes.</div></details>
+      <details><summary>¿Cumple con la protección de datos?</summary><div class="ans">Los datos se alojan en la Unión Europea, cifrados, con aislamiento por clínica y los derechos del RGPD operativos. Firmamos el contrato de encargado de tratamiento con cada centro. Consulta la <a href="#contacto">información legal</a> o escríbenos para el detalle.</div></details>
+      <details><summary>¿Cuánto se tarda en ponerla en marcha?</summary><div class="ans">La configuración inicial (servicios, horarios, veterinarios, reglas) la dejamos lista nosotros a partir de la información de tu clínica. El tiempo mayor suele ser la activación de WhatsApp Business, que te acompañamos a tramitar.</div></details>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="final" id="contacto">
+  <div class="wrap reveal">
+    <span class="eyebrow" style="justify-content:center">Empecemos</span>
+    <h2 style="margin-top:18px">¿Vemos cómo respondería<br>en tu clínica?</h2>
+    <p>Cuéntanos cómo es tu recepción hoy y te preparamos una demo con los servicios y horarios reales de tu centro. Sin compromiso.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="mailto:hola@iatope.com?subject=Quiero%20una%20demo%20de%20Recepia&body=Hola%2C%20me%20gustar%C3%ADa%20ver%20una%20demo%20de%20Recepia%20para%20mi%20cl%C3%ADnica.%0A%0ANombre%20de%20la%20cl%C3%ADnica%3A%0ALocalidad%3A%0AN%C2%BA%20aprox.%20de%20mensajes%2Fllamadas%20al%20d%C3%ADa%3A">Solicita una demo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="mailto:hola@iatope.com">Escríbenos un email</a>
+    </div>
+    <p class="mail">o directamente a <a href="mailto:hola@iatope.com">hola@iatope.com</a></p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="ft">
+  <div class="wrap">
+    <div class="ft-top">
+      <div class="ft-brand">
+        <a class="brand" href="#top">
+          <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="37" height="37" rx="11" fill="var(--green)"/>
+            <path d="M9 27.5V15.5C9 12.4 11.4 10 14.5 10H25.5C28.6 10 31 12.4 31 15.5C31 18.6 28.6 21 25.5 21H16L11 26.5C10.3 27.3 9 26.8 9 25.7" fill="#fff" opacity=".95"/>
+            <circle cx="16.5" cy="15.6" r="1.7" fill="var(--green)"/>
+            <circle cx="21.6" cy="15.6" r="1.7" fill="var(--green)"/>
+            <path d="M15.6 18.2c1 1.4 4.2 1.4 5.2 0" stroke="var(--green)" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Recepia
+        </a>
+        <p>La recepcionista virtual con IA para clínicas veterinarias. Atiende, agenda y escala cuando hace falta.</p>
+      </div>
+      <div class="ft-cols">
+        <div class="ft-col">
+          <h5>Producto</h5>
+          <a href="#como">Cómo funciona</a>
+          <a href="#funciones">Funciones</a>
+          <a href="#seguridad">Seguridad</a>
+          <a href="#planes">Planes</a>
+        </div>
+        <div class="ft-col">
+          <h5>Contacto</h5>
+          <a href="mailto:hola@iatope.com">hola@iatope.com</a>
+          <a href="mailto:marc@iatope.com">marc@iatope.com</a>
+          <a href="#contacto">Solicita una demo</a>
+        </div>
+        <div class="ft-col">
+          <h5>Legal</h5>
+          <a href="#">Aviso legal</a>
+          <a href="#">Privacidad</a>
+          <a href="#">Cookies</a>
+        </div>
+      </div>
+    </div>
+    <div class="ft-bottom">
+      <span>© <span id="year">2026</span> Recepia · un proyecto de iatope.com</span>
+      <span>Hecho en Tarragona 🐾</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+
+  /* Theme */
+  try{var saved=localStorage.getItem("recepia-theme");if(saved){root.setAttribute("data-theme",saved);}}catch(e){}
+  var btn=document.getElementById("themeBtn");
+  if(btn){btn.addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next;
+    if(cur==="dark"){next="light";}
+    else if(cur==="light"){next="dark";}
+    else{ next = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "light":"dark"; }
+    root.setAttribute("data-theme",next);
+    try{localStorage.setItem("recepia-theme",next);}catch(e){}
+  });}
+
+  /* Year */
+  var y=document.getElementById("year");if(y){y.textContent=new Date().getFullYear();}
+
+  /* Nav border on scroll */
+  var nav=document.getElementById("nav");
+  var onScroll=function(){ if(window.scrollY>10){nav.classList.add("scrolled");}else{nav.classList.remove("scrolled");} };
+  onScroll();window.addEventListener("scroll",onScroll,{passive:true});
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Reveal on scroll */
+  var reveals=document.querySelectorAll(".reveal");
+  if(reduce || !("IntersectionObserver" in window)){
+    reveals.forEach(function(el){el.classList.add("in");});
+  }else{
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting){en.target.classList.add("in");io.unobserve(en.target);} });
+    },{threshold:0.14,rootMargin:"0px 0px -8% 0px"});
+    reveals.forEach(function(el){io.observe(el);});
+  }
+
+  /* Hero chat playback */
+  var chat=document.getElementById("chat");
+  var msgs=Array.prototype.slice.call(document.querySelectorAll("#chatBody .msg, #chatBody .sys"));
+  var body=document.getElementById("chatBody");
+
+  function showAll(){ msgs.forEach(function(m){m.classList.add("show");}); }
+
+  function play(){
+    if(reduce){ showAll(); return; }
+    var typing=document.createElement("div");
+    typing.className="typing";
+    typing.innerHTML="<i></i><i></i><i></i>";
+    var timers=[];
+    msgs.forEach(function(m){
+      var delay=parseInt(m.getAttribute("data-delay")||"0",10);
+      var isOut=m.classList.contains("out");
+      if(isOut){
+        // show typing 650ms before an outgoing bubble
+        timers.push(setTimeout(function(){
+          if(!body.contains(typing)) body.appendChild(typing);
+          typing.classList.add("show");
+          body.scrollTop=body.scrollHeight;
+        }, Math.max(0,delay-650)));
+      }
+      timers.push(setTimeout(function(){
+        if(typing.parentNode && isOut){typing.classList.remove("show");}
+        m.classList.add("show");
+        body.scrollTop=body.scrollHeight;
+      }, delay));
+    });
+  }
+
+  var played=false;
+  if(!("IntersectionObserver" in window) || reduce){ showAll(); }
+  else{
+    var cio=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting && !played){ played=true; play(); cio.disconnect(); } });
+    },{threshold:0.4});
+    if(chat) cio.observe(chat);
+  }
+})();
+</script>
+</body>
+</html>
