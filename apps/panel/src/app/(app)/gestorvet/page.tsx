@@ -239,7 +239,7 @@ export default async function GestorVetPage({
             <div>
               <h2 className="text-sm font-semibold text-stone-900">Agenda de GestorVet</h2>
               <p className="mt-0.5 text-xs text-stone-500">
-                El endpoint actual solo proporciona la fecha; faltan las referencias clínicas.
+                Datos consultados en vivo, con referencias clínicas cuando GestorVet las facilita.
               </p>
             </div>
             <Badge variant="outline">{list.length} registros</Badge>

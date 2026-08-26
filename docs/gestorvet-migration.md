@@ -37,7 +37,19 @@ El área `/gestorvet` permite trabajar desde RECEPIA durante la transición:
 - muestra inventario, estado e historial de ejecuciones;
 - pagina el listado de clientes y abre su ficha detallada en vivo;
 - busca mascotas por nombre o ID y abre su ficha detallada;
-- muestra la agenda disponible, señalando los campos que la API no entrega.
+- muestra la agenda disponible con las referencias clínicas que entrega la API.
+
+Además, los módulos nativos incorporan una capa de consulta durante la
+convivencia:
+
+- **Clientes** combina los registros locales con la primera página de
+  GestorVet, permite buscar en ambos orígenes y abre una ficha externa de solo
+  lectura con sus mascotas vinculadas;
+- **Calendario** combina las citas locales y externas dentro de la misma vista,
+  identificando GestorVet en violeta y sin permitir modificaciones.
+
+Si GestorVet no responde, los clientes y citas locales continúan disponibles.
+Los enlaces externos no se precargan para evitar consultas masivas de fichas.
 
 Las búsquedas por nombre usan acciones de servidor y no se incluyen en la URL ni
 en el historial del navegador. Estas consultas no convierten todavía los

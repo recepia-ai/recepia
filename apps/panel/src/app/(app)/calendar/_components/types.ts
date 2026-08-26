@@ -11,6 +11,8 @@ export type AppointmentWithDetails = {
   pet_species: string | null;
   service_name: string | null;
   service_duration_minutes: number | null;
+  source: "recepia" | "gestorvet";
+  external_id: string | null;
 };
 
 /** Business hours for a single day: array of open intervals. */

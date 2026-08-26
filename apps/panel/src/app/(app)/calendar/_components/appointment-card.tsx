@@ -1,10 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { AppointmentWithDetails } from "./types";
 
-const STATUS_STYLES: Record<
-  string,
-  { border: string; label: string } | undefined
-> = {
+const STATUS_STYLES: Record<string, { border: string; label: string } | undefined> = {
   scheduled: {
     border: "border-l-emerald-500",
     label: "Programada",
@@ -50,13 +47,15 @@ type Props = {
   className?: string;
 };
 
-export function AppointmentCard({
-  appointment,
-  variant = "default",
-  className,
-}: Props) {
+export function AppointmentCard({ appointment, variant = "default", className }: Props) {
   const isCancelled = appointment.status === "cancelled";
-  const styles = STATUS_STYLES[appointment.status] ?? { border: "border-l-stone-300", label: appointment.status };
+  const styles =
+    appointment.source === "gestorvet"
+      ? { border: "border-l-violet-500", label: "GestorVet" }
+      : (STATUS_STYLES[appointment.status] ?? {
+          border: "border-l-stone-300",
+          label: appointment.status,
+        });
 
   if (variant === "compact") {
     return (
@@ -87,6 +86,9 @@ export function AppointmentCard({
             {appointment.service_name}
           </p>
         )}
+        {appointment.source === "gestorvet" && !appointment.service_name && (
+          <p className="mt-0.5 truncate text-[10px] leading-tight text-violet-600">GestorVet</p>
+        )}
       </div>
     );
   }
@@ -106,15 +108,16 @@ export function AppointmentCard({
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-stone-900">
-                {formatTime(appointment.starts_at)} –{" "}
-                {formatTime(appointment.ends_at)}
+                {formatTime(appointment.starts_at)} – {formatTime(appointment.ends_at)}
               </span>
               <span
                 className={cn(
                   "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                  isCancelled
-                    ? "bg-rose-50 text-rose-600"
-                    : "bg-stone-100 text-stone-600",
+                  appointment.source === "gestorvet"
+                    ? "bg-violet-50 text-violet-700"
+                    : isCancelled
+                      ? "bg-rose-50 text-rose-600"
+                      : "bg-stone-100 text-stone-600",
                 )}
               >
                 {styles.label}
@@ -137,9 +140,7 @@ export function AppointmentCard({
               </p>
             )}
             {appointment.notes && (
-              <p className="text-xs text-stone-400 italic line-clamp-2">
-                {appointment.notes}
-              </p>
+              <p className="text-xs text-stone-400 italic line-clamp-2">{appointment.notes}</p>
             )}
           </div>
         </div>
@@ -172,10 +173,11 @@ export function AppointmentCard({
           {appointment.pet_name && (
             <p className="mt-0.5 truncate text-xs text-stone-500">
               {appointment.pet_name}
-              {appointment.service_name
-                ? ` · ${appointment.service_name}`
-                : ""}
+              {appointment.service_name ? ` · ${appointment.service_name}` : ""}
             </p>
+          )}
+          {appointment.source === "gestorvet" && !appointment.pet_name && (
+            <p className="mt-0.5 text-xs text-violet-600">GestorVet · Solo lectura</p>
           )}
         </div>
       </div>
@@ -183,4 +185,4 @@ export function AppointmentCard({
   );
 }
 
-export { formatTime, formatDate };
+export { formatDate, formatTime };

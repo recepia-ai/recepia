@@ -1,12 +1,20 @@
+import type { Database } from "@recepia/db";
+import { readGestorVetClient } from "@/lib/gestorvet/discovery";
+import { gestorVetAppointment } from "@/lib/gestorvet/native-adapters";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { CalendarClient } from "./_components/calendar-client";
 import type { AppointmentWithDetails, BusinessHours } from "./_components/types";
-import type { Database } from "@recepia/db";
+
+export const maxDuration = 30;
 
 type ApptRow = Database["public"]["Tables"]["appointments"]["Row"] & {
   clients: { name: string; phone: string } | { name: string; phone: string }[] | null;
   pets: { name: string; species: string } | { name: string; species: string }[] | null;
-  services: { name: string; duration_minutes: number } | { name: string; duration_minutes: number }[] | null;
+  services:
+    | { name: string; duration_minutes: number }
+    | { name: string; duration_minutes: number }[]
+    | null;
 };
 
 export default async function CalendarPage() {
@@ -48,11 +56,7 @@ export default async function CalendarPage() {
     clinics: { name: string; slug: string } | { name: string; slug: string }[] | null;
   } | null;
 
-  const clinic = cu
-    ? Array.isArray(cu.clinics)
-      ? cu.clinics[0] ?? null
-      : cu.clinics
-    : null;
+  const clinic = cu ? (Array.isArray(cu.clinics) ? (cu.clinics[0] ?? null) : cu.clinics) : null;
 
   const clinicName = clinic?.name ?? "tu clínica";
 
@@ -80,17 +84,13 @@ export default async function CalendarPage() {
     const row = a as ApptRow;
     const client = row.clients
       ? Array.isArray(row.clients)
-        ? row.clients[0] ?? null
+        ? (row.clients[0] ?? null)
         : row.clients
       : null;
-    const pet = row.pets
-      ? Array.isArray(row.pets)
-        ? row.pets[0] ?? null
-        : row.pets
-      : null;
+    const pet = row.pets ? (Array.isArray(row.pets) ? (row.pets[0] ?? null) : row.pets) : null;
     const service = row.services
       ? Array.isArray(row.services)
-        ? row.services[0] ?? null
+        ? (row.services[0] ?? null)
         : row.services
       : null;
 
@@ -106,14 +106,57 @@ export default async function CalendarPage() {
       pet_species: pet?.species ?? null,
       service_name: service?.name ?? null,
       service_duration_minutes: service?.duration_minutes ?? null,
+      source: "recepia",
+      external_id: null,
     };
   });
 
+  let gestorVetRows: AppointmentWithDetails[] = [];
+  let gestorVetConnected = false;
+  if (cu?.clinic_id) {
+    try {
+      const { client } = await readGestorVetClient(createAdminClient(), cu.clinic_id);
+      const records = await client.getAppointments();
+      gestorVetConnected = true;
+      gestorVetRows = records.flatMap((record) => {
+        const appointment = gestorVetAppointment(record);
+        if (!appointment) return [];
+        const startsAt = new Date(appointment.startsAt);
+        if (startsAt < from || startsAt > to) return [];
+        return [
+          {
+            id: `gestorvet-${appointment.externalId}`,
+            starts_at: appointment.startsAt,
+            ends_at: appointment.endsAt,
+            status: "scheduled",
+            notes: appointment.notes,
+            client_name: appointment.clientName,
+            client_phone: null,
+            pet_name: appointment.petName,
+            pet_species: null,
+            service_name: appointment.serviceName,
+            service_duration_minutes: appointment.durationMinutes,
+            source: "gestorvet" as const,
+            external_id: appointment.externalId,
+          },
+        ];
+      });
+    } catch {
+      // Keep the native calendar available during a GestorVet outage.
+    }
+  }
+
+  const combinedRows = [...rows, ...gestorVetRows].sort(
+    (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+  );
+
   return (
     <CalendarClient
-      appointments={rows}
+      appointments={combinedRows}
       businessHours={businessHours}
       clinicName={clinicName}
+      gestorVetConnected={gestorVetConnected}
+      gestorVetCount={gestorVetRows.length}
     />
   );
 }

@@ -1,14 +1,15 @@
+import { readGestorVetClient } from "@/lib/gestorvet/discovery";
+import { gestorVetClientSummary } from "@/lib/gestorvet/native-adapters";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { ClientsList } from "./_components/clients-list";
+
+export const maxDuration = 30;
 
 type PetCountRow = { client_id: string; id: string };
 type ClientListRow = { id: string; name: string | null; phone: string; email: string | null };
 
-export default async function ClientsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function ClientsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
   const {
@@ -27,11 +28,7 @@ export default async function ClientsLayout({
     clinics: { name: string } | { name: string }[] | null;
   } | null;
 
-  const clinic = cu
-    ? Array.isArray(cu.clinics)
-      ? cu.clinics[0] ?? null
-      : cu.clinics
-    : null;
+  const clinic = cu ? (Array.isArray(cu.clinics) ? (cu.clinics[0] ?? null) : cu.clinics) : null;
 
   const clinicName = clinic?.name ?? "tu clínica";
   const clinicId = cu?.clinic_id;
@@ -63,18 +60,49 @@ export default async function ClientsLayout({
     .limit(50);
   const clients = (clientsRes.data ?? []) as ClientListRow[];
 
-  const rows = clients.map((c) => ({
+  const nativeRows = clients.map((c) => ({
     id: c.id,
     name: c.name,
     phone: c.phone,
     email: c.email,
     pet_count: countsByClient.get(c.id) ?? 0,
+    source: "recepia" as const,
   }));
+
+  let gestorVetRows: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    email: null;
+    pet_count: null;
+    source: "gestorvet";
+  }> = [];
+  try {
+    const { client } = await readGestorVetClient(createAdminClient(), clinicId);
+    const records = await client.getClients({ page: 0 });
+    gestorVetRows = records.flatMap((record) => {
+      const summary = gestorVetClientSummary(record);
+      return summary
+        ? [
+            {
+              id: summary.externalId,
+              name: summary.name,
+              phone: "",
+              email: null,
+              pet_count: null,
+              source: "gestorvet" as const,
+            },
+          ]
+        : [];
+    });
+  } catch {
+    // RECEPIA remains usable if GestorVet is temporarily unavailable.
+  }
 
   return (
     <div className="flex h-full">
       {/* List panel */}
-      <ClientsList clients={rows} clinicName={clinicName} />
+      <ClientsList clients={[...nativeRows, ...gestorVetRows]} clinicName={clinicName} />
 
       {/* Detail panel — desktop */}
       <div className="hidden flex-1 lg:block">{children}</div>
