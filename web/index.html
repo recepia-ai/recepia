@@ -149,6 +149,9 @@ header.nav.scrolled{border-color:var(--line)}
 .nav-links a{font-size:15.5px;color:var(--muted);font-weight:500;transition:color .15s}
 .nav-links a:hover{color:var(--ink)}
 .nav-right{display:flex;align-items:center;gap:14px}
+.nav-login{font-size:15.5px;color:var(--muted);font-weight:500;transition:color .15s;white-space:nowrap}
+.nav-login:hover{color:var(--green)}
+@media(max-width:560px){.nav-login{display:none}}
 .theme-toggle{width:40px;height:40px;border-radius:999px;border:1.5px solid var(--line-strong);background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer;transition:border-color .15s,background .15s}
 .theme-toggle:hover{border-color:var(--green)}
 .theme-toggle svg{width:18px;height:18px}
@@ -396,6 +399,7 @@ footer.ft{background:var(--surface);border-top:1px solid var(--line);padding:56p
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.5 12h3M19.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
         <svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a.7.7 0 0 0-.9-.9A9.5 9.5 0 1 0 20.9 15.4a.7.7 0 0 0-.9-.9Z"/></svg>
       </button>
+      <a class="nav-login" href="https://app.recepia.iatope.com">Iniciar sesión</a>
       <a class="btn btn-primary" href="#contacto">Solicita una demo</a>
     </div>
   </div>
@@ -732,6 +736,7 @@ footer.ft{background:var(--surface);border-top:1px solid var(--line);padding:56p
           <a href="#funciones">Funciones</a>
           <a href="#seguridad">Seguridad</a>
           <a href="#planes">Planes</a>
+          <a href="https://app.recepia.iatope.com">Iniciar sesión</a>
         </div>
         <div class="ft-col">
           <h5>Contacto</h5>
