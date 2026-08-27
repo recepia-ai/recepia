@@ -6,7 +6,17 @@ import {
   vapiAssistantResponse,
   vapiWebhookSchema,
 } from "@/lib/channels/vapi";
+import {
+  handleVapiToolCalls,
+  type VapiFunctionCall,
+} from "@/lib/channels/vapi-tools";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+function extractToolCalls(payload: unknown): VapiFunctionCall[] {
+  const message = (payload as { message?: Record<string, unknown> })?.message;
+  const list = message?.toolCallList ?? message?.toolCalls;
+  return Array.isArray(list) ? (list as VapiFunctionCall[]) : [];
+}
 
 function secureEqual(actual: string | null, expected: string): boolean {
   if (!actual) return false;
@@ -105,6 +115,31 @@ export async function POST(request: Request) {
       console.error("[vapi] assistant request failed", error);
       return Response.json({
         error: "No puedo iniciar la recepción. Voy a pasarte con el equipo.",
+      });
+    }
+  }
+
+  if (parsed.data.message.type === "tool-calls") {
+    const rawCalls = extractToolCalls(payload);
+    try {
+      const supabaseAdmin = createAdminClient();
+      const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
+      const { conversation } = await ensureVapiCall(supabaseAdmin, channel, parsed.data);
+      return Response.json(
+        await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls),
+      );
+    } catch (error) {
+      console.error("[vapi] tool-calls failed", error);
+      // Devolver un error por cada tool-call para que el LLM lo comunique
+      // en vez de quedarse colgado.
+      return Response.json({
+        results: rawCalls.map((call) => ({
+          toolCallId: call.id ?? "",
+          result: JSON.stringify({
+            success: false,
+            error: "No he podido completar la acción. Ofrece pasar con el equipo.",
+          }),
+        })),
       });
     }
   }
