@@ -1026,7 +1026,7 @@ export const config = {
 
 En Supabase Studio → **Authentication → URL Configuration**:
 - Site URL: `http://localhost:3000` (cambiar a producción tras desplegar).
-- Redirect URLs: añadir `http://localhost:3000/auth/callback` y (para producción) `https://recepia.iatope.com/auth/callback`.
+- Redirect URLs: añadir `http://localhost:3000/auth/callback` y (para producción) `https://app.recepia.iatope.com/auth/callback` (el panel vive en el subdominio `app.`; `recepia.iatope.com` es la landing).
 
 ### 13.2 Crear `src/app/login/page.tsx`
 
@@ -1245,12 +1245,16 @@ Vercel asigna automáticamente `recepia-xxxx.vercel.app`.
    - Site URL: `https://recepia-xxxx.vercel.app`
    - Redirect: `https://recepia-xxxx.vercel.app/auth/callback`
 
-### 14.5 (Opcional) Subdominio `recepia.iatope.com`
+### 14.5 (Opcional) Subdominio del panel `app.recepia.iatope.com`
 
-1. En Vercel → Project → Settings → Domains, añadir `recepia.iatope.com`.
-2. En Raiola (donde está `iatope.com`), añadir registro CNAME apuntando a `cname.vercel-dns.com`.
-3. Esperar propagación.
-4. Actualizar Site URL y Redirect en Supabase.
+> **Ojo:** `recepia.iatope.com` (sin `www`) está reservado para la **landing de marketing** (proyecto Vercel `recepia-web`, carpeta `web/`). El panel usa el subdominio `app.recepia.iatope.com` para no chocar.
+
+1. En Vercel → Project (panel) → Settings → Domains, añadir `app.recepia.iatope.com`.
+2. **El DNS de `iatope.com` está gestionado en Cloudflare** (los nameservers apuntan a Cloudflare, no a Raiola; el dominio está registrado en Raiola pero la zona DNS es autoritativa en Cloudflare). En **Cloudflare → DNS → Records**, añadir el registro CNAME que indique Vercel:
+   - **Tipo:** `CNAME` · **Nombre:** `app.recepia` · **Valor:** el que muestre Vercel (p. ej. `xxxx.vercel-dns-017.com`; el legacy `cname.vercel-dns.com` también sirve).
+   - **Proxy status:** `DNS only` (nube gris). **No** activar el proxy naranja, o Cloudflare y Vercel entran en conflicto de SSL.
+3. Esperar propagación (minutos). Vercel emite el certificado HTTPS automáticamente.
+4. Actualizar Site URL y Redirect en Supabase Auth a `https://app.recepia.iatope.com` y `https://app.recepia.iatope.com/auth/callback`.
 
 ### 14.6 Criterio de "hecho"
 
@@ -1352,7 +1356,9 @@ pnpm --filter @recepia/db gen:types
 | Cliente Supabase | `@supabase/ssr` para Next.js App Router |
 | Estilo de auth | Magic Link, sin password |
 | Email transactional | Supabase default → migrar a Resend en piloto |
-| Dominio dev | `recepia.iatope.com` (subdominio del que controla Marc) |
+| Dominio landing | `recepia.iatope.com` (marketing, proyecto Vercel `recepia-web`) |
+| Dominio panel | `app.recepia.iatope.com` (subdominio del que controla Marc) |
+| DNS de `iatope.com` | Gestionado en **Cloudflare** (dominio registrado en Raiola; zona DNS autoritativa en Cloudflare) |
 | Doppler configs | `dev` y `prd` por ahora; `stg` cuando haya tráfico |
 
 ---
