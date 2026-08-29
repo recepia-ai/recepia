@@ -349,6 +349,7 @@ export type Database = {
           clinic_id: string
           created_at: string
           deleted_at: string | null
+          document_id: string | null
           email: string | null
           id: string
           metadata: Json
@@ -362,6 +363,7 @@ export type Database = {
           clinic_id: string
           created_at?: string
           deleted_at?: string | null
+          document_id?: string | null
           email?: string | null
           id?: string
           metadata?: Json
@@ -375,6 +377,7 @@ export type Database = {
           clinic_id?: string
           created_at?: string
           deleted_at?: string | null
+          document_id?: string | null
           email?: string | null
           id?: string
           metadata?: Json
@@ -606,6 +609,83 @@ export type Database = {
             foreignKeyName: "clinic_invitations_clinic_id_fkey"
             columns: ["clinic_id"]
             isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_regulatory_info: {
+        Row: {
+          address_line1: string
+          address_line2: string | null
+          authorized_rep_name: string | null
+          city: string
+          clinic_id: string
+          contact_email: string | null
+          contact_phone: string | null
+          country_code: string
+          created_at: string
+          documents_verified_at: string | null
+          end_user_type: Database["public"]["Enums"]["regulatory_end_user_type"]
+          legal_name: string
+          notes: string | null
+          postal_code: string
+          region: string
+          supporting_document_sids: Json
+          tax_id: string
+          twilio_address_sid: string | null
+          twilio_end_user_sid: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_line1: string
+          address_line2?: string | null
+          authorized_rep_name?: string | null
+          city: string
+          clinic_id: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          country_code?: string
+          created_at?: string
+          documents_verified_at?: string | null
+          end_user_type?: Database["public"]["Enums"]["regulatory_end_user_type"]
+          legal_name: string
+          notes?: string | null
+          postal_code: string
+          region: string
+          supporting_document_sids?: Json
+          tax_id: string
+          twilio_address_sid?: string | null
+          twilio_end_user_sid?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_line1?: string
+          address_line2?: string | null
+          authorized_rep_name?: string | null
+          city?: string
+          clinic_id?: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          country_code?: string
+          created_at?: string
+          documents_verified_at?: string | null
+          end_user_type?: Database["public"]["Enums"]["regulatory_end_user_type"]
+          legal_name?: string
+          notes?: string | null
+          postal_code?: string
+          region?: string
+          supporting_document_sids?: Json
+          tax_id?: string
+          twilio_address_sid?: string | null
+          twilio_end_user_sid?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_regulatory_info_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: true
             referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
@@ -1181,6 +1261,75 @@ export type Database = {
           },
         ]
       }
+      pet_records: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          created_by_user_id: string | null
+          deleted_at: string | null
+          description: string | null
+          external_url: string | null
+          file_name: string | null
+          file_path: string | null
+          id: string
+          mime_type: string | null
+          occurred_at: string
+          pet_id: string
+          record_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          occurred_at?: string
+          pet_id: string
+          record_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          external_url?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          occurred_at?: string
+          pet_id?: string
+          record_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pet_records_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pet_records_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pets: {
         Row: {
           active: boolean
@@ -1367,6 +1516,96 @@ export type Database = {
             columns: ["requires_specific_vet_user_id"]
             isOneToOne: false
             referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_numbers: {
+        Row: {
+          billed_monthly_price: number | null
+          billing_model: Database["public"]["Enums"]["telephony_billing_model"]
+          bundle_approved_at: string | null
+          bundle_expires_at: string | null
+          bundle_status: Database["public"]["Enums"]["regulatory_bundle_status"]
+          bundle_submitted_at: string | null
+          channel_id: string | null
+          clinic_id: string
+          country_code: string
+          created_at: string
+          currency: string
+          id: string
+          metadata: Json
+          number_type: string | null
+          phone_number: string
+          provider: string
+          provider_monthly_cost: number | null
+          provider_sid: string | null
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["telephony_number_status"]
+          twilio_bundle_sid: string | null
+          updated_at: string
+        }
+        Insert: {
+          billed_monthly_price?: number | null
+          billing_model?: Database["public"]["Enums"]["telephony_billing_model"]
+          bundle_approved_at?: string | null
+          bundle_expires_at?: string | null
+          bundle_status?: Database["public"]["Enums"]["regulatory_bundle_status"]
+          bundle_submitted_at?: string | null
+          channel_id?: string | null
+          clinic_id: string
+          country_code?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          number_type?: string | null
+          phone_number: string
+          provider?: string
+          provider_monthly_cost?: number | null
+          provider_sid?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["telephony_number_status"]
+          twilio_bundle_sid?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billed_monthly_price?: number | null
+          billing_model?: Database["public"]["Enums"]["telephony_billing_model"]
+          bundle_approved_at?: string | null
+          bundle_expires_at?: string | null
+          bundle_status?: Database["public"]["Enums"]["regulatory_bundle_status"]
+          bundle_submitted_at?: string | null
+          channel_id?: string | null
+          clinic_id?: string
+          country_code?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          metadata?: Json
+          number_type?: string | null
+          phone_number?: string
+          provider?: string
+          provider_monthly_cost?: number | null
+          provider_sid?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["telephony_number_status"]
+          twilio_bundle_sid?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_numbers_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_numbers_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
@@ -1616,6 +1855,68 @@ export type Database = {
             columns: ["pet_id"]
             isOneToOne: false
             referencedRelation: "pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_clinic_telephony: {
+        Row: {
+          billed_monthly_price: number | null
+          billing_model:
+            | Database["public"]["Enums"]["telephony_billing_model"]
+            | null
+          bundle_status:
+            | Database["public"]["Enums"]["regulatory_bundle_status"]
+            | null
+          clinic_id: string | null
+          country_code: string | null
+          created_at: string | null
+          currency: string | null
+          id: string | null
+          number_type: string | null
+          phone_number: string | null
+          status: Database["public"]["Enums"]["telephony_number_status"] | null
+        }
+        Insert: {
+          billed_monthly_price?: number | null
+          billing_model?:
+            | Database["public"]["Enums"]["telephony_billing_model"]
+            | null
+          bundle_status?:
+            | Database["public"]["Enums"]["regulatory_bundle_status"]
+            | null
+          clinic_id?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          number_type?: string | null
+          phone_number?: string | null
+          status?: Database["public"]["Enums"]["telephony_number_status"] | null
+        }
+        Update: {
+          billed_monthly_price?: number | null
+          billing_model?:
+            | Database["public"]["Enums"]["telephony_billing_model"]
+            | null
+          bundle_status?:
+            | Database["public"]["Enums"]["regulatory_bundle_status"]
+            | null
+          clinic_id?: string | null
+          country_code?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string | null
+          number_type?: string | null
+          phone_number?: string | null
+          status?: Database["public"]["Enums"]["telephony_number_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_numbers_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
@@ -1872,6 +2173,15 @@ export type Database = {
       message_direction: "inbound" | "outbound"
       message_sender: "client" | "agent" | "human" | "system"
       pet_sex: "male" | "female" | "unknown"
+      regulatory_bundle_status:
+        | "draft"
+        | "pending_review"
+        | "in_review"
+        | "twilio_approved"
+        | "twilio_rejected"
+        | "provisionally_approved"
+        | "expired"
+      regulatory_end_user_type: "business" | "individual"
       service_category:
         | "consultation"
         | "vaccine"
@@ -1881,6 +2191,16 @@ export type Database = {
         | "bureaucratic"
         | "diagnostic"
         | "other"
+      telephony_billing_model:
+        | "included_in_subscription"
+        | "passthrough_line_item"
+        | "client_owned"
+      telephony_number_status:
+        | "pending_purchase"
+        | "pending_bundle"
+        | "active"
+        | "suspended"
+        | "released"
       urgency_level: "low" | "medium" | "high" | "critical"
     }
     CompositeTypes: {
@@ -2048,6 +2368,16 @@ export const Constants = {
       message_direction: ["inbound", "outbound"],
       message_sender: ["client", "agent", "human", "system"],
       pet_sex: ["male", "female", "unknown"],
+      regulatory_bundle_status: [
+        "draft",
+        "pending_review",
+        "in_review",
+        "twilio_approved",
+        "twilio_rejected",
+        "provisionally_approved",
+        "expired",
+      ],
+      regulatory_end_user_type: ["business", "individual"],
       service_category: [
         "consultation",
         "vaccine",
@@ -2057,6 +2387,18 @@ export const Constants = {
         "bureaucratic",
         "diagnostic",
         "other",
+      ],
+      telephony_billing_model: [
+        "included_in_subscription",
+        "passthrough_line_item",
+        "client_owned",
+      ],
+      telephony_number_status: [
+        "pending_purchase",
+        "pending_bundle",
+        "active",
+        "suspended",
+        "released",
       ],
       urgency_level: ["low", "medium", "high", "critical"],
     },
