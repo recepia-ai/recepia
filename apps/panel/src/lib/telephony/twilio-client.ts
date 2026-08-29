@@ -55,9 +55,7 @@ function encodeForm(params: Record<string, unknown>): string {
   return usp.toString();
 }
 
-export type TwilioResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; status: number; error: string };
+export type TwilioResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
 type Method = "GET" | "POST";
 

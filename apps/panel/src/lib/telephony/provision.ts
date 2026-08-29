@@ -84,19 +84,15 @@ async function createEndUser(reg: RegulatoryInfo) {
 }
 
 async function createAddress(reg: RegulatoryInfo) {
-  return twilioCore<{ sid: string }>(
-    "POST",
-    `/Accounts/${twilioAccountSid()}/Addresses.json`,
-    {
-      FriendlyName: `${reg.legal_name} (${reg.city})`,
-      CustomerName: reg.legal_name,
-      Street: reg.address_line1,
-      City: reg.city,
-      Region: reg.region,
-      PostalCode: reg.postal_code,
-      IsoCountry: reg.country_code,
-    },
-  );
+  return twilioCore<{ sid: string }>("POST", `/Accounts/${twilioAccountSid()}/Addresses.json`, {
+    FriendlyName: `${reg.legal_name} (${reg.city})`,
+    CustomerName: reg.legal_name,
+    Street: reg.address_line1,
+    City: reg.city,
+    Region: reg.region,
+    PostalCode: reg.postal_code,
+    IsoCountry: reg.country_code,
+  });
 }
 
 async function searchAvailableNumber(
@@ -144,11 +140,7 @@ async function submitBundle(bundleSid: string) {
   );
 }
 
-async function purchaseNumber(
-  phoneNumber: string,
-  bundleSid: string,
-  addressSid: string,
-) {
+async function purchaseNumber(phoneNumber: string, bundleSid: string, addressSid: string) {
   return twilioCore<{ sid: string }>(
     "POST",
     `/Accounts/${twilioAccountSid()}/IncomingPhoneNumbers.json`,
@@ -160,9 +152,7 @@ async function purchaseNumber(
 // Orquestador
 // ---------------------------------------------------------------------------
 
-export async function provisionTwilioNumber(
-  opts: ProvisionOptions,
-): Promise<ProvisionResult> {
+export async function provisionTwilioNumber(opts: ProvisionOptions): Promise<ProvisionResult> {
   const numberType = opts.numberType ?? "local";
   const admin = createAdminClient();
 
@@ -239,7 +229,10 @@ export async function provisionTwilioNumber(
     const candidate = await searchAvailableNumber(reg.country_code, numberType, opts.areaCode);
     if (!candidate.ok) return { success: false, error: `Búsqueda de número: ${candidate.error}` };
     if (!candidate.data) {
-      return { success: false, error: "Sin números disponibles para esos criterios (país/tipo/área)." };
+      return {
+        success: false,
+        error: "Sin números disponibles para esos criterios (país/tipo/área).",
+      };
     }
     const ins = await admin
       .from("telephony_numbers")
@@ -258,7 +251,8 @@ export async function provisionTwilioNumber(
       })
       .select("*")
       .single();
-    if (ins.error) return { success: false, error: `Crear telephony_numbers: ${ins.error.message}` };
+    if (ins.error)
+      return { success: false, error: `Crear telephony_numbers: ${ins.error.message}` };
     row = ins.data;
   }
 
@@ -300,7 +294,11 @@ export async function provisionTwilioNumber(
   if (row.bundle_status === "draft") {
     const res = await submitBundle(bundleSid);
     if (!res.ok) {
-      return { success: false, stoppedAt: "regulatory_ready", error: `Enviar bundle: ${res.error}` };
+      return {
+        success: false,
+        stoppedAt: "regulatory_ready",
+        error: `Enviar bundle: ${res.error}`,
+      };
     }
     const up = await admin
       .from("telephony_numbers")
@@ -333,13 +331,15 @@ export async function provisionTwilioNumber(
       numberId: row.id,
       phoneNumber: row.phone_number,
       bundleSid,
-      message: "Bundle aprobado. Re-ejecuta con confirmPurchase para COMPRAR el número (acción de pago, irreversible).",
+      message:
+        "Bundle aprobado. Re-ejecuta con confirmPurchase para COMPRAR el número (acción de pago, irreversible).",
     };
   }
 
   // 8) Comprar el número y registrar el SID.
   const buy = await purchaseNumber(row.phone_number, bundleSid, addressSid);
-  if (!buy.ok) return { success: false, stoppedAt: "number_purchased", error: `Compra: ${buy.error}` };
+  if (!buy.ok)
+    return { success: false, stoppedAt: "number_purchased", error: `Compra: ${buy.error}` };
   const up = await admin
     .from("telephony_numbers")
     .update({
