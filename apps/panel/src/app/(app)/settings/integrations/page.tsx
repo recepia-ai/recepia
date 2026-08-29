@@ -46,7 +46,11 @@ async function IntegrationContent() {
     <div className="space-y-5">
       <GoogleCalendarCard status={status} />
       <GestorVetCard settings={gestorVetSettings} />
-      <ConversationChannelsCard settings={channelSettings} />
+      <ConversationChannelsCard
+        settings={channelSettings}
+        metaAppId={process.env.NEXT_PUBLIC_META_APP_ID}
+        metaConfigurationId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID}
+      />
 
       {status.connected &&
         calendarsData &&
