@@ -6,6 +6,8 @@ import { getGestorVetSettings } from "./gestorvet-actions";
 import { GestorVetCard } from "./gestorvet-card";
 import { GoogleCalendarCard } from "./google-calendar-card";
 import { getIntegrationStatus } from "./integration-actions";
+import { getTelephonyNumbers } from "./telephony-actions";
+import { TelephonyNumberCard } from "./telephony-number-card";
 import { VetCalendarsSection } from "./vet-calendars-section";
 
 // ---------------------------------------------------------------------------
@@ -18,6 +20,8 @@ async function IntegrationContent() {
     getChannelSettings(),
     getGestorVetSettings(),
   ]);
+
+  const telephonyNumbers = await getTelephonyNumbers();
 
   // If connected, also load calendar discovery data
   let calendarsData:
@@ -68,6 +72,8 @@ async function IntegrationContent() {
         ) : (
           <VetCalendarsSection vets={vetsData.vets} availableCalendars={calendarsData.calendars} />
         ))}
+
+      <TelephonyNumberCard numbers={telephonyNumbers} />
     </div>
   );
 }
