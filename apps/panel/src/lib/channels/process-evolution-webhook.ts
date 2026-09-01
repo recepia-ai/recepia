@@ -16,6 +16,17 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
   const result = await processInboundMessage(supabaseAdmin, event);
   if (!result.response || result.duplicate || result.queuedForHuman) return;
 
+  const { data: outbound } = await supabaseAdmin
+    .from("messages")
+    .select("id")
+    .eq("conversation_id", result.conversationId ?? "")
+    .eq("direction", "outbound")
+    .eq("sender", "agent")
+    .is("provider_message_id", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   try {
     const sent = await sendWhatsAppText(
       supabaseAdmin,
@@ -23,16 +34,6 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
       event.externalThreadId,
       result.response,
     );
-    const { data: outbound } = await supabaseAdmin
-      .from("messages")
-      .select("id")
-      .eq("conversation_id", result.conversationId ?? "")
-      .eq("direction", "outbound")
-      .eq("sender", "agent")
-      .is("provider_message_id", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
     if (outbound) {
       await supabaseAdmin
         .from("messages")
@@ -44,6 +45,18 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
     }
   } catch (error) {
     console.error("[evolution] outbound delivery failed", error);
+    if (outbound) {
+      await supabaseAdmin
+        .from("messages")
+        .update({
+          metadata: {
+            delivery_status: "failed",
+            delivery_error: "El proveedor de WhatsApp no aceptó el mensaje.",
+            failed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", outbound.id);
+    }
     if (result.conversationId) {
       await supabaseAdmin
         .from("conversations")

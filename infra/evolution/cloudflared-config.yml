@@ -1,0 +1,7 @@
+tunnel: 519f5e9e-8db1-4cc1-a0d7-5bc50afad550
+credentials-file: /Users/marcsolerroldan/.cloudflared/519f5e9e-8db1-4cc1-a0d7-5bc50afad550.json
+
+ingress:
+  - hostname: evolution.iatope.com
+    service: http://127.0.0.1:8080
+  - service: http_status:404

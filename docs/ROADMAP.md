@@ -65,11 +65,11 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 
 ---
 
-## 1. Estado real a 21 de agosto de 2026
+## 1. Estado real a 27 de agosto de 2026
 
 **Último commit:** 29–30 de julio de 2026 (`fix(agent): end-to-end error handling`). El proyecto lleva ~3 semanas sin actividad en el repo.
 
-**Dónde está el producto:** el agente funciona end-to-end **dentro de un chat de pruebas del panel**, contra la base de datos y el Google Calendar reales del entorno de test. Crea clientes, mascotas y citas de verdad. El transporte directo de Meta tiene app, secretos, callback verificado, número de prueba, canal activo en Recepia y la aplicación suscrita a la WABA. Falta ejecutar el E2E con un destinatario permitido y validar la toma de control manual.
+**Dónde está el producto:** el agente funciona end-to-end en el chat web y en un WhatsApp real de pruebas transportado por Evolution API/Baileys mediante el túnel estable `evolution.iatope.com`. El mensaje entrante se persiste, el agente se presenta como IA del equipo del hospital, consulta disponibilidad real, crea la cita y su evento de Google Calendar, responde por WhatsApp y respeta la toma de control manual. El panel recibe mensajes nuevos sin recarga manual mediante comprobación autenticada cada 3 segundos. El transporte directo de Meta conserva app, secretos, callback y canal pausado, pero su E2E sigue bloqueado por el aprovisionamiento de Meta.
 
 **Panel desplegado:** https://recepia-panel.vercel.app (login por magic link de Supabase Auth).
 
@@ -81,11 +81,11 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 |---|---|---|
 | **E1 — Infra y deploy** | ✅ Hecho | Monorepo pnpm + Turborepo, Biome, Supabase (proyecto `vsnrlpfsgwwdmiyndwnl`) linkado, panel en Vercel, tipos generados con `pnpm db:gen-types`. |
 | **E2 — Schema y datos** | ✅ Hecho | 12 migraciones aplicadas: schema inicial, settings y equipo, RLS, integración Google Calendar, seed real Dr. Patiño, wrappers de Vault, schema de citas, `service_vet_assignments` (N:M servicio↔veterinario). |
-| **E3 — Pipeline WhatsApp** | 🟡 **Evolution construido, despliegue y E2E pendientes** | Meta directo permanece conectado pero su E2E está bloqueado por el aprovisionamiento de Meta, reproducido incluso en un porfolio sandbox. Marc aprobó Evolution API/Baileys como transporte temporal de demostración. El adaptador inbound/outbound, webhook autenticado y configuración multi-proveedor están construidos; los canales oficiales se conservan pausados al activar Evolution. Faltan ejecutar el servicio, conectar un número prescindible, configurar el secreto en Vercel y completar el E2E. |
+| **E3 — Pipeline WhatsApp** | 🟡 **E2E de cita validado** | Evolution API 2.3.7 está conectado al número personal de pruebas de Marc mediante `evolution.iatope.com`; inbound, respuesta automática, persistencia, cita real, evento de Google Calendar, outbound manual, toma y devolución de control y actualización del panel sin recarga están validados. Meta/360dialog se conservan pausados. Faltan derivación clínica y recuperación de sesión tras reiniciar Evolution; el Mac sigue siendo infraestructura de demostración, no producción. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
-| **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento de calendarios, `vet_calendars`, CRUD de eventos. |
+| **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento y CRUD de eventos. Cada veterinario activo dispone de un calendario secundario dedicado creado automáticamente; los cinco calendarios actuales se han provisionado y `freeBusy` responde sin errores. |
 | **E6 — Resúmenes y clasificación** | ❌ No empezado | Sin Edge Function de resumen, sin integración DeepSeek, sin dataset golden formalizado. |
-| **E7 — Panel: lecturas** | ✅ Hecho (con hueco) | Conversaciones (lista + detalle + timeline), calendario día/semana/mes, clientes con ficha y mascotas. **Falta:** búsqueda global full-text y vista de auditoría `/events`. |
+| **E7 — Panel: lecturas** | ✅ Hecho (con hueco) | Conversaciones (lista + detalle + timeline con actualización automática autenticada), calendario día/semana/mes, clientes con ficha y mascotas. **Falta:** búsqueda global full-text y vista de auditoría `/events`. |
 | **E8 — Panel: escrituras** | ✅ Hecho | Tomar control / devolver al agente, ajustes de clínica, perfil, equipo (invitaciones, roles, expulsión), integraciones. **Falta:** editor de `clinic_config` como formulario y CRUD de servicios. |
 | **E9 — Cumplimiento legal** | 🟡 Documentado, sin ejecutar | `LEGAL.md` existe. Falta DPIA y Encargado de Tratamiento firmado con el Dr. Patiño. **Bloqueante para tráfico real.** |
 | **E10 — Onboarding cliente** | 🟡 Iniciado | Materiales de Fase F entregados. Falta formación del equipo y plan de soporte. |
@@ -172,6 +172,9 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 **Pre-requisitos de demostración:**
 
 - [x] App de desarrollo de Meta `Recepia` creada con el producto WhatsApp y vinculada al porfolio Recepia.
+- [x] Recepia incorporada como proveedor tecnológico independiente; la verificación empresarial de `RELOS VM, S.L.` fue reenviada y está en revisión por Meta.
+- [x] Configuración de WhatsApp Embedded Signup creada desde la plantilla oficial con Cloud API y permisos `whatsapp_business_management` y `whatsapp_business_messaging`.
+- [x] Flujo SaaS implementado y desplegado en el panel: intercambio de código, suscripción a webhooks, registro del número y credenciales por clínica en Vault. Falta ejecutar el E2E.
 - [x] Número gratuito de prueba asignado por Meta: `+1 555-668-8613` (la pantalla de solicitud conserva un estado visual obsoleto).
 - [x] Webhook verificado y suscrito al campo `messages`; prueba de Meta recibida con GET 200 y POST 200.
 - [x] Usuario del sistema `Recepia API` creado con acceso total a la app y a la WABA; token permanente con los tres permisos mínimos guardado en Vault.
@@ -188,8 +191,13 @@ Esta sección conserva el plan F–K anterior como referencia e inventario. Desd
 - [x] Conectar el bucle del agente común al webhook.
 - [x] Añadir Meta Cloud API directa como segundo transporte, con validación de firma y secretos separados.
 - [x] Añadir Evolution API/Baileys como tercer transporte temporal, con webhook autenticado, adaptación al contrato omnicanal, envío saliente y configuración protegida en Vault.
-- [ ] Ejecutar Evolution estable, conectar por QR un número exclusivo de pruebas y activar su canal sin borrar la configuración oficial.
+- [x] Ejecutar Evolution 2.3.7, conectar por QR el número personal de pruebas de Marc y activar su canal sin borrar la configuración oficial.
+- [x] Validar inbound real, respuesta automática, persistencia, outbound manual, silencio de la IA durante la toma de control y actualización del panel sin recarga.
+- [x] Devolver el control a la IA y validar la continuidad de contexto con un nuevo mensaje del cliente.
+- [x] Validar cita y calendario con una conversación real de WhatsApp.
+- [ ] Validar derivación clínica y recuperación de sesión tras reinicio.
 - [ ] E2E con número de prueba de Meta y toma de control manual.
+- [ ] E2E de Embedded Signup v4 con una clínica de prueba; verificar alta, suscripción, registro y recepción del primer webhook.
 - [ ] Gestión de la ventana de 24 h de WhatsApp y de plantillas cuando se excede.
 
 **Hecho cuando:** Marc escribe un WhatsApp al número, el agente le da cita, la cita aparece en Google Calendar y la conversación aparece en el panel.
@@ -353,3 +361,8 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-08-23 | 0.6 | Marc + Codex | El fallo del Public Test Number se reproduce en una segunda app limpia y queda aislado al porfolio/WABA de Meta. Se abre el caso de soporte `27395235070154712` sin alterar la integración activa de Recepia. |
 | 2026-08-23 | 0.7 | Marc + Codex | Un porfolio sandbox y una tercera aplicación creados desde cero reproducen el fallo. El bloqueo queda aislado a la cuenta de desarrollador o al aprovisionamiento de Meta; se abre la decisión de usar un transporte temporal para completar la demostración sin tocar el WhatsApp real del hospital. |
 | 2026-08-23 | 0.8 | Marc + Codex | Marc aprueba Evolution API/Baileys como transporte temporal. Se construyen el adaptador inbound/outbound, webhook autenticado y configuración que pausa —sin borrar— Meta/360dialog. Quedan el servicio, número de pruebas y E2E. |
+| 2026-08-27 | 0.9 | Marc + Codex | Evolution 2.3.7 queda operativo con un número real de pruebas. Se valida inbound, respuesta IA, persistencia y toma de control manual. El detalle de conversación se actualiza automáticamente cada 3 segundos; el preview autenticado se valida y se promociona a producción. |
+| 2026-08-27 | 1.0 | Marc + Codex | Google Calendar queda provisionado con un calendario secundario por veterinario. Se corrige la reutilización de errores históricos del agente, se archivan las escalaciones al devolver el control y el panel distingue respuestas de WhatsApp no entregadas. El E2E de creación de cita sigue pendiente. |
+| 2026-08-27 | 1.1 | Marc + Codex | E2E de cita cerrado con Laura y Thor: disponibilidad real, confirmación, cita en Recepia, evento de Google Calendar y respuestas entregadas por WhatsApp. Evolution abandona el Quick Tunnel efímero y queda publicado en `evolution.iatope.com` mediante un túnel nombrado que se inicia como servicio de usuario. |
+| 2026-08-27 | 1.2 | Marc + Codex | Los eventos de Google Calendar se normalizan a hora local con offset explícito de `Europe/Madrid` y sus títulos/descripciones pasan a español. Se corrige también el evento de Thor existente sin duplicarlo. |
+| 2026-08-28 | 1.3 | Marc + Codex | Incidente de disponibilidad resuelto: la degradación de API Gateway y el rechazo temporal de JWT de Supabase provocaban timeouts de Vercel y errores del calendario. Se reinicia `recepia-prod`, se valida su vuelta a `ACTIVE_HEALTHY` y se desacoplan los webhooks públicos de WhatsApp de la autenticación del dashboard. El middleware limita la espera de Auth a 6 segundos y muestra una recuperación automática en lugar de colgar la aplicación. |

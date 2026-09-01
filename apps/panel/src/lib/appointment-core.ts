@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
+import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
 import type { CreateAppointmentInput, CreateAppointmentState } from "@/app/(app)/_actions/appointment-schemas";
 import { createAppointmentSchema } from "@/app/(app)/_actions/appointment-schemas";
 
@@ -120,8 +121,23 @@ export async function createAppointmentForClinic(
   }
 
   // Create Google Calendar event
-  const eventSummary = `${client.name} — ${pet.name} (${service.name})`;
-  const eventDescription = [`Cita creada por ${created_by}.`, notes ? `Notas: ${notes}` : ""].filter(Boolean).join("\n");
+  const createdByLabel =
+    created_by === "agent"
+      ? "Recepia, agente de IA"
+      : created_by === "reception"
+        ? "recepción"
+        : "administración";
+  const eventSummary = `Cita · ${pet.name} · ${service.name} · ${client.name}`;
+  const eventDescription = [
+    `Cita veterinaria creada por ${createdByLabel}.`,
+    `Cliente: ${client.name}`,
+    `Mascota: ${pet.name}`,
+    `Servicio: ${service.name}`,
+    `Veterinario/a: ${vet.display_name ?? "Sin asignar"}`,
+    notes ? `Notas: ${notes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   let googleEventId: string | null = null;
   try {
@@ -136,8 +152,8 @@ export async function createAppointmentForClinic(
         body: JSON.stringify({
           summary: eventSummary,
           description: eventDescription,
-          start: { dateTime: starts_at, timeZone: "Europe/Madrid" },
-          end: { dateTime: ends_at, timeZone: "Europe/Madrid" },
+          start: googleCalendarDateTime(starts_at),
+          end: googleCalendarDateTime(ends_at),
         }),
       },
     );

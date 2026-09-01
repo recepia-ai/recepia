@@ -1,3 +1,4 @@
+import { formatClinicDate, formatClinicTime } from "@/lib/clinic-datetime";
 import { cn } from "@/lib/utils";
 import type { AppointmentWithDetails } from "./types";
 
@@ -27,14 +28,11 @@ const STATUS_STYLES: Record<string, { border: string; label: string } | undefine
 type Variant = "compact" | "default" | "expanded";
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatClinicTime(iso);
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", {
+  return formatClinicDate(iso, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -142,6 +140,11 @@ export function AppointmentCard({ appointment, variant = "default", className }:
             {appointment.notes && (
               <p className="text-xs text-stone-400 italic line-clamp-2">{appointment.notes}</p>
             )}
+            {appointment.vet_name && (
+              <p className="text-xs font-medium text-emerald-700">
+                Veterinario: {appointment.vet_name}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -178,6 +181,11 @@ export function AppointmentCard({ appointment, variant = "default", className }:
           )}
           {appointment.source === "gestorvet" && !appointment.pet_name && (
             <p className="mt-0.5 text-xs text-violet-600">GestorVet · Solo lectura</p>
+          )}
+          {appointment.vet_name && (
+            <p className="mt-1 truncate text-[11px] font-medium text-emerald-700">
+              {appointment.vet_name}
+            </p>
           )}
         </div>
       </div>

@@ -63,6 +63,8 @@ export function buildSystemPrompt(clientPhone?: string): string {
         'NO respondas directamente. Invoca `lookup_client` con { "phone":',
         `"${clientPhone}" }. Si el cliente existe, saludale por su nombre y`,
         "continua. Si no existe, preguntale su nombre para registrarle.",
+        "El telefono verificado del canal es la señal principal de identidad.",
+        "No crees una ficha duplicada si lookup_client devuelve un cliente.",
         "",
       ].join("\n")
     : [
@@ -70,6 +72,7 @@ export function buildSystemPrompt(clientPhone?: string): string {
         "El telefono del cliente NO esta disponible en este momento.",
         "Pregunta al cliente su telefono o nombre para identificarle con",
         "`lookup_client`.",
+        "Si facilita DNI/NIE, puedes usarlo como identificador alternativo.",
         "",
       ].join("\n");
 
@@ -323,6 +326,13 @@ export function buildSystemPrompt(clientPhone?: string): string {
     "  Si la pregunta no esta cubierta en esa seccion, escala.",
     "",
     "## QUE HACER SI UNA TOOL FALLA",
+    "",
+    "Los resultados de tools de turnos anteriores son historicos: describen",
+    "lo que ocurrio en aquel momento, no el estado actual del sistema. Ante",
+    "una NUEVA peticion que dependa de datos en tiempo real (disponibilidad,",
+    "citas o calendario), vuelve a invocar las tools necesarias aunque una",
+    "consulta anterior fallara. NUNCA afirmes que existe un problema tecnico",
+    "actual basandote solamente en un error de un turno anterior.",
     "",
     "Si invocas una tool y esta devuelve success:false (con un mensaje",
     "de error en el campo error), actuas asi:",

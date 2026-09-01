@@ -1,3 +1,4 @@
+import { toClinicDate } from "@/lib/clinic-datetime";
 import type { AppointmentWithDetails, BusinessHours, DayHours } from "./types";
 
 // -- Date helpers -----------------------------------------------------------
@@ -32,18 +33,20 @@ export function isToday(d: Date): boolean {
 // -- Spanish labels ---------------------------------------------------------
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const DAY_NAMES_FULL = [
-  "Domingo",
-  "Lunes",
-  "Martes",
-  "Miércoles",
-  "Jueves",
-  "Viernes",
-  "Sábado",
-];
+const DAY_NAMES_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const MONTH_NAMES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
 export function dayNameShort(d: Date): string {
@@ -86,10 +89,7 @@ export type Slot = {
   end: string; // HH:MM
 };
 
-export function generateSlots(
-  dayHours: DayHours,
-  slotMinutes: number = 30,
-): Slot[] {
+export function generateSlots(dayHours: DayHours, slotMinutes: number = 30): Slot[] {
   const slots: Slot[] = [];
   for (const block of dayHours) {
     const [sh, sm] = block.start.split(":").map(Number);
@@ -111,10 +111,7 @@ export function generateSlots(
   return slots;
 }
 
-export function earliestSlot(
-  hours: BusinessHours | null,
-  dates: Date[],
-): string {
+export function earliestSlot(hours: BusinessHours | null, dates: Date[]): string {
   let earliest = "23:59";
   for (const d of dates) {
     for (const block of hoursForDay(hours, d)) {
@@ -124,10 +121,7 @@ export function earliestSlot(
   return earliest;
 }
 
-export function latestSlot(
-  hours: BusinessHours | null,
-  dates: Date[],
-): string {
+export function latestSlot(hours: BusinessHours | null, dates: Date[]): string {
   let latest = "00:00";
   for (const d of dates) {
     for (const block of hoursForDay(hours, d)) {
@@ -149,7 +143,7 @@ export function appointmentsForDay(
   date: Date,
 ): AppointmentWithDetails[] {
   return appointments.filter((a) => {
-    const start = new Date(a.starts_at);
+    const start = toClinicDate(a.starts_at);
     return sameDay(start, date);
   });
 }
@@ -162,13 +156,12 @@ export function appointmentsForSlot(
 ): AppointmentWithDetails[] {
   const dayApps = appointmentsForDay(appointments, date);
   return dayApps.filter((a) => {
-    const aStart = new Date(a.starts_at);
-    const aStartMin =
-      aStart.getHours() * 60 + aStart.getMinutes();
+    const aStart = toClinicDate(a.starts_at);
+    const aStartMin = aStart.getHours() * 60 + aStart.getMinutes();
     const slotStartMin = timeToMinutes(slotStart);
     const slotEndMin = timeToMinutes(slotEnd);
     // Appointment overlaps this slot if it starts before slot end and ends after slot start
-    const aEnd = new Date(a.ends_at);
+    const aEnd = toClinicDate(a.ends_at);
     const aEndMin = aEnd.getHours() * 60 + aEnd.getMinutes();
     return aStartMin < slotEndMin && aEndMin > slotStartMin;
   });

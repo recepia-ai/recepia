@@ -34,7 +34,7 @@ export default async function CalendarPage() {
   const { data: appointments, error: apptError } = await supabase
     .from("appointments")
     .select(
-      "id, starts_at, ends_at, status, notes, clients(name, phone), pets(name, species), services(name, duration_minutes)",
+      "id, starts_at, ends_at, status, notes, vet_user_id, clients(name, phone), pets(name, species), services(name, duration_minutes)",
     )
     .gte("starts_at", from.toISOString())
     .lte("starts_at", to.toISOString())
@@ -59,6 +59,53 @@ export default async function CalendarPage() {
   const clinic = cu ? (Array.isArray(cu.clinics) ? (cu.clinics[0] ?? null) : cu.clinics) : null;
 
   const clinicName = clinic?.name ?? "tu clínica";
+
+  const [vetsResult, clientsResult, petsResult, servicesResult, vetLinksResult] = cu?.clinic_id
+    ? await Promise.all([
+        supabase
+          .from("clinic_users")
+          .select("id, display_name")
+          .eq("clinic_id", cu.clinic_id)
+          .eq("staff_type", "vet")
+          .order("display_name", { ascending: true }),
+        supabase
+          .from("clients")
+          .select("id, name, phone")
+          .eq("clinic_id", cu.clinic_id)
+          .is("deleted_at", null)
+          .order("name", { ascending: true })
+          .limit(500),
+        supabase
+          .from("pets")
+          .select("id, client_id, name")
+          .eq("clinic_id", cu.clinic_id)
+          .eq("active", true)
+          .is("deleted_at", null)
+          .order("name", { ascending: true })
+          .limit(1000),
+        supabase
+          .from("services")
+          .select("id, name, duration_minutes")
+          .eq("clinic_id", cu.clinic_id)
+          .eq("active", true)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("integration_external_links")
+          .select("external_id, local_id")
+          .eq("clinic_id", cu.clinic_id)
+          .eq("provider", "gestorvet")
+          .eq("entity_type", "clinic_user"),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
+
+  const vets = (vetsResult.data ?? []).map((vet) => ({
+    id: vet.id,
+    name: vet.display_name ?? "Veterinario sin nombre",
+  }));
+  const vetNameById = new Map(vets.map((vet) => [vet.id, vet.name]));
+  const localVetIdByExternalId = new Map(
+    (vetLinksResult.data ?? []).map((link) => [link.external_id, link.local_id]),
+  );
 
   // Fetch business hours from clinic_config
   let businessHours: BusinessHours | null = null;
@@ -106,6 +153,8 @@ export default async function CalendarPage() {
       pet_species: pet?.species ?? null,
       service_name: service?.name ?? null,
       service_duration_minutes: service?.duration_minutes ?? null,
+      vet_user_id: row.vet_user_id,
+      vet_name: row.vet_user_id ? (vetNameById.get(row.vet_user_id) ?? "Veterinario") : null,
       source: "recepia",
       external_id: null,
     };
@@ -123,6 +172,9 @@ export default async function CalendarPage() {
         if (!appointment) return [];
         const startsAt = new Date(appointment.startsAt);
         if (startsAt < from || startsAt > to) return [];
+        const localVetId = appointment.vetExternalId
+          ? (localVetIdByExternalId.get(appointment.vetExternalId) ?? null)
+          : null;
         return [
           {
             id: `gestorvet-${appointment.externalId}`,
@@ -136,6 +188,8 @@ export default async function CalendarPage() {
             pet_species: null,
             service_name: appointment.serviceName,
             service_duration_minutes: appointment.durationMinutes,
+            vet_user_id: localVetId,
+            vet_name: localVetId ? (vetNameById.get(localVetId) ?? "Veterinario") : null,
             source: "gestorvet" as const,
             external_id: appointment.externalId,
           },
@@ -157,6 +211,22 @@ export default async function CalendarPage() {
       clinicName={clinicName}
       gestorVetConnected={gestorVetConnected}
       gestorVetCount={gestorVetRows.length}
+      vets={vets}
+      clients={(clientsResult.data ?? []).map((client) => ({
+        id: client.id,
+        name: client.name,
+        phone: client.phone,
+      }))}
+      pets={(petsResult.data ?? []).map((pet) => ({
+        id: pet.id,
+        client_id: pet.client_id,
+        name: pet.name,
+      }))}
+      services={(servicesResult.data ?? []).map((service) => ({
+        id: service.id,
+        name: service.name,
+        duration_minutes: service.duration_minutes,
+      }))}
     />
   );
 }

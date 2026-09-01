@@ -1,11 +1,6 @@
+import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type {
-  Tool,
-  ToolResult,
-  ToolContext,
-  ToolSuccess,
-  ToolFailure,
-} from "./types";
+import type { Tool, ToolContext, ToolFailure, ToolResult, ToolSuccess } from "./types";
 
 // ---------------------------------------------------------------------------
 // invokeTool — generic wrapper that records to tool_invocations
@@ -38,6 +33,29 @@ export async function invokeTool<TInput, TOutput>(
     result = { success: false, error: message };
   }
 
+  // An appointment is the unambiguous confirmation of both identities. Keep
+  // the conversation linked even for pre-existing clients with several pets.
+  if (result.success && tool.name === "create_appointment" && ctx.conversationId) {
+    const appointmentInput = input as {
+      client_id?: unknown;
+      pet_id?: unknown;
+    };
+    if (
+      typeof appointmentInput.client_id === "string" &&
+      typeof appointmentInput.pet_id === "string"
+    ) {
+      const linkResult = await linkConversationIdentity(ctx.supabaseAdmin, {
+        conversationId: ctx.conversationId,
+        clinicId: ctx.clinicId,
+        clientId: appointmentInput.client_id,
+        petId: appointmentInput.pet_id,
+      });
+      if (!linkResult.success) {
+        ctx.logger("[create_appointment] conversation link error", linkResult.error);
+      }
+    }
+  }
+
   const durationMs = Date.now() - startedAt;
 
   // ------------------------------------------------------------------
@@ -48,29 +66,24 @@ export async function invokeTool<TInput, TOutput>(
   // console.error para visibilidad inmediata en terminal dev.
   // ------------------------------------------------------------------
   try {
-    const { error: insertErr } = await (ctx.supabaseAdmin
-      .from("tool_invocations") as any)
-      .insert({
-        clinic_id: ctx.clinicId,
-        conversation_id: ctx.conversationId,
-        tool_name: tool.name,
-        input,
-        output: result.success ? (result as ToolSuccess<TOutput>).data : null,
-        success: result.success,
-        error_code: result.success ? null : (result as ToolFailure).error_code ?? null,
-        error_message: result.success ? null : (result as ToolFailure).error,
-        duration_ms: durationMs,
-      });
+    const { error: insertErr } = await (ctx.supabaseAdmin.from("tool_invocations") as any).insert({
+      clinic_id: ctx.clinicId,
+      conversation_id: ctx.conversationId,
+      tool_name: tool.name,
+      input,
+      output: result.success ? (result as ToolSuccess<TOutput>).data : null,
+      success: result.success,
+      error_code: result.success ? null : ((result as ToolFailure).error_code ?? null),
+      error_message: result.success ? null : (result as ToolFailure).error,
+      duration_ms: durationMs,
+    });
 
     if (insertErr) {
       console.error(
         `[${tool.name}] tool_invocations INSERT error:`,
         JSON.stringify(insertErr, null, 2),
       );
-      ctx.logger(
-        `[${tool.name}] failed to record tool_invocation`,
-        insertErr,
-      );
+      ctx.logger(`[${tool.name}] failed to record tool_invocation`, insertErr);
     }
   } catch (dbErr) {
     console.error(

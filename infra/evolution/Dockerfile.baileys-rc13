@@ -1,0 +1,8 @@
+FROM evoapicloud/evolution-api:v2.3.7
+
+WORKDIR /evolution
+
+# Experimental compatibility test. rc.13 fixes protocolMessage parsing after
+# a WhatsApp node-behavior change while keeping Evolution 2.3.7 unmodified.
+RUN npm install --omit=dev --save-exact \
+    baileys@https://github.com/WhiskeySockets/Baileys/releases/download/v7.0.0-rc13/baileys.tgz

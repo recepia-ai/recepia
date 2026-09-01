@@ -7,6 +7,7 @@ type Props = {
   content: string | null;
   sender: SenderType;
   createdAt: string;
+  deliveryStatus?: string;
 };
 
 function formatTime(dateStr: string): string {
@@ -16,7 +17,7 @@ function formatTime(dateStr: string): string {
   });
 }
 
-export function MessageBubble({ content, sender, createdAt }: Props) {
+export function MessageBubble({ content, sender, createdAt, deliveryStatus }: Props) {
   // System events render centered and muted.
   if (sender === "system") {
     return (
@@ -49,6 +50,9 @@ export function MessageBubble({ content, sender, createdAt }: Props) {
           {formatTime(createdAt)}
           {!isClient && !isHuman && (
             <Sparkles className="size-2.5 text-emerald-500" />
+          )}
+          {deliveryStatus === "failed" && (
+            <span className="font-medium text-red-600">· No entregado</span>
           )}
         </p>
       </div>

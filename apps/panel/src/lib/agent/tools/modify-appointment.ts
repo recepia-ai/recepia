@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { uuidSchema } from "@/lib/uuid-schema";
 import { getValidAccessToken } from "@/lib/google-tokens";
+import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
 import type { Tool, ToolResult, ToolContext } from "./types";
 
 const inputSchema = z.object({
@@ -89,8 +90,8 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
     const patchBody: Record<string, unknown> = {};
     if (input.starts_at) {
-      patchBody.start = { dateTime: newStartsAt, timeZone: "Europe/Madrid" };
-      patchBody.end = { dateTime: newEndsAt, timeZone: "Europe/Madrid" };
+      patchBody.start = googleCalendarDateTime(newStartsAt);
+      patchBody.end = googleCalendarDateTime(newEndsAt);
     }
 
     try {

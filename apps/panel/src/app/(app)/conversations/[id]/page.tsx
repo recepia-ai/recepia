@@ -9,6 +9,7 @@ import { ChannelBadge } from "../_components/channel-badge";
 import { EmptyDetail } from "../_components/empty-detail";
 import { MessageBubble } from "../_components/message-bubble";
 import { CallSessionCard } from "./call-session-card";
+import { ConversationAutoRefresh } from "./conversation-auto-refresh";
 import { MessageInputBar } from "./message-input-bar";
 import { ReturnToAgentButton } from "./return-to-agent-button";
 import { TakeControlButton } from "./take-control-button";
@@ -58,10 +59,21 @@ export default async function ConversationDetailPage({
     ? await supabase.from("clients").select("*").eq("id", convData.client_id).maybeSingle()
     : { data: null };
 
-  // Fetch pet
-  const { data: pet } = convData.pet_id
-    ? await supabase.from("pets").select("*").eq("id", convData.pet_id).maybeSingle()
-    : { data: null };
+  // Fetch the assigned pet and every active pet belonging to the identified client.
+  const [{ data: pet }, { data: clientPets }] = await Promise.all([
+    convData.pet_id
+      ? supabase.from("pets").select("*").eq("id", convData.pet_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    convData.client_id
+      ? supabase
+          .from("pets")
+          .select("*")
+          .eq("client_id", convData.client_id)
+          .eq("active", true)
+          .is("deleted_at", null)
+          .order("name", { ascending: true })
+      : Promise.resolve({ data: [] }),
+  ]);
 
   // Fetch messages
   const { data: messages } = await supabase
@@ -90,8 +102,20 @@ export default async function ConversationDetailPage({
 
   const clientData = client as ClientRow | null;
   const petData = pet as PetRow | null;
+  const clientPetRows = (clientPets ?? []) as PetRow[];
   const msgs = (messages ?? []) as MsgRow[];
   const calls = (callSessions ?? []) as CallSessionRow[];
+  const latestMessage = msgs.at(-1);
+  const conversationVersion = [
+    convData.updated_at,
+    clientData?.updated_at,
+    petData?.updated_at,
+    ...clientPetRows.flatMap((clientPet) => [clientPet.id, clientPet.updated_at]),
+    latestMessage?.created_at,
+    latestMessage?.id,
+  ]
+    .filter(Boolean)
+    .join(":");
 
   const hasPhone = Boolean(clientData?.phone);
   const hasEmail = Boolean(clientData?.email);
@@ -99,6 +123,7 @@ export default async function ConversationDetailPage({
 
   return (
     <div className="flex h-full flex-col bg-white">
+      <ConversationAutoRefresh conversationId={id} initialVersion={conversationVersion} />
       {/* Header */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-stone-200 px-4">
         <Link
@@ -109,7 +134,16 @@ export default async function ConversationDetailPage({
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-stone-900">
-            {clientData?.name ?? clientData?.phone ?? "Cliente sin nombre"}
+            {clientData ? (
+              <Link
+                href={`/clients/${clientData.id}`}
+                className="hover:text-emerald-700 hover:underline"
+              >
+                {clientData.name ?? clientData.phone}
+              </Link>
+            ) : (
+              "Cliente sin nombre"
+            )}
           </p>
           <p className="flex items-center gap-1.5 text-xs text-stone-500">
             {petData && (
@@ -148,6 +182,14 @@ export default async function ConversationDetailPage({
               Cliente
             </p>
             <p className="mt-1 text-sm font-medium text-stone-900">{clientData?.name ?? "—"}</p>
+            {clientData && (
+              <Link
+                href={`/clients/${clientData.id}`}
+                className="mt-1 inline-flex text-[11px] font-medium text-emerald-700 hover:underline"
+              >
+                Ver ficha del cliente
+              </Link>
+            )}
             {hasContactInfo && (
               <div className="mt-1 space-y-0.5">
                 {clientData?.phone && (
@@ -166,31 +208,36 @@ export default async function ConversationDetailPage({
             )}
           </div>
 
-          {/* Pet info */}
+          {/* Client pets */}
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
-              Mascota
+              Mascotas del cliente
             </p>
-            {petData ? (
-              <>
-                <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-stone-900">
-                  <PawPrint className="size-3.5 text-stone-400" strokeWidth={1.75} />
-                  {petData.name}
-                </p>
-                <p className="mt-1 text-xs text-stone-500">
-                  {[
-                    petData.species,
-                    petData.breed,
-                    petData.birth_date
-                      ? `${new Date().getFullYear() - new Date(petData.birth_date).getFullYear()} años`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </>
+            {clientPetRows.length > 0 ? (
+              <div className="mt-1.5 space-y-1.5">
+                {clientPetRows.map((clientPet) => (
+                  <Link
+                    key={clientPet.id}
+                    href={`/pets/${clientPet.id}`}
+                    className="block rounded-md border border-stone-200 bg-white px-2.5 py-2 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-stone-900">
+                      <PawPrint className="size-3.5 text-stone-400" strokeWidth={1.75} />
+                      {clientPet.name}
+                      {clientPet.id === convData.pet_id && (
+                        <span className="ml-auto text-[10px] font-medium text-emerald-700">
+                          En esta conversación
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-stone-500">
+                      {[clientPet.species, clientPet.breed].filter(Boolean).join(" · ")}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             ) : (
-              <p className="mt-1 text-sm text-stone-400">Sin mascota</p>
+              <p className="mt-1 text-sm text-stone-400">Sin mascotas vinculadas</p>
             )}
           </div>
 
@@ -233,6 +280,11 @@ export default async function ConversationDetailPage({
                 content={m.content}
                 sender={m.sender}
                 createdAt={m.created_at}
+                deliveryStatus={
+                  m.metadata && typeof m.metadata === "object" && !Array.isArray(m.metadata)
+                    ? String((m.metadata as Record<string, unknown>).delivery_status ?? "")
+                    : undefined
+                }
               />
             ))}
           </div>

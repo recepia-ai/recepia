@@ -1,27 +1,29 @@
 "use client";
 
+import { toClinicDate } from "@/lib/clinic-datetime";
 import { AppointmentCard } from "./appointment-card";
-import type { AppointmentWithDetails, BusinessHours } from "./types";
 import {
   addDays,
-  dayNameShort,
-  isToday,
   appointmentsForDay,
-  hoursForDay,
+  dayNameShort,
   generateSlots,
+  hoursForDay,
+  isToday,
   timeToMinutes,
 } from "./helpers";
+import type { AppointmentWithDetails, BusinessHours } from "./types";
 
 type Props = {
   weekStart: Date;
   appointments: AppointmentWithDetails[];
   businessHours: BusinessHours | null;
+  onEmptySlotClick?: (date: Date, time: string) => void;
 };
 
 const HOUR_HEIGHT = 48;
 const MIN_CARD_HEIGHT = 22;
 
-export function WeekView({ weekStart, appointments, businessHours }: Props) {
+export function WeekView({ weekStart, appointments, businessHours, onEmptySlotClick }: Props) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   // Build the unified set of hourly slots across the week
@@ -51,7 +53,7 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
     );
   }
 
-  const firstSlotMinutes = timeToMinutes(globalSlots[0]!.start);
+  const firstSlotMinutes = timeToMinutes(globalSlots[0]?.start ?? "00:00");
 
   return (
     <div className="overflow-auto">
@@ -65,9 +67,7 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
               className="flex items-start justify-end pr-2"
               style={{ height: HOUR_HEIGHT }}
             >
-              <span className="text-[10px] tabular-nums text-stone-400">
-                {slot.start}
-              </span>
+              <span className="text-[10px] tabular-nums text-stone-400">{slot.start}</span>
             </div>
           ))}
         </div>
@@ -82,9 +82,7 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
           return (
             <div
               key={day.toDateString()}
-              className={`flex-1 border-l border-stone-200 ${
-                today ? "bg-emerald-50/50" : ""
-              }`}
+              className={`flex-1 border-l border-stone-200 ${today ? "bg-emerald-50/50" : ""}`}
             >
               {/* Day header */}
               <div
@@ -92,9 +90,7 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
                   today ? "border-t-2 border-t-emerald-200" : ""
                 }`}
               >
-                <span className="text-xs font-medium text-stone-500">
-                  {dayNameShort(day)}
-                </span>
+                <span className="text-xs font-medium text-stone-500">{dayNameShort(day)}</span>
                 <span
                   className={`flex size-5 items-center justify-center rounded-full text-xs font-semibold ${
                     today ? "bg-emerald-600 text-white" : "text-stone-700"
@@ -107,35 +103,47 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
               {/* Grid + appointment overlay container */}
               <div className="relative">
                 {/* Background grid lines */}
-                {globalSlots.map((slot) => (
-                  <div
-                    key={`${slot.start}-${slot.end}`}
-                    className={`border-b border-stone-100 ${
-                      !open ? "bg-stone-50" : ""
-                    }`}
-                    style={{ height: HOUR_HEIGHT }}
-                  />
-                ))}
+                {globalSlots.map((slot) => {
+                  const slotStart = timeToMinutes(slot.start);
+                  const slotDate = new Date(day);
+                  const [slotHour, slotMinute] = slot.start.split(":").map(Number);
+                  slotDate.setHours(slotHour ?? 0, slotMinute ?? 0, 0, 0);
+                  const available =
+                    slotDate >= new Date() &&
+                    dayHours.some(
+                      (hours) =>
+                        slotStart >= timeToMinutes(hours.start) &&
+                        slotStart < timeToMinutes(hours.end),
+                    );
+                  return (
+                    <button
+                      type="button"
+                      key={`${slot.start}-${slot.end}`}
+                      disabled={!available || !onEmptySlotClick}
+                      aria-label={
+                        available
+                          ? `Crear cita el ${day.toLocaleDateString()} a las ${slot.start}`
+                          : undefined
+                      }
+                      onClick={() => onEmptySlotClick?.(day, slot.start)}
+                      className={`block w-full border-b border-stone-100 transition ${
+                        !open || !available ? "bg-stone-50" : "hover:bg-emerald-50/60"
+                      }`}
+                      style={{ height: HOUR_HEIGHT }}
+                    />
+                  );
+                })}
 
                 {/* Appointment overlays — positioned absolutely based on time */}
                 {dayApps.map((appt) => {
-                  const startDate = new Date(appt.starts_at);
-                  const endDate = new Date(appt.ends_at);
-                  const startMinutes =
-                    startDate.getHours() * 60 + startDate.getMinutes();
-                  const endMinutes =
-                    endDate.getHours() * 60 + endDate.getMinutes();
-                  const durationMinutes = Math.max(
-                    1,
-                    endMinutes - startMinutes,
-                  );
+                  const startDate = toClinicDate(appt.starts_at);
+                  const endDate = toClinicDate(appt.ends_at);
+                  const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+                  const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+                  const durationMinutes = Math.max(1, endMinutes - startMinutes);
 
-                  const topPx =
-                    ((startMinutes - firstSlotMinutes) / 60) * HOUR_HEIGHT;
-                  const heightPx = Math.max(
-                    MIN_CARD_HEIGHT,
-                    (durationMinutes / 60) * HOUR_HEIGHT,
-                  );
+                  const topPx = ((startMinutes - firstSlotMinutes) / 60) * HOUR_HEIGHT;
+                  const heightPx = Math.max(MIN_CARD_HEIGHT, (durationMinutes / 60) * HOUR_HEIGHT);
 
                   return (
                     <div
@@ -146,10 +154,7 @@ export function WeekView({ weekStart, appointments, businessHours }: Props) {
                         height: heightPx,
                       }}
                     >
-                      <AppointmentCard
-                        appointment={appt}
-                        variant="compact"
-                      />
+                      <AppointmentCard appointment={appt} variant="compact" />
                     </div>
                   );
                 })}

@@ -152,6 +152,20 @@ export function GoogleCalendarCard({ status }: { status: IntegrationStatus }) {
               ) : null}
               Desconectar
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConnect}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} />
+              ) : null}
+              Activar calendarios automáticos
+            </Button>
+            <p className="text-xs text-stone-500">
+              Autoriza una vez la creación de agendas individuales para cada veterinario.
+            </p>
           </div>
         ) : (
           <Button

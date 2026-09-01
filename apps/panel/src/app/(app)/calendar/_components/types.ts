@@ -11,6 +11,8 @@ export type AppointmentWithDetails = {
   pet_species: string | null;
   service_name: string | null;
   service_duration_minutes: number | null;
+  vet_user_id: string | null;
+  vet_name: string | null;
   source: "recepia" | "gestorvet";
   external_id: string | null;
 };
@@ -22,3 +24,8 @@ export type DayHours = { start: string; end: string }[];
 export type BusinessHours = Record<string, DayHours>;
 
 export type ViewMode = "day" | "week" | "month" | "agenda";
+
+export type CalendarVet = { id: string; name: string };
+export type CalendarClientOption = { id: string; name: string; phone: string };
+export type CalendarPetOption = { id: string; client_id: string; name: string };
+export type CalendarServiceOption = { id: string; name: string; duration_minutes: number };

@@ -1,9 +1,9 @@
 "use client";
 
-import { AppointmentCard } from "./appointment-card";
-import { formatDate } from "./appointment-card";
-import type { AppointmentWithDetails } from "./types";
+import { toClinicDate } from "@/lib/clinic-datetime";
+import { AppointmentCard, formatDate } from "./appointment-card";
 import { sameDay } from "./helpers";
+import type { AppointmentWithDetails } from "./types";
 
 type Props = {
   appointments: AppointmentWithDetails[];
@@ -15,7 +15,7 @@ export function AgendaView({ appointments }: Props) {
   const days: string[] = [];
 
   for (const appt of appointments) {
-    const d = new Date(appt.starts_at);
+    const d = toClinicDate(appt.starts_at);
     const key = d.toDateString();
     if (!groups.has(key)) {
       groups.set(key, []);
@@ -28,9 +28,7 @@ export function AgendaView({ appointments }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-sm text-stone-500">No hay citas programadas</p>
-        <p className="mt-1 text-xs text-stone-400">
-          Las próximas citas aparecerán aquí
-        </p>
+        <p className="mt-1 text-xs text-stone-400">Las próximas citas aparecerán aquí</p>
       </div>
     );
   }
@@ -55,11 +53,7 @@ export function AgendaView({ appointments }: Props) {
             {/* Appointments */}
             <div className="space-y-3">
               {dayApps.map((appt) => (
-                <AppointmentCard
-                  key={appt.id}
-                  appointment={appt}
-                  variant="expanded"
-                />
+                <AppointmentCard key={appt.id} appointment={appt} variant="expanded" />
               ))}
             </div>
 

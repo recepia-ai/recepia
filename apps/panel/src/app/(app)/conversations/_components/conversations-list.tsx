@@ -93,6 +93,16 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "clients", filter: `clinic_id=eq.${clinicId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pets", filter: `clinic_id=eq.${clinicId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
         {
           event: "*",
           schema: "public",

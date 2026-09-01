@@ -1,7 +1,11 @@
 import { after } from "next/server";
 import { processWhatsAppCloudWebhook } from "@/lib/channels/process-whatsapp-cloud-webhook";
 import { secureEqual } from "@/lib/channels/webhook-security";
-import { parseMetaWhatsAppWebhook, verifyMetaWebhookSignature } from "@/lib/channels/whatsapp-meta";
+import {
+  metaWebhookFields,
+  parseMetaWhatsAppWebhook,
+  verifyMetaWebhookSignature,
+} from "@/lib/channels/whatsapp-meta";
 
 export async function GET(request: Request) {
   const verifyToken = process.env.META_WHATSAPP_VERIFY_TOKEN;
@@ -40,6 +44,10 @@ export async function POST(request: Request) {
       return null;
     }
   })();
+  const fields = metaWebhookFields(payload);
+  if (fields.length > 0 && !fields.includes("messages")) {
+    return Response.json({ received: true, fields });
+  }
   const parsed = (() => {
     try {
       return parseMetaWhatsAppWebhook(payload);

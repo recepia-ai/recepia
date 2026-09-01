@@ -1,13 +1,15 @@
 "use client";
 
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { searchNativeGestorVetClients } from "../client-actions";
+import { CreateClientDialog } from "./client-editors";
 
 type ClientRow = {
   id: string;
@@ -15,6 +17,7 @@ type ClientRow = {
   phone: string;
   email: string | null;
   pet_count: number | null;
+  match_context?: string | null;
   source: "recepia" | "gestorvet";
 };
 
@@ -30,15 +33,47 @@ function initials(name: string): string {
 type Props = {
   clients: ClientRow[];
   clinicName: string;
+  clinicId: string | null;
 };
 
-export function ClientsList({ clients, clinicName }: Props) {
+export function ClientsList({ clients, clinicName, clinicId }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [query, setQuery] = useState("");
   const [gestorVetClients, setGestorVetClients] = useState(
     clients.filter((client) => client.source === "gestorvet"),
   );
+  const [nativeSearchResults, setNativeSearchResults] = useState<ClientRow[]>([]);
   const [busy, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!clinicId) return;
+
+    const supabase = createClient();
+    const scheduleRefresh = () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => router.refresh(), 250);
+    };
+    const channel = supabase
+      .channel(`client-list:${clinicId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "clients", filter: `clinic_id=eq.${clinicId}` },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pets", filter: `clinic_id=eq.${clinicId}` },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      void supabase.removeChannel(channel);
+    };
+  }, [clinicId, router]);
 
   const nativeClients = useMemo(
     () => clients.filter((client) => client.source === "recepia"),
@@ -53,8 +88,12 @@ export function ClientsList({ clients, clinicName }: Props) {
             .some((value) => value!.toLocaleLowerCase("es-ES").includes(normalized)),
         )
       : nativeClients;
-    return [...local, ...gestorVetClients];
-  }, [gestorVetClients, nativeClients, query]);
+    const nativeById = new Map(local.map((client) => [client.id, client]));
+    if (normalized) {
+      for (const client of nativeSearchResults) nativeById.set(client.id, client);
+    }
+    return [...nativeById.values(), ...gestorVetClients];
+  }, [gestorVetClients, nativeClients, nativeSearchResults, query]);
 
   function searchClients() {
     startTransition(async () => {
@@ -63,7 +102,8 @@ export function ClientsList({ clients, clinicName }: Props) {
         toast.error(result.error ?? "No se pudo buscar en GestorVet");
         return;
       }
-      setGestorVetClients(result.clients);
+      setNativeSearchResults(result.clients.filter((client) => client.source === "recepia"));
+      setGestorVetClients(result.clients.filter((client) => client.source === "gestorvet"));
     });
   }
 
@@ -86,14 +126,7 @@ export function ClientsList({ clients, clinicName }: Props) {
               {clinicName}
             </p>
           </div>
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-400"
-          >
-            <Plus className="size-3.5" strokeWidth={1.75} />
-            Nuevo
-          </button>
+          <CreateClientDialog />
         </div>
 
         <form
@@ -108,9 +141,16 @@ export function ClientsList({ clients, clinicName }: Props) {
             strokeWidth={1.75}
           />
           <Input
-            placeholder="Buscar también en GestorVet..."
+            placeholder="Cliente, mascota, chip o DNI..."
             className="h-8 pl-8 pr-16 text-xs"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
+              setNativeSearchResults([]);
+              setGestorVetClients(
+                nextQuery.trim() ? [] : clients.filter((client) => client.source === "gestorvet"),
+              );
+            }}
             value={query}
           />
           <button
@@ -175,6 +215,11 @@ export function ClientsList({ clients, clinicName }: Props) {
                     </div>
                     {client.phone && (
                       <p className="truncate text-xs text-stone-500">{client.phone}</p>
+                    )}
+                    {client.match_context && (
+                      <p className="truncate text-[11px] font-medium text-emerald-700">
+                        {client.match_context}
+                      </p>
                     )}
                   </div>
                 </div>

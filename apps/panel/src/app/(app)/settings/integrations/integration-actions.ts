@@ -50,6 +50,7 @@ function googleOAuthUrl(state: string): string {
     scope: [
       "openid",
       "email",
+      "https://www.googleapis.com/auth/calendar.app.created",
       "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/calendar.readonly",
     ].join(" "),

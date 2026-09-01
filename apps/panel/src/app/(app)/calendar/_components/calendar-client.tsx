@@ -1,13 +1,22 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Stethoscope } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AgendaView } from "./agenda-view";
 import { DayView } from "./day-view";
 import { addDays, dayNameFull, isToday, mondayOf, monthName } from "./helpers";
 import { MonthView } from "./month-view";
-import type { AppointmentWithDetails, BusinessHours, ViewMode } from "./types";
+import { NewAppointmentDialog } from "./new-appointment-dialog";
+import type {
+  AppointmentWithDetails,
+  BusinessHours,
+  CalendarClientOption,
+  CalendarPetOption,
+  CalendarServiceOption,
+  CalendarVet,
+  ViewMode,
+} from "./types";
 import { WeekView } from "./week-view";
 
 type Props = {
@@ -16,6 +25,10 @@ type Props = {
   clinicName: string;
   gestorVetConnected: boolean;
   gestorVetCount: number;
+  vets: CalendarVet[];
+  clients: CalendarClientOption[];
+  pets: CalendarPetOption[];
+  services: CalendarServiceOption[];
 };
 
 const VIEWS: { key: ViewMode; label: string }[] = [
@@ -31,11 +44,26 @@ export function CalendarClient({
   clinicName,
   gestorVetConnected,
   gestorVetCount,
+  vets,
+  clients,
+  pets,
+  services,
 }: Props) {
   const [view, setView] = useState<ViewMode>("week");
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedVetId, setSelectedVetId] = useState("all");
+  const [appointmentDraft, setAppointmentDraft] = useState<{ date: Date; time: string } | null>(
+    null,
+  );
 
   const weekStart = useMemo(() => mondayOf(currentDate), [currentDate]);
+  const filteredAppointments = useMemo(
+    () =>
+      selectedVetId === "all"
+        ? appointments
+        : appointments.filter((appointment) => appointment.vet_user_id === selectedVetId),
+    [appointments, selectedVetId],
+  );
 
   function goPrev() {
     setCurrentDate((d) => {
@@ -93,7 +121,12 @@ export function CalendarClient({
           <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Calendario</h1>
           <p className="mt-1 text-sm text-stone-500">Gestiona las citas de {clinicName}.</p>
         </div>
-        <Button variant="outline" size="sm" disabled className="mt-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-1"
+          onClick={() => setAppointmentDraft({ date: currentDate, time: "09:00" })}
+        >
           <Plus className="size-4" strokeWidth={1.75} />
           Nueva cita
         </Button>
@@ -112,7 +145,7 @@ export function CalendarClient({
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Date navigator */}
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="size-8" onClick={goPrev}>
@@ -131,42 +164,85 @@ export function CalendarClient({
           )}
         </div>
 
-        {/* View toggle */}
-        <div className="flex items-center rounded-lg border border-stone-200 bg-white p-0.5">
-          {VIEWS.map((v) => (
-            <button
-              type="button"
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                view === v.key
-                  ? "bg-stone-100 text-stone-700"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-stone-200 bg-white px-2.5 text-xs text-stone-600">
+            <Stethoscope className="size-3.5 text-emerald-700" />
+            <span>Veterinario</span>
+            <select
+              value={selectedVetId}
+              onChange={(event) => setSelectedVetId(event.target.value)}
+              className="bg-transparent font-medium text-stone-800 outline-none"
             >
-              {v.label}
-            </button>
-          ))}
+              <option value="all">Todos</option>
+              {vets.map((vet) => (
+                <option key={vet.id} value={vet.id}>
+                  {vet.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* View toggle */}
+          <div className="flex items-center rounded-lg border border-stone-200 bg-white p-0.5">
+            {VIEWS.map((v) => (
+              <button
+                type="button"
+                key={v.key}
+                onClick={() => setView(v.key)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  view === v.key
+                    ? "bg-stone-100 text-stone-700"
+                    : "text-stone-500 hover:text-stone-700"
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Content */}
       <div>
         {view === "day" && (
-          <DayView date={currentDate} appointments={appointments} businessHours={businessHours} />
+          <DayView
+            date={currentDate}
+            appointments={filteredAppointments}
+            businessHours={businessHours}
+            onEmptySlotClick={(date, time) => setAppointmentDraft({ date, time })}
+          />
         )}
         {view === "week" && (
           <WeekView
             weekStart={weekStart}
-            appointments={appointments}
+            appointments={filteredAppointments}
             businessHours={businessHours}
+            onEmptySlotClick={(date, time) => setAppointmentDraft({ date, time })}
           />
         )}
         {view === "month" && (
-          <MonthView date={currentDate} appointments={appointments} onDayClick={navigateToDay} />
+          <MonthView
+            date={currentDate}
+            appointments={filteredAppointments}
+            onDayClick={navigateToDay}
+          />
         )}
-        {view === "agenda" && <AgendaView appointments={appointments} />}
+        {view === "agenda" && <AgendaView appointments={filteredAppointments} />}
       </div>
+
+      {appointmentDraft && (
+        <NewAppointmentDialog
+          open
+          onOpenChange={(open) => !open && setAppointmentDraft(null)}
+          initialDate={appointmentDraft.date}
+          initialTime={appointmentDraft.time}
+          initialVetId={selectedVetId === "all" ? "" : selectedVetId}
+          clients={clients}
+          pets={pets}
+          services={services}
+          vets={vets}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import type { Database } from "@recepia/db";
 import { revalidatePath } from "next/cache";
 import { resolveClinicWhatsAppChannel, sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -143,12 +144,32 @@ export async function returnToAgent(
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, metadata")
     .eq("id", conversation_id)
     .eq("clinic_id", clinicUser.clinic_id)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
+
+  const currentMetadata =
+    convGuard.metadata && typeof convGuard.metadata === "object" && !Array.isArray(convGuard.metadata)
+      ? (convGuard.metadata as Record<string, unknown>)
+      : {};
+  const { escalation, ...metadataWithoutActiveEscalation } = currentMetadata;
+  const priorHistory = Array.isArray(currentMetadata.escalation_history)
+    ? currentMetadata.escalation_history
+    : [];
+  const resolvedAt = new Date().toISOString();
+  const metadata = escalation
+    ? {
+        ...metadataWithoutActiveEscalation,
+        escalation_history: [
+          ...priorHistory,
+          { escalation, resolved_at: resolvedAt, resolution: "returned_to_agent" },
+        ].slice(-20),
+        escalation_resolved_at: resolvedAt,
+      }
+    : currentMetadata;
 
   const { data: updated, error } = await supabase
     .from("conversations")
@@ -156,6 +177,7 @@ export async function returnToAgent(
       status: "active",
       controlled_by: null,
       controlled_at: null,
+      metadata: metadata as Database["public"]["Tables"]["conversations"]["Update"]["metadata"],
     })
     .eq("id", conversation_id)
     .eq("clinic_id", clinicUser.clinic_id)

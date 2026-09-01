@@ -20,9 +20,7 @@ type Output = {
 };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
-  const notes = input.notes
-    ? `[AGENT] ${input.notes}`
-    : "[AGENT] cita creada por el agente";
+  const notes = input.notes ? `Recepia: ${input.notes}` : undefined;
 
   const result = await createAppointmentForClinic(ctx.clinicId, {
     ...input,

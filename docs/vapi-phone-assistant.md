@@ -121,7 +121,7 @@ Elisabeth Menasanch (medicina general, ecografía): 9:30-13:00.
 Fernando Moreno (medicina general, laboratorio): 11:00-14:30.
 Sábado: mañana 9:00-13:00 consulta; tarde 13:00-21:00 SOLO urgencias (no se
 agenda). Domingo: cerrado; urgencias 24h en Anicura.
-Dirección: Avda Vidal i Barraquer, 34, 43002 Tarragona.
+Dirección: Av. Cardenal Vidal i Barraquer, 34, bajos, 43005 Tarragona.
 Urgencias fuera de horario: acudir al hospital o a Anicura Hospital Veterinario,
 Carrer de la Soledat, 4, 43001 Tarragona, teléfono 977 21 18 18.
 

@@ -1,3 +1,5 @@
+import { fromZonedTime } from "date-fns-tz";
+import { CLINIC_TIME_ZONE } from "@/lib/clinic-datetime";
 import type { GestorVetRecord } from "./client";
 
 function normalizedKey(value: string): string {
@@ -59,13 +61,14 @@ export type GestorVetNativeAppointment = {
   serviceName: string | null;
   durationMinutes: number;
   notes: string | null;
+  vetExternalId: string | null;
 };
 
-function wallClockPlusMinutes(value: string, minutes: number): string {
-  const parsed = new Date(`${value}Z`);
+function plusMinutes(value: string, minutes: number): string {
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   parsed.setUTCMinutes(parsed.getUTCMinutes() + minutes);
-  return parsed.toISOString().slice(0, 19);
+  return parsed.toISOString();
 }
 
 function durationMinutes(value: string | null): number {
@@ -87,7 +90,7 @@ export function gestorVetAppointment(record: GestorVetRecord): GestorVetNativeAp
       ? `${rawTime}:00`
       : rawTime
     : "00:00:00";
-  const startsAt = `${date}T${time}`;
+  const startsAt = fromZonedTime(`${date}T${time}`, CLINIC_TIME_ZONE).toISOString();
   const minutes = durationMinutes(gestorVetValue(record, "DURACION"));
   const clientId = gestorVetValue(record, "CLIENTE");
   const petId = gestorVetValue(record, "MASCOTA");
@@ -96,7 +99,7 @@ export function gestorVetAppointment(record: GestorVetRecord): GestorVetNativeAp
   return {
     externalId,
     startsAt,
-    endsAt: wallClockPlusMinutes(startsAt, minutes),
+    endsAt: plusMinutes(startsAt, minutes),
     clientName: clientId ? `Cliente GestorVet #${clientId}` : null,
     petName: petId ? `Mascota #${petId}` : null,
     serviceName:
@@ -104,5 +107,14 @@ export function gestorVetAppointment(record: GestorVetRecord): GestorVetNativeAp
       (reasonId ? `Motivo #${reasonId}` : null),
     durationMinutes: minutes,
     notes: gestorVetValue(record, "DESCRIPCION"),
+    vetExternalId: gestorVetValue(
+      record,
+      "VETERINARIO",
+      "IDVETERINARIO",
+      "VETERINARI",
+      "EMPLEADO",
+      "IDEMPLEADO",
+      "USUARIO",
+    ),
   };
 }

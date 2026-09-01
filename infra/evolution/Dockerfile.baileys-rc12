@@ -1,0 +1,8 @@
+FROM evoapicloud/evolution-api:v2.3.7
+
+WORKDIR /evolution
+
+# Experimental compatibility test only. Evolution 2.3.7 ships rc.9.
+# rc.12 is distributed as a signed release artifact rather than an npm version.
+RUN npm install --omit=dev --save-exact \
+    baileys@https://github.com/WhiskeySockets/Baileys/releases/download/v7.0.0-rc12/baileys.tgz

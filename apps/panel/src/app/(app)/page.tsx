@@ -1,10 +1,49 @@
+import type { Database } from "@recepia/db";
+import { ArrowRight, CalendarDays, Clock3, MessageCircle, PawPrint, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { DashboardAutoRefresh } from "@/app/(app)/_components/dashboard-auto-refresh";
+import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  clinicDateKey,
+  clinicDayBounds,
+  formatClinicDate,
+  formatClinicTime,
+} from "@/lib/clinic-datetime";
+import { readGestorVetClient } from "@/lib/gestorvet/discovery";
+import { gestorVetAppointment } from "@/lib/gestorvet/native-adapters";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
+import { relativeTime } from "./conversations/_components/relative-time";
+
+export const maxDuration = 30;
 
 type ClinicUserRow = {
   role: string;
   clinic_id: string;
+  display_name: string | null;
   clinics: { name: string } | { name: string }[] | null;
+};
+
+type AppointmentRow = Pick<
+  Database["public"]["Tables"]["appointments"]["Row"],
+  "id" | "starts_at" | "ends_at" | "status"
+> & {
+  clients: { name: string } | { name: string }[] | null;
+  pets: { name: string } | { name: string }[] | null;
+  services: { name: string } | { name: string }[] | null;
+};
+
+type TodayAppointment = {
+  id: string;
+  startsAt: string;
+  clientName: string;
+  petName: string | null;
+  serviceName: string | null;
+  status: string;
+  source: "recepia" | "gestorvet";
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -13,142 +52,337 @@ const ROLE_LABELS: Record<string, string> = {
   veterinario: "Veterinario",
 };
 
-/**
- * Extracts a human-readable first name from an email address.
- *
- * Strategy:
- *   1. If local part contains a dot → first segment before dot → "Juan"
- *   2. If local part has no dot and no uppercase letters:
- *      - If the resulting letters are ≤9 chars → plausible single name. Keep it.
- *      - If longer than 9 chars → likely concatenation (e.g. marcsolerroldan).
- *        Truncate to first 4 chars as an approximate first name.
- *   3. Fallback: "Hola" (no name) if we can't extract confidently.
- *
- * Examples:
- *   "marc.soler@example.com"   → "Marc"
- *   "alejandro@gmail.com"      → "Alejandro"   (9 chars, preserved)
- *   "marcsolerroldan85@..."    → "Marc"        (concatenation detected)
- *   "j.doe@..."                → "J" → below threshold → "Hola"
- *   "@..."                     → "Hola"
- */
-function extractFirstName(email: string): string {
-  const local = email.split("@")[0] ?? "";
+function single<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
-  // If the local part has a dot, take the first segment.
-  const candidate = local.includes(".")
-    ? (local.split(".")[0] ?? local)
-    : local;
+function firstName(displayName: string | null, email: string | null): string {
+  if (displayName?.trim()) return displayName.trim().split(/\s+/)[0] ?? "";
+  const local = email?.split("@")[0]?.toLowerCase() ?? "";
+  if (/^(admin|clinica|hospital|info|recepcion)/.test(local)) return "";
+  const candidate = local.split(/[._-]/)[0]?.match(/[a-záéíóúñ]+/i)?.[0] ?? "";
+  return candidate.length >= 2
+    ? candidate.charAt(0).toUpperCase() + candidate.slice(1).toLowerCase()
+    : "";
+}
 
-  // Strip leading non-letters, then take contiguous letters.
-  const letters = candidate.match(/[a-zA-Z]+/)?.[0] ?? "";
-
-  if (letters.length < 2) return "";
-
-  // If the local part has a dot, the first segment is very likely a name.
-  if (local.includes(".")) {
-    return letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase();
-  }
-
-  // No dot, no mixed-case → ambiguous. Long runs are likely concatenations.
-  const hasUppercase = /[A-Z]/.test(letters);
-  if (!hasUppercase && letters.length > 9) {
-    // Truncate to first 4 chars — best guess at first name.
-    return letters.slice(0, 4).charAt(0).toUpperCase() + letters.slice(1, 4).toLowerCase();
-  }
-
-  return letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase();
+function comparison(today: number, yesterday: number): string {
+  const difference = today - yesterday;
+  if (difference === 0) return "Igual que ayer";
+  return `${difference > 0 ? "+" : ""}${difference} respecto a ayer`;
 }
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const result = await supabase
+  const { data: membership } = await supabase
     .from("clinic_users")
-    .select("role, clinic_id, clinics(name)")
-    .eq("user_id", user!.id)
+    .select("role, clinic_id, display_name, clinics(name)")
+    .eq("user_id", user.id)
     .maybeSingle();
+  const clinicUser = membership as ClinicUserRow | null;
+  if (!clinicUser) redirect("/login");
 
-  const clinicUser = result.data as ClinicUserRow | null;
-
-  const clinic = clinicUser
-    ? Array.isArray(clinicUser.clinics)
-      ? clinicUser.clinics[0] ?? null
-      : clinicUser.clinics
-    : null;
-
-  const firstName = extractFirstName(user!.email ?? "Usuario");
+  const clinic = single(clinicUser.clinics);
   const clinicName = clinic?.name ?? "tu clínica";
+  const todayBounds = clinicDayBounds();
+  const yesterdayReference = new Date(todayBounds.start);
+  yesterdayReference.setUTCDate(yesterdayReference.getUTCDate() - 1);
+  const yesterdayBounds = clinicDayBounds(yesterdayReference);
+  const todayKey = clinicDateKey();
+  const yesterdayKey = clinicDateKey(yesterdayReference);
 
-  const METRICS = [
-    { label: "Conversaciones hoy", value: "—", delta: "vs. ayer —" },
-    { label: "Citas hoy", value: "—", delta: "vs. ayer —" },
-    { label: "Pendientes", value: "—", delta: "activas —" },
+  const [
+    conversationsToday,
+    conversationsYesterday,
+    appointmentsTodayResult,
+    appointmentsYesterday,
+    waitingConversations,
+    humanConversations,
+    newClients,
+    recentConversations,
+  ] = await Promise.all([
+    supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .is("deleted_at", null)
+      .gte("started_at", todayBounds.start.toISOString())
+      .lt("started_at", todayBounds.end.toISOString()),
+    supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .is("deleted_at", null)
+      .gte("started_at", yesterdayBounds.start.toISOString())
+      .lt("started_at", yesterdayBounds.end.toISOString()),
+    supabase
+      .from("appointments")
+      .select("id, starts_at, ends_at, status, clients(name), pets(name), services(name)")
+      .eq("clinic_id", clinicUser.clinic_id)
+      .neq("status", "cancelled")
+      .gte("starts_at", todayBounds.start.toISOString())
+      .lt("starts_at", todayBounds.end.toISOString())
+      .order("starts_at", { ascending: true }),
+    supabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .neq("status", "cancelled")
+      .gte("starts_at", yesterdayBounds.start.toISOString())
+      .lt("starts_at", yesterdayBounds.end.toISOString()),
+    supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("status", "awaiting_human")
+      .is("deleted_at", null),
+    supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("status", "human_handling")
+      .is("deleted_at", null),
+    supabase
+      .from("clients")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicUser.clinic_id)
+      .is("deleted_at", null)
+      .gte("created_at", todayBounds.start.toISOString())
+      .lt("created_at", todayBounds.end.toISOString()),
+    supabase
+      .from("v_conversations_inbox")
+      .select(
+        "id, client_name, client_phone, pet_name, status, channel, last_message_at, last_message_preview, started_at",
+      )
+      .eq("clinic_id", clinicUser.clinic_id)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(6),
+  ]);
+
+  const nativeAppointments: TodayAppointment[] = (
+    (appointmentsTodayResult.data ?? []) as AppointmentRow[]
+  ).map((appointment) => ({
+    id: appointment.id,
+    startsAt: appointment.starts_at,
+    clientName: single(appointment.clients)?.name ?? "Cliente sin nombre",
+    petName: single(appointment.pets)?.name ?? null,
+    serviceName: single(appointment.services)?.name ?? null,
+    status: appointment.status,
+    source: "recepia",
+  }));
+
+  const gestorVetToday: TodayAppointment[] = [];
+  let gestorVetYesterdayCount = 0;
+  try {
+    const { client } = await readGestorVetClient(createAdminClient(), clinicUser.clinic_id);
+    const records = await client.getAppointments();
+    for (const record of records) {
+      const appointment = gestorVetAppointment(record);
+      if (!appointment) continue;
+      const dateKey = clinicDateKey(appointment.startsAt);
+      if (dateKey === yesterdayKey) gestorVetYesterdayCount += 1;
+      if (dateKey !== todayKey) continue;
+      gestorVetToday.push({
+        id: `gestorvet-${appointment.externalId}`,
+        startsAt: appointment.startsAt,
+        clientName: appointment.clientName ?? "Cliente de GestorVet",
+        petName: appointment.petName,
+        serviceName: appointment.serviceName,
+        status: "scheduled",
+        source: "gestorvet",
+      });
+    }
+  } catch {
+    // Dashboard remains available if the optional integration is offline.
+  }
+
+  const todayAppointments = [...nativeAppointments, ...gestorVetToday].sort((a, b) =>
+    a.startsAt.localeCompare(b.startsAt),
+  );
+  const todayAppointmentCount = todayAppointments.length;
+  const yesterdayAppointmentCount = (appointmentsYesterday.count ?? 0) + gestorVetYesterdayCount;
+  const needsAttention = (waitingConversations.count ?? 0) + (humanConversations.count ?? 0);
+  const metrics = [
+    {
+      label: "Conversaciones hoy",
+      value: conversationsToday.count ?? 0,
+      detail: comparison(conversationsToday.count ?? 0, conversationsYesterday.count ?? 0),
+      icon: MessageCircle,
+    },
+    {
+      label: "Citas hoy",
+      value: todayAppointmentCount,
+      detail: comparison(todayAppointmentCount, yesterdayAppointmentCount),
+      icon: CalendarDays,
+    },
+    {
+      label: "Necesitan atención",
+      value: needsAttention,
+      detail: `${waitingConversations.count ?? 0} esperando · ${humanConversations.count ?? 0} con humano`,
+      icon: Clock3,
+    },
+    {
+      label: "Clientes nuevos",
+      value: newClients.count ?? 0,
+      detail: "Registrados hoy",
+      icon: UserPlus,
+    },
   ];
+  const greetingName = firstName(clinicUser.display_name, user.email ?? null);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      {/* Welcome */}
+    <div className="mx-auto max-w-6xl space-y-6">
+      <DashboardAutoRefresh clinicId={clinicUser.clinic_id} />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
-          {firstName ? `Bienvenido, ${firstName}` : "Bienvenido"}
+          {greetingName ? `Bienvenido, ${greetingName}` : "Bienvenido"}
         </h1>
         <p className="mt-1 text-sm text-stone-500">
-          Aquí tienes el resumen de hoy en {clinicName}.
+          Resumen del {formatClinicDate(new Date(), { day: "numeric", month: "long" })} en{" "}
+          {clinicName}.
         </p>
       </div>
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-3 gap-6">
-        {METRICS.map((m) => (
-          <Card
-            key={m.label}
-            className="rounded-xl border-stone-200 shadow-card transition-shadow hover:shadow-card-hero"
-          >
-            <CardContent className="p-6">
-              <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-                {m.label}
-              </p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-stone-900">
-                {m.value}
-              </p>
-              <p className="mt-1 text-xs text-stone-400">{m.delta}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
+          return (
+            <Card key={metric.label} className="rounded-xl border-stone-200 shadow-card">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                    {metric.label}
+                  </p>
+                  <Icon className="size-4 text-stone-400" strokeWidth={1.75} />
+                </div>
+                <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-stone-900">
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-xs text-stone-400">{metric.detail}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Clinic info */}
-      <Card className="rounded-xl border-stone-200 shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-stone-900">
-            Tu clínica
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-stone-500">Nombre</span>
-            <span className="font-medium text-stone-900">{clinicName}</span>
-          </div>
-          <div className="border-t border-stone-100" />
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-stone-500">Tu rol</span>
-            <span className="font-medium text-stone-900">
-              {ROLE_LABELS[clinicUser?.role ?? ""] ?? clinicUser?.role ?? "—"}
-            </span>
-          </div>
-          <div className="border-t border-stone-100" />
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-stone-500">Estado</span>
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
-              Activa
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
+        <Card className="rounded-xl border-stone-200 shadow-card">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Agenda de hoy
+              </CardTitle>
+              <p className="mt-1 text-xs text-stone-500">
+                Recepia y GestorVet · {todayAppointmentCount} citas
+              </p>
+            </div>
+            <Link
+              href="/calendar"
+              className="flex items-center gap-1 text-xs font-medium text-emerald-700"
+            >
+              Ver calendario <ArrowRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="px-0 pb-1">
+            {todayAppointments.length === 0 ? (
+              <p className="px-6 pb-5 text-sm text-stone-400">No hay citas programadas para hoy.</p>
+            ) : (
+              <div className="max-h-[420px] divide-y divide-stone-100 overflow-y-auto">
+                {todayAppointments.map((appointment) => (
+                  <div key={appointment.id} className="flex items-center gap-3 px-6 py-3">
+                    <span className="w-12 shrink-0 text-sm font-semibold tabular-nums text-stone-900">
+                      {formatClinicTime(appointment.startsAt)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-stone-900">
+                        {appointment.clientName}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-stone-500">
+                        {appointment.petName && <PawPrint className="size-3 shrink-0" />}
+                        {[appointment.petName, appointment.serviceName]
+                          .filter(Boolean)
+                          .join(" · ") || "Sin detalle"}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                        appointment.source === "gestorvet"
+                          ? "bg-violet-50 text-violet-700"
+                          : "bg-emerald-50 text-emerald-700",
+                      )}
+                    >
+                      {appointment.source === "gestorvet" ? "GestorVet" : "Recepia"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-xl border-stone-200 shadow-card">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold text-stone-900">
+                Conversaciones recientes
+              </CardTitle>
+              <p className="mt-1 text-xs text-stone-500">Última actividad de los clientes</p>
+            </div>
+            <Link
+              href="/conversations"
+              className="flex items-center gap-1 text-xs font-medium text-emerald-700"
+            >
+              Ver todas <ArrowRight className="size-3.5" />
+            </Link>
+          </CardHeader>
+          <CardContent className="px-0 pb-1">
+            {(recentConversations.data ?? []).length === 0 ? (
+              <p className="px-6 pb-5 text-sm text-stone-400">Todavía no hay conversaciones.</p>
+            ) : (
+              <div className="divide-y divide-stone-100">
+                {(recentConversations.data ?? []).map((conversation) => (
+                  <Link
+                    key={conversation.id}
+                    href={`/conversations/${conversation.id}`}
+                    className="block px-6 py-3 transition-colors hover:bg-stone-50"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="min-w-0 truncate text-sm font-medium text-stone-900">
+                        {conversation.client_name ??
+                          conversation.client_phone ??
+                          "Cliente sin nombre"}
+                      </p>
+                      {conversation.status && <StatusBadge status={conversation.status} />}
+                    </div>
+                    <p className="mt-1 truncate text-xs text-stone-500">
+                      {conversation.pet_name ? `${conversation.pet_name} · ` : ""}
+                      {conversation.last_message_preview ?? "Conversación iniciada"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-stone-400">
+                      {relativeTime(
+                        conversation.last_message_at ??
+                          conversation.started_at ??
+                          new Date().toISOString(),
+                      )}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <p className="text-xs text-stone-400">
+        Sesión: {ROLE_LABELS[clinicUser.role] ?? clinicUser.role} · Los datos se actualizan
+        automáticamente.
+      </p>
     </div>
   );
 }

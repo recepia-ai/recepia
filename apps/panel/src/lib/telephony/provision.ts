@@ -71,14 +71,15 @@ const NUMBER_TYPE_PATH: Record<NumberType, string> = {
 };
 
 async function createEndUser(reg: RegulatoryInfo) {
-  // VERIFICAR: Attributes exactos según la regulación ES (business_name, business_registration…).
+  // Verificado contra la regulación "Spain: Local - Business"
+  // (RN4fef079e6810dd3af0df8a94ce9ae98b): el End-User business SOLO requiere
+  // `business_name`. El NIF/CIF (tax_id_number) y la dirección se prueban en el
+  // Supporting Document (business_registration), no en el End-User.
   return twilioNumbers<{ sid: string }>("POST", "/RegulatoryCompliance/EndUsers", {
     FriendlyName: `${reg.legal_name} (Recepia End-User)`,
     Type: reg.end_user_type, // 'business' | 'individual'
     Attributes: JSON.stringify({
       business_name: reg.legal_name,
-      business_registration_number: reg.tax_id,
-      authorized_representative_1: reg.authorized_rep_name ?? undefined,
     }),
   });
 }
@@ -113,8 +114,9 @@ async function searchAvailableNumber(
 }
 
 async function createBundle(reg: RegulatoryInfo, numberType: NumberType) {
-  // VERIFICAR: puede requerir RegulationSid concreto (GET /RegulatoryCompliance/Regulations
-  // filtrando por IsoCountry/NumberType/EndUserType) según el número a comprar.
+  // Verificado: para ES el trío (IsoCountry ES + EndUserType business + NumberType local)
+  // mapea a una única regulación (RN4fef079e6810dd3af0df8a94ce9ae98b "Spain: Local - Business"),
+  // así que Twilio la resuelve sin pasar RegulationSid explícito.
   return twilioNumbers<{ sid: string }>("POST", "/RegulatoryCompliance/Bundles", {
     FriendlyName: `${reg.legal_name} — ${numberType} ${reg.country_code}`,
     Email: reg.contact_email ?? undefined,
@@ -262,7 +264,10 @@ export async function provisionTwilioNumber(opts: ProvisionOptions): Promise<Pro
     const res = await createBundle(reg, numberType);
     if (!res.ok) return { success: false, error: `Twilio Bundle: ${res.error}` };
     bundleSid = res.data.sid;
-    for (const objectSid of [endUserSid, addressSid, ...supportingDocSids]) {
+    // El Address NO se asigna como item del bundle (Twilio: "invalid object type"):
+    // se referencia desde el Supporting Document vía `address_sids`. Solo van al
+    // bundle el End-User y los Supporting Documents.
+    for (const objectSid of [endUserSid, ...supportingDocSids]) {
       const assign = await assignBundleItem(bundleSid, objectSid);
       if (!assign.ok) {
         return { success: false, error: `Asignar item ${objectSid} al bundle: ${assign.error}` };

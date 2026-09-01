@@ -1,28 +1,33 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/app/(app)/_components/status-badge";
-import { relativeTime } from "../../conversations/_components/relative-time";
+import type { Database } from "@recepia/db";
 import {
   ArrowLeft,
-  Phone,
-  Mail,
-  MessageSquare,
   Calendar,
-  PawPrint,
-  Clock,
-  MapPin,
-  Globe,
   ChevronRight,
+  Clock,
+  Globe,
+  Mail,
+  MapPin,
+  MessageSquare,
+  PawPrint,
+  Phone,
   Users,
 } from "lucide-react";
-import type { Database } from "@recepia/db";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { StatusBadge } from "@/app/(app)/_components/status-badge";
+import { Button } from "@/components/ui/button";
+import { formatClinicDate, formatClinicTime } from "@/lib/clinic-datetime";
+import { createClient } from "@/lib/supabase/server";
+import { relativeTime } from "../../conversations/_components/relative-time";
+import { EditClientDialog, PetEditorDialog } from "../_components/client-editors";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type PetRow = Database["public"]["Tables"]["pets"]["Row"];
 type ApptRow = Database["public"]["Tables"]["appointments"]["Row"] & {
-  services: { name: string; duration_minutes: number } | { name: string; duration_minutes: number }[] | null;
+  services:
+    | { name: string; duration_minutes: number }
+    | { name: string; duration_minutes: number }[]
+    | null;
   pets: { name: string } | { name: string }[] | null;
 };
 type ConvViewRow = Database["public"]["Views"]["v_active_conversations"]["Row"];
@@ -46,7 +51,7 @@ const SEX_LABELS: Record<string, string> = {
 };
 
 function formatDateStr(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-ES", {
+  return formatClinicDate(iso, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -54,10 +59,7 @@ function formatDateStr(iso: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatClinicTime(iso);
 }
 
 function petAge(birthDate: string | null): string | null {
@@ -81,11 +83,7 @@ function channelLabel(channel: string): string {
   return channel;
 }
 
-export default async function ClientDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -130,9 +128,7 @@ export default async function ClientDetailPage({
       .limit(5),
     supabase
       .from("v_active_conversations")
-      .select(
-        "id, status, category, pet_name, last_message_at, channel",
-      )
+      .select("id, status, category, pet_name, last_message_at, channel")
       .eq("client_id", id)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(5),
@@ -173,23 +169,17 @@ export default async function ClientDetailPage({
                 {clientData.phone}
               </span>
             )}
-            {hasPhone && hasEmail && (
-              <span className="text-stone-300">·</span>
-            )}
+            {hasPhone && hasEmail && <span className="text-stone-300">·</span>}
             {hasEmail && (
               <span className="flex items-center gap-0.5">
                 <Mail className="size-3" strokeWidth={1.75} />
                 {clientData.email}
               </span>
             )}
-            {!hasPhone && !hasEmail && (
-              <span className="text-stone-400">Sin contacto</span>
-            )}
+            {!hasPhone && !hasEmail && <span className="text-stone-400">Sin contacto</span>}
           </div>
         </div>
-        <Button variant="outline" size="sm" disabled>
-          Editar
-        </Button>
+        <EditClientDialog client={clientData} />
         <Button
           variant="ghost"
           size="sm"
@@ -207,9 +197,7 @@ export default async function ClientDetailPage({
         <div className="mx-auto max-w-4xl space-y-6 p-6">
           {/* Client info card */}
           <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-card">
-            <h3 className="text-sm font-semibold text-stone-900">
-              Información del cliente
-            </h3>
+            <h3 className="text-sm font-semibold text-stone-900">Información del cliente</h3>
             <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-3">
               {/* Contact */}
               <div className="space-y-3">
@@ -226,10 +214,7 @@ export default async function ClientDetailPage({
                     {hasEmail ? clientData.email : "—"}
                   </p>
                   <p className="flex items-center gap-2 text-sm text-stone-700">
-                    <MessageSquare
-                      className="size-3.5 text-stone-400"
-                      strokeWidth={1.75}
-                    />
+                    <MessageSquare className="size-3.5 text-stone-400" strokeWidth={1.75} />
                     WhatsApp
                   </p>
                 </div>
@@ -243,13 +228,13 @@ export default async function ClientDetailPage({
                 <div className="space-y-2">
                   <p className="flex items-center gap-2 text-sm text-stone-700">
                     <MapPin className="size-3.5 text-stone-400" strokeWidth={1.75} />
-                    <span className="text-stone-400">—</span>
+                    <span className={clientData.document_id ? "" : "text-stone-400"}>
+                      {clientData.document_id ? `DNI/NIE: ${clientData.document_id}` : "DNI/NIE: —"}
+                    </span>
                   </p>
                   <p className="flex items-center gap-2 text-sm text-stone-700">
                     <Globe className="size-3.5 text-stone-400" strokeWidth={1.75} />
-                    {clientData.preferred_language === "en"
-                      ? "Inglés"
-                      : "Español"}
+                    {clientData.preferred_language === "en" ? "Inglés" : "Español"}
                   </p>
                 </div>
               </div>
@@ -265,9 +250,7 @@ export default async function ClientDetailPage({
                     {formatDateStr(clientData.created_at)}
                   </p>
                   {clientData.notes && (
-                    <p className="text-xs text-stone-500 italic line-clamp-3">
-                      {clientData.notes}
-                    </p>
+                    <p className="text-xs text-stone-500 italic line-clamp-3">{clientData.notes}</p>
                   )}
                 </div>
               </div>
@@ -276,21 +259,19 @@ export default async function ClientDetailPage({
 
           {/* Pets section */}
           <section>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-stone-900">
-                Mascotas
-              </h3>
-              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">
-                {pets.length}
-              </span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-stone-900">Mascotas</h3>
+                <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">
+                  {pets.length}
+                </span>
+              </div>
+              <PetEditorDialog clientId={clientData.id} />
             </div>
 
             {pets.length === 0 ? (
               <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-6 py-8 text-center">
-                <PawPrint
-                  className="mx-auto size-5 text-stone-300"
-                  strokeWidth={1.75}
-                />
+                <PawPrint className="mx-auto size-5 text-stone-300" strokeWidth={1.75} />
                 <p className="mt-2 text-sm text-stone-500">
                   Este cliente no tiene mascotas registradas
                 </p>
@@ -298,34 +279,39 @@ export default async function ClientDetailPage({
             ) : (
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {pets.map((pet) => {
-                  const speciesIcon = pet.species
-                    ? SPECIES_ICONS[pet.species] ?? "🐾"
-                    : "🐾";
+                  const speciesIcon = pet.species ? (SPECIES_ICONS[pet.species] ?? "🐾") : "🐾";
                   const age = petAge(pet.birth_date);
 
                   return (
                     <div
                       key={pet.id}
-                      className="rounded-xl border border-stone-200 bg-white p-4 shadow-card"
+                      className="group flex items-start gap-2 rounded-xl border border-stone-200 bg-white p-4 shadow-card transition hover:border-emerald-300 hover:shadow-card-hero"
                     >
-                      <div className="flex items-start gap-3">
+                      <Link
+                        href={`/pets/${pet.id}`}
+                        aria-label={`Ver ficha de ${pet.name}`}
+                        className="flex min-w-0 flex-1 items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                      >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-stone-100 text-lg">
                           {speciesIcon}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-stone-900">
-                            {pet.name}
-                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-stone-900 group-hover:text-emerald-700">
+                              {pet.name}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                              Ver ficha
+                              <ChevronRight className="size-3.5" />
+                            </span>
+                          </div>
                           <p className="mt-0.5 text-xs text-stone-500">
                             {[
                               pet.species
-                                ? pet.species.charAt(0).toUpperCase() +
-                                  pet.species.slice(1)
+                                ? pet.species.charAt(0).toUpperCase() + pet.species.slice(1)
                                 : null,
                               pet.breed,
-                              pet.sex != null
-                                ? (SEX_LABELS[pet.sex] ?? null)
-                                : null,
+                              pet.sex != null ? (SEX_LABELS[pet.sex] ?? null) : null,
                               age,
                             ]
                               .filter(Boolean)
@@ -337,7 +323,8 @@ export default async function ClientDetailPage({
                             </p>
                           )}
                         </div>
-                      </div>
+                      </Link>
+                      <PetEditorDialog clientId={clientData.id} pet={pet} />
                     </div>
                   );
                 })}
@@ -348,9 +335,7 @@ export default async function ClientDetailPage({
           {/* Appointments section */}
           <section>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-stone-900">
-                Próximas citas
-              </h3>
+              <h3 className="text-base font-semibold text-stone-900">Próximas citas</h3>
               <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">
                 {appointments.length}
               </span>
@@ -358,19 +343,9 @@ export default async function ClientDetailPage({
 
             {appointments.length === 0 ? (
               <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-6 py-8 text-center">
-                <Calendar
-                  className="mx-auto size-5 text-stone-300"
-                  strokeWidth={1.75}
-                />
-                <p className="mt-2 text-sm text-stone-500">
-                  No tiene citas próximas
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  className="mt-3"
-                >
+                <Calendar className="mx-auto size-5 text-stone-300" strokeWidth={1.75} />
+                <p className="mt-2 text-sm text-stone-500">No tiene citas próximas</p>
+                <Button variant="outline" size="sm" disabled className="mt-3">
                   Agendar cita
                 </Button>
               </div>
@@ -379,25 +354,19 @@ export default async function ClientDetailPage({
                 {appointments.map((appt) => {
                   const service = appt.services
                     ? Array.isArray(appt.services)
-                      ? appt.services[0] ?? null
+                      ? (appt.services[0] ?? null)
                       : appt.services
                     : null;
                   const pet = appt.pets
                     ? Array.isArray(appt.pets)
-                      ? appt.pets[0] ?? null
+                      ? (appt.pets[0] ?? null)
                       : appt.pets
                     : null;
 
                   return (
-                    <div
-                      key={appt.id}
-                      className="flex items-center gap-3 px-4 py-3"
-                    >
+                    <div key={appt.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                        <Calendar
-                          className="size-4 text-emerald-600"
-                          strokeWidth={1.75}
-                        />
+                        <Calendar className="size-4 text-emerald-600" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -405,13 +374,10 @@ export default async function ClientDetailPage({
                             {formatTime(appt.starts_at)}
                           </span>
                           <span className="text-xs text-stone-500">
-                            {new Date(appt.starts_at).toLocaleDateString(
-                              "es-ES",
-                              {
-                                day: "numeric",
-                                month: "short",
-                              },
-                            )}
+                            {formatClinicDate(appt.starts_at, {
+                              day: "numeric",
+                              month: "short",
+                            })}
                           </span>
                           <span className="text-stone-300">·</span>
                           <span className="truncate text-sm text-stone-700">
@@ -419,11 +385,7 @@ export default async function ClientDetailPage({
                           </span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-2">
-                          {pet && (
-                            <span className="text-xs text-stone-500">
-                              {pet.name}
-                            </span>
-                          )}
+                          {pet && <span className="text-xs text-stone-500">{pet.name}</span>}
                           <span className="text-xs text-stone-300">·</span>
                           <span
                             className={`text-xs font-medium ${
@@ -458,9 +420,7 @@ export default async function ClientDetailPage({
           {/* Conversations section */}
           <section className="pb-6">
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-stone-900">
-                Conversaciones recientes
-              </h3>
+              <h3 className="text-base font-semibold text-stone-900">Conversaciones recientes</h3>
               <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">
                 {conversations.length}
               </span>
@@ -468,13 +428,8 @@ export default async function ClientDetailPage({
 
             {conversations.length === 0 ? (
               <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-6 py-8 text-center">
-                <MessageSquare
-                  className="mx-auto size-5 text-stone-300"
-                  strokeWidth={1.75}
-                />
-                <p className="mt-2 text-sm text-stone-500">
-                  Sin conversaciones todavía
-                </p>
+                <MessageSquare className="mx-auto size-5 text-stone-300" strokeWidth={1.75} />
+                <p className="mt-2 text-sm text-stone-500">Sin conversaciones todavía</p>
               </div>
             ) : (
               <div className="mt-4 divide-y divide-stone-100 rounded-xl border border-stone-200 bg-white">
@@ -485,16 +440,14 @@ export default async function ClientDetailPage({
                     className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-stone-50"
                   >
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-stone-100">
-                      <MessageSquare
-                        className="size-4 text-stone-500"
-                        strokeWidth={1.75}
-                      />
+                      <MessageSquare className="size-4 text-stone-500" strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <StatusBadge
                           status={
-                            (conv.status ?? "active") as Database["public"]["Enums"]["conversation_status"]
+                            (conv.status ??
+                              "active") as Database["public"]["Enums"]["conversation_status"]
                           }
                         />
                         <span className="text-xs text-stone-400">
@@ -502,9 +455,7 @@ export default async function ClientDetailPage({
                         </span>
                       </div>
                       {conv.pet_name && (
-                        <p className="mt-0.5 text-xs text-stone-500">
-                          {conv.pet_name}
-                        </p>
+                        <p className="mt-0.5 text-xs text-stone-500">{conv.pet_name}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -513,10 +464,7 @@ export default async function ClientDetailPage({
                           {relativeTime(conv.last_message_at)}
                         </span>
                       )}
-                      <ChevronRight
-                        className="size-4 text-stone-300"
-                        strokeWidth={1.75}
-                      />
+                      <ChevronRight className="size-4 text-stone-300" strokeWidth={1.75} />
                     </div>
                   </Link>
                 ))}
@@ -535,9 +483,7 @@ function NotFound() {
       <div className="flex size-16 items-center justify-center rounded-full bg-rose-50">
         <Users className="size-7 text-rose-400" strokeWidth={1.75} />
       </div>
-      <h3 className="mt-5 text-base font-semibold text-stone-900">
-        Cliente no encontrado
-      </h3>
+      <h3 className="mt-5 text-base font-semibold text-stone-900">Cliente no encontrado</h3>
       <p className="mt-1.5 text-sm text-stone-500">
         Este cliente no existe o no pertenece a tu clínica.
       </p>

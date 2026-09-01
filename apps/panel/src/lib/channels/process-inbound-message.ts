@@ -1,8 +1,10 @@
 import type { InboundChannelEvent } from "@recepia/core";
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
 import { loadMessages, saveMessage, startConversation } from "@/lib/agent/conversation-store";
 import { runAgentLoop } from "@/lib/agent/loop";
+import { findClientByIdentity } from "@/lib/client-identity";
 
 type AdminClient = SupabaseClient<Database>;
 type ChannelEventRow = Database["public"]["Tables"]["channel_events"]["Row"];
@@ -162,6 +164,32 @@ export async function processInboundMessage(
         event.contact.phone,
         event.externalThreadId,
       )) as ConversationRow;
+    }
+
+    if (!conversation.client_id && event.contact.phone) {
+      const matchedClient = await findClientByIdentity(supabaseAdmin, event.clinicId, {
+        phone: event.contact.phone,
+      });
+      if (matchedClient) {
+        const { data: pets } = await supabaseAdmin
+          .from("pets")
+          .select("id")
+          .eq("clinic_id", event.clinicId)
+          .eq("client_id", matchedClient.id)
+          .eq("active", true)
+          .is("deleted_at", null)
+          .limit(2);
+        const petId = pets?.length === 1 ? pets[0]?.id : undefined;
+        const linked = await linkConversationIdentity(supabaseAdmin, {
+          conversationId: conversation.id,
+          clinicId: event.clinicId,
+          clientId: matchedClient.id,
+          petId,
+        });
+        if (linked.success) {
+          conversation = { ...conversation, client_id: matchedClient.id, pet_id: petId ?? null };
+        }
+      }
     }
 
     await supabaseAdmin

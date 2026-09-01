@@ -1,0 +1,72 @@
+services:
+  evolution-api-rc12:
+    build:
+      context: .
+      dockerfile: Dockerfile.baileys-rc13
+    image: recepia/evolution-api:2.3.7-baileys-rc13
+    container_name: recepia_evolution_api_rc12
+    restart: unless-stopped
+    depends_on:
+      evolution-postgres-rc12:
+        condition: service_healthy
+      evolution-redis-rc12:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SERVER_NAME: recepia-evolution-rc12
+      SERVER_URL: http://localhost:8080
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@evolution-postgres-rc12:5432/${POSTGRES_DATABASE}?schema=evolution_api
+      DATABASE_CONNECTION_CLIENT_NAME: recepia_demo_rc12
+      CACHE_REDIS_URI: redis://evolution-redis-rc12:6379/0
+      CACHE_REDIS_PREFIX_KEY: recepia_rc12
+      CONFIG_SESSION_PHONE_CLIENT: Recepia Experimental
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - evolution_instances_rc12:/evolution/instances
+    networks:
+      - evolution-rc12
+
+  evolution-postgres-rc12:
+    image: postgres:15-alpine
+    container_name: recepia_evolution_postgres_rc12
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME} -d ${POSTGRES_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - evolution_postgres_rc12:/var/lib/postgresql/data
+    networks:
+      - evolution-rc12
+
+  evolution-redis-rc12:
+    image: redis:7-alpine
+    container_name: recepia_evolution_redis_rc12
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - evolution_redis_rc12:/data
+    networks:
+      - evolution-rc12
+
+volumes:
+  evolution_instances_rc12:
+  evolution_postgres_rc12:
+  evolution_redis_rc12:
+
+networks:
+  evolution-rc12:
+    name: recepia-evolution-rc12

@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Recepia",
   description: "Recepcionista virtual veterinaria con IA",
+  applicationName: "Recepia",
+  icons: {
+    icon: "/recepia-app-icon.png",
+    apple: "/recepia-app-icon.png",
+  },
 }
 
 export default function RootLayout({

@@ -2,7 +2,7 @@
 
 > Checklist operativo iniciado el 21 de agosto de 2026. Solo autoriza el número de prueba proporcionado por Meta. No autoriza conectar el número real del hospital ni asumir gastos.
 
-## Estado verificado — 23 de agosto de 2026
+## Estado verificado — 26 de agosto de 2026
 
 - Porfolio empresarial Meta: `Recepia` (`business_id=4548379128777722`), sin verificar durante la demostración.
 - Aplicación Meta: `Recepia` (`app_id=1529572905588227`), en modo desarrollo.
@@ -10,7 +10,7 @@
 - `META_WHATSAPP_VERIFY_TOKEN` y `META_WHATSAPP_APP_SECRET` guardados como variables sensibles de Production y Preview en Vercel. El App Secret se rotó antes de guardar el valor definitivo.
 - Despliegue de producción regenerado y en estado Ready.
 - Callback verificado por Meta: GET 200.
-- Campo `messages` suscrito en la versión v26.0.
+- Campos `messages` y `account_update` suscritos en la versión v26.0. El webhook reconoce `account_update` y lo confirma sin tratarlo como conversación.
 - Webhook de muestra firmado recibido: POST 200. El procesador rechazó correctamente asociarlo a una clínica porque el ejemplo usa el número ficticio `16505551111` y no existe un canal `meta_cloud` para él.
 - Número de prueba confirmado aunque la pantalla de Developers siga mostrando de forma obsoleta que no hay número: `+1 555-668-8613`, Phone Number ID `1206555752548755`, WABA ID `1235240618736353`.
 - Usuario del sistema `Recepia API` (`61593392469840`) con acceso total a la aplicación Recepia y a la WABA de prueba.
@@ -29,6 +29,12 @@
 - Para descartar también el porfolio original se creó un entorno totalmente separado: porfolio `Recepia Sandbox` (`business_id=1611080270728854`) y aplicación `Recepia Sandbox Messaging` (`app_id=957295927423465`). Se completó el onboarding inicial de WhatsApp, se solicitó el número público de prueba, se esperó más de un minuto y se recargó API Testing. Meta volvió a mostrar **No hay ningún número de teléfono disponible para esta aplicación** y mantuvo el botón **Solicitar número de prueba**. La incidencia queda aislada a la cuenta de desarrollador o al servicio de aprovisionamiento de Meta, no a la aplicación, WABA ni porfolio originales de Recepia.
 - Pendiente para el E2E: añadir un destinatario permitido en Meta, enviar el mensaje inicial de prueba y validar entrada, respuesta del agente y toma de control desde el panel.
 - No se ha registrado el número real del hospital ni se ha añadido método de pago.
+- Recepia ha aceptado las condiciones de **Independent Tech Provider** con el porfolio empresarial principal.
+- La verificación de `RELOS VM, S.L.` fue reenviada y Meta la muestra **En revisión**, con una estimación de dos días laborables.
+- Se creó la configuración oficial de WhatsApp Embedded Signup desde la plantilla de token de 60 días. El Configuration ID es un identificador público y debe configurarse en Vercel, nunca tratarse como un secreto.
+- `recepia-panel.vercel.app` quedó añadido como dominio autorizado del SDK y `/settings/integrations` como URI OAuth válida. El acceso OAuth web, HTTPS, navegador integrado, modo estricto y SDK de JavaScript están activados; la reautenticación forzada y el inicio de sesión desde dispositivos permanecen desactivados.
+- El panel incorpora el botón de alta por clínica. El servidor intercambia el código antes de que caduque, suscribe la aplicación a la WABA, registra el número con un PIN aleatorio de seis dígitos y guarda token y PIN en Supabase Vault. La caducidad del token de 60 días queda registrada en la configuración no secreta para poder avisar y renovar antes de que caduque.
+- Las variables públicas de la app y la configuración se añadieron a Vercel en Production y Preview. El despliegue de producción quedó `READY` y aliasado a `https://recepia-panel.vercel.app`.
 
 ## Objetivo
 
@@ -53,10 +59,18 @@ Demostrar a Samuel el flujo completo de Recepia por WhatsApp sin contratar 360di
 
 ## Variables del despliegue
 
+- `NEXT_PUBLIC_META_APP_ID`: identificador público de la aplicación Recepia.
+- `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`: identificador público de la configuración de Embedded Signup v4.
 - `META_WHATSAPP_VERIFY_TOKEN`: valor aleatorio usado por Meta para verificar el callback.
 - `META_WHATSAPP_APP_SECRET`: App Secret de la aplicación Meta, usado para validar `X-Hub-Signature-256`.
 
-Configurar ambas en Production y Preview. No usar el mismo valor para las dos variables.
+Configurar las cuatro en Production y Preview. No usar el mismo valor para los dos secretos.
+
+## Alta SaaS de una clínica
+
+En **Ajustes → Integraciones → WhatsApp**, un administrador puede pulsar **Conectar WhatsApp con Meta**. El cliente inicia sesión en su propio porfolio, selecciona o crea su WABA y verifica el número. La clínica conserva la propiedad de sus activos; Recepia recibe acceso para operar la mensajería.
+
+Después del alta, el cliente debe añadir su propio método de pago en WhatsApp Manager para usar el canal en producción. Recepia no añade ni comparte métodos de pago durante la demostración.
 
 ## Configuración del canal en Recepia
 

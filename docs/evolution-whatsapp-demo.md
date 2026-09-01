@@ -1,6 +1,6 @@
 # Evolution API — transporte temporal de WhatsApp
 
-> Entorno de demostración. No conecta ni autoriza conectar el número real del Hospital Dr. Patiño. Evolution usa una sesión de WhatsApp Web no oficial y debe operar únicamente con un número de pruebas prescindible.
+> Entorno de demostración. Desde el 29 de agosto de 2026, el Hospital Dr. Patiño ha autorizado vincular temporalmente su móvil `+34 605 413 875` para estas pruebas. Evolution usa una sesión de WhatsApp Web no oficial; la autorización debe revocarse y la sesión debe cerrarse al terminar la demostración si no se decide mantener este transporte.
 
 ## Arquitectura
 
@@ -23,7 +23,7 @@
 En **Ajustes → Integraciones → WhatsApp**:
 
 1. Proveedor: `Evolution API (demostración temporal)`.
-2. Número: número E.164 exclusivo de pruebas.
+2. Número: número E.164 autorizado para las pruebas (`+34605413875` en la demostración actual).
 3. URL de Evolution API: URL base accesible desde el despliegue de Recepia.
 4. Instancia: nombre exacto creado en Evolution, por ejemplo `recepia-demo`.
 5. API key: introducirla directamente en el campo protegido.
@@ -37,18 +37,56 @@ En **Ajustes → Integraciones → WhatsApp**:
    - Evento: `MESSAGES_UPSERT`
    - Header: `x-recepia-webhook-secret: <EVOLUTION_WEBHOOK_SECRET>`
    - Base64: desactivado.
-4. Escanear el QR desde el teléfono de pruebas.
+4. Vincular el teléfono desde **Dispositivos vinculados → Vincular con número de teléfono**
+   usando el código temporal de ocho caracteres devuelto por Evolution. El QR queda como método
+   alternativo, ya que WhatsApp rechazó repetidamente los QR de Baileys para el número del hospital.
+
+Validación del 29-08-2026: la instancia `recepia-demo` se recreó sin las credenciales residuales del
+número anterior y `+34605413875` quedó conectado correctamente mediante código de vinculación.
+
+### Ejecución local para la demostración
+
+1. Iniciar Colima y levantar el stack conservando sus volúmenes:
+
+   ```bash
+   colima start
+   docker-compose --env-file infra/evolution/.env -f infra/evolution/docker-compose.yml up -d
+   ```
+
+2. Comprobar `http://127.0.0.1:8080/`; debe devolver la versión `2.3.7`.
+3. Para una prueba puntual puede publicarse temporalmente esa URL:
+
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate
+   ```
+
+4. Los Quick Tunnels son efímeros y ya no son el transporte habitual de la demostración. El túnel nombrado `recepia-evolution-demo` expone Evolution mediante `https://evolution.iatope.com`, usa `infra/evolution/cloudflared-config.yml` y está instalado como servicio de usuario de macOS.
+5. Mantener Colima y los contenedores de Evolution activos. `cloudflared` se inicia automáticamente mientras el usuario de macOS esté conectado. Para producción definitiva, Evolution debe trasladarse a infraestructura permanentemente encendida.
+
+Si el Quick Tunnel caduca, Recepia puede haber generado y guardado la respuesta de la IA sin que WhatsApp la haya aceptado. El panel marca esos mensajes como **No entregado**, pasa la conversación a `awaiting_human` y no debe reenviar automáticamente el texto para evitar duplicados. La recuperación correcta es: crear un túnel nuevo, actualizar la URL base del canal, comprobar que la instancia está `open` y devolver después la conversación al agente.
+
+Al devolver una conversación al agente, la escalación activa queda archivada en el historial. Los resultados de calendario de turnos anteriores son históricos: una petición nueva de disponibilidad debe ejecutar de nuevo las herramientas y no reutilizar un error antiguo como si siguiera vigente.
+
+En `v2.3.7`, `POST /webhook/set/{instanceName}` espera la configuración dentro de una propiedad raíz `webhook`, aunque la documentación más reciente muestre el objeto directamente. La verificación posterior debe hacerse con `GET /webhook/find/{instanceName}` sin registrar ni mostrar `headers`.
+
+Antes del QR deben cumplirse estas comprobaciones:
+
+- El webhook de Recepia sin secreto devuelve `401`.
+- El mismo webhook, autenticado pero con un payload inválido, devuelve `400`.
+- Un endpoint protegido de Evolution a través del túnel y sin `apikey` devuelve `401`.
 
 ## Prueba E2E
 
-1. Enviar un mensaje desde un segundo teléfono al número conectado a Evolution.
-2. Confirmar que la conversación aparece en la vista WhatsApp del panel.
-3. Confirmar que el agente se presenta como agente de IA del equipo del hospital.
-4. Pedir una cita y verificar que el agente responde y utiliza el calendario existente.
-5. Tomar el control desde el panel y enviar una respuesta manual.
-6. Devolver el control a la IA y comprobar que la conversación continúa con el mismo contexto.
+1. [x] Enviar un mensaje desde un segundo teléfono al número conectado a Evolution.
+2. [x] Confirmar que la conversación aparece en la vista WhatsApp del panel y se actualiza sin recargar (comprobación autenticada cada 3 segundos).
+3. [x] Confirmar que el agente se presenta como agente de IA del equipo del hospital.
+4. [x] Pedir una cita y verificar que el agente responde y utiliza el calendario existente.
+5. [x] Tomar el control desde el panel, enviar una respuesta manual y comprobar que la IA permanece en silencio.
+6. [x] Devolver el control a la IA y comprobar que la conversación continúa con el mismo contexto.
 7. Forzar una consulta clínica y verificar que se deriva a una persona sin diagnosticar ni prescribir.
 8. Reiniciar Evolution y comprobar que la sesión se recupera; si no, registrar la necesidad de volver a escanear el QR.
+
+Validación del 27-08-2026: Laura solicitó una revisión general para Thor, eligió el 28-08-2026 a las 09:30 con Elisabeth Menasanch y confirmó la reserva. La cita quedó `confirmed` en Recepia, vinculada al cliente, mascota, servicio y veterinaria, con evento creado en el calendario dedicado de Google. Los eventos se envían con hora local y offset explícitos (`Europe/Madrid`) y textos operativos en español. La confirmación y el cierre de conversación fueron aceptados por Evolution y recibidos por WhatsApp.
 
 ## Criterio de cierre de la demostración
 

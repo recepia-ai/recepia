@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureDedicatedVetCalendar } from "@/lib/google-calendar-provisioning";
 import { revalidatePath } from "next/cache";
 import {
   inviteMemberSchema,
@@ -298,7 +299,7 @@ export async function updateMemberRole(
   // Verify target member exists in the same clinic
   const { data: targetMember } = await supabase
     .from("clinic_users")
-    .select("id, user_id, role")
+    .select("id, user_id, role, display_name")
     .eq("id", member_id)
     .eq("clinic_id", cu.clinic_id)
     .maybeSingle();
@@ -307,6 +308,7 @@ export async function updateMemberRole(
     id: string;
     user_id: string;
     role: string;
+    display_name: string | null;
   } | null;
   if (!target) return { error: "Miembro no encontrado" };
 
@@ -336,7 +338,15 @@ export async function updateMemberRole(
   // Update
   const updateQuery = supabase.from("clinic_users") as any;
   const { data: updated, error } = await updateQuery
-    .update({ role: new_role })
+    .update({
+      role: new_role,
+      staff_type:
+        new_role === "veterinario"
+          ? "vet"
+          : new_role === "recepcion"
+            ? "reception"
+            : "admin",
+    })
     .eq("id", member_id)
     .eq("clinic_id", cu.clinic_id)
     .select()
@@ -349,6 +359,17 @@ export async function updateMemberRole(
 
   if (!updated) {
     return { error: "No tienes permiso para cambiar el rol." };
+  }
+
+  if (new_role === "veterinario") {
+    const calendar = await ensureDedicatedVetCalendar(
+      cu.clinic_id,
+      member_id,
+      target.display_name,
+    );
+    if (!calendar.success) {
+      console.error("[updateMemberRole] calendar provisioning failed", calendar.error);
+    }
   }
 
   revalidatePath("/settings/team");

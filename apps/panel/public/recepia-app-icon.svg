@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">Recepia</title>
+  <defs>
+    <linearGradient id="background" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#background)"/>
+  <path
+    d="M318 794V238h224c132 0 218 73 218 184 0 96-62 164-162 181l184 191H632L470 614H438v180H318Zm120-286h96c65 0 104-30 104-82 0-53-39-82-104-82h-96v164Z"
+    fill="#FFFFFF"
+  />
+  <circle cx="783" cy="249" r="58" fill="#A7F3D0"/>
+</svg>

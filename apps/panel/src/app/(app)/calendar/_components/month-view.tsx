@@ -1,14 +1,8 @@
 "use client";
 
-import type { AppointmentWithDetails, BusinessHours } from "./types";
-import {
-  monthGrid,
-  dayNameShort,
-  isToday,
-  isSameMonth,
-  appointmentsForDay,
-} from "./helpers";
-import type { ViewMode } from "./types";
+import { formatClinicTime } from "@/lib/clinic-datetime";
+import { appointmentsForDay, dayNameShort, isSameMonth, isToday, monthGrid } from "./helpers";
+import type { AppointmentWithDetails, BusinessHours, ViewMode } from "./types";
 
 type Props = {
   date: Date;
@@ -53,9 +47,7 @@ export function MonthView({ date, appointments, onDayClick }: Props) {
               >
                 <span
                   className={`inline-flex size-6 items-center justify-center rounded-full text-xs font-medium ${
-                    today
-                      ? "bg-emerald-600 text-white"
-                      : "text-stone-600"
+                    today ? "bg-emerald-600 text-white" : "text-stone-600"
                   }`}
                 >
                   {day.getDate()}
@@ -75,17 +67,11 @@ export function MonthView({ date, appointments, onDayClick }: Props) {
                               : "border-l-emerald-500 bg-emerald-50/70 text-emerald-700"
                       }`}
                     >
-                      {new Date(appt.starts_at).toLocaleTimeString("es-ES", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}{" "}
-                      {appt.client_name?.split(" ")[0]}
+                      {formatClinicTime(appt.starts_at)} {appt.client_name?.split(" ")[0]}
                     </div>
                   ))}
                   {overflow > 0 && (
-                    <p className="px-1.5 text-[10px] text-stone-400">
-                      +{overflow} más
-                    </p>
+                    <p className="px-1.5 text-[10px] text-stone-400">+{overflow} más</p>
                   )}
                 </div>
               </button>

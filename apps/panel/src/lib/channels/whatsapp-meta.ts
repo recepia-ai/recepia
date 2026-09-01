@@ -18,6 +18,25 @@ export type MetaWhatsAppWebhook = WhatsAppCloudWebhook;
 
 export const parseMetaWhatsAppWebhook = parseWhatsAppCloudWebhook;
 
+export function metaWebhookFields(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const entries = (payload as { entry?: unknown }).entry;
+  if (!Array.isArray(entries)) return [];
+
+  const fields: string[] = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const changes = (entry as { changes?: unknown }).changes;
+    if (!Array.isArray(changes)) continue;
+    for (const change of changes) {
+      if (!change || typeof change !== "object") continue;
+      const field = (change as { field?: unknown }).field;
+      if (typeof field === "string") fields.push(field);
+    }
+  }
+  return fields;
+}
+
 export function resolveMetaWhatsAppChannel(
   supabaseAdmin: AdminClient,
   phoneNumberId: string,

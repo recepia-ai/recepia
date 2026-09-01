@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureDedicatedVetCalendar } from "@/lib/google-calendar-provisioning";
 
 // ---------------------------------------------------------------------------
 // linkPendingInvitationForUser
@@ -60,13 +61,22 @@ export async function linkPendingInvitationForUser(
   // Create the membership. Only ONE row is created so the app's single-clinic
   // assumption (clinic_users queried with maybeSingle) keeps holding.
   const insertQuery = admin.from("clinic_users") as any;
-  const { error: insertError } = await insertQuery.insert({
-    clinic_id: invitation.clinic_id,
-    user_id: userId,
-    role: invitation.role,
-    display_name: invitation.display_name,
-    email,
-  });
+  const { data: createdMembership, error: insertError } = await insertQuery
+    .insert({
+      clinic_id: invitation.clinic_id,
+      user_id: userId,
+      role: invitation.role,
+      display_name: invitation.display_name,
+      email,
+      staff_type:
+        invitation.role === "veterinario"
+          ? "vet"
+          : invitation.role === "recepcion"
+            ? "reception"
+            : "admin",
+    })
+    .select("id")
+    .single();
 
   if (insertError) {
     console.error("[linkPendingInvitation] insert error:", insertError);
@@ -78,6 +88,17 @@ export async function linkPendingInvitationForUser(
   await updateQuery
     .update({ status: "accepted", accepted_at: new Date().toISOString() })
     .eq("id", invitation.id);
+
+  if (invitation.role === "veterinario" && createdMembership?.id) {
+    const calendar = await ensureDedicatedVetCalendar(
+      invitation.clinic_id,
+      createdMembership.id,
+      invitation.display_name,
+    );
+    if (!calendar.success) {
+      console.error("[linkPendingInvitation] calendar provisioning failed", calendar.error);
+    }
+  }
 
   return true;
 }

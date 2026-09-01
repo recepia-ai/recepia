@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
+import { normalizeDocumentId, normalizeIdentityPhone } from "@/lib/client-identity";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // register_new_client
@@ -11,6 +13,8 @@ const inputSchema = z.object({
     .string()
     .trim()
     .regex(/^\+[1-9][0-9]{6,14}$/, "Formato E.164 (+34 seguido de 9 dígitos)"),
+  email: z.string().trim().email().optional(),
+  document_id: z.string().trim().optional(),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -22,12 +26,20 @@ type Output = {
 };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
-  const { data: inserted, error } = await (ctx.supabaseAdmin
-    .from("clients") as any)
+  const phone = normalizeIdentityPhone(input.phone);
+  const documentId = input.document_id ? normalizeDocumentId(input.document_id) : null;
+  if (!phone) return { success: false, error: "El teléfono no es válido." };
+  if (input.document_id && !documentId) {
+    return { success: false, error: "El DNI/NIE no es válido." };
+  }
+
+  const { data: inserted, error } = await (ctx.supabaseAdmin.from("clients") as any)
     .insert({
       clinic_id: ctx.clinicId,
       name: input.name,
-      phone: input.phone,
+      phone,
+      email: input.email || null,
+      document_id: documentId,
       preferred_language: "es",
     })
     .select("id")
@@ -39,8 +51,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     if (error.code === "23505") {
       return {
         success: false,
-        error:
-          "Ya existe un cliente con ese teléfono. Usa lookup_client para encontrarlo.",
+        error: "Ya existe un cliente con ese teléfono. Usa lookup_client para encontrarlo.",
         error_code: "DUPLICATE_PHONE",
       };
     }
@@ -54,16 +65,25 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
   const c = inserted as { id: string };
 
+  const linkResult = await linkConversationIdentity(ctx.supabaseAdmin, {
+    conversationId: ctx.conversationId,
+    clinicId: ctx.clinicId,
+    clientId: c.id,
+  });
+  if (!linkResult.success) {
+    ctx.logger("[register_new_client] conversation link error", linkResult.error);
+  }
+
   return {
     success: true,
-    data: { client_id: c.id, name: input.name, phone: input.phone },
+    data: { client_id: c.id, name: input.name, phone },
   };
 }
 
 export const registerNewClient: Tool<Input, Output> = {
   name: "register_new_client",
   description:
-    "Registra un cliente nuevo en la clínica. Úsalo SOLO tras confirmar explícitamente con el cliente que quiere darse de alta. Requiere nombre y teléfono.",
+    "Registra un cliente nuevo en la clínica. Úsalo SOLO tras confirmar explícitamente con el cliente que quiere darse de alta. Requiere nombre y teléfono; email y DNI/NIE son opcionales.",
   inputSchema,
   handler,
 };

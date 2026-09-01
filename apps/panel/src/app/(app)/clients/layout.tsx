@@ -34,7 +34,7 @@ export default async function ClientsLayout({ children }: { children: React.Reac
   const clinicId = cu?.clinic_id;
 
   if (!clinicId) {
-    return <ClientsList clients={[]} clinicName={clinicName} />;
+    return <ClientsList clients={[]} clinicName={clinicName} clinicId={null} />;
   }
 
   // Fetch pet counts per client
@@ -102,7 +102,11 @@ export default async function ClientsLayout({ children }: { children: React.Reac
   return (
     <div className="flex h-full">
       {/* List panel */}
-      <ClientsList clients={[...nativeRows, ...gestorVetRows]} clinicName={clinicName} />
+      <ClientsList
+        clients={[...nativeRows, ...gestorVetRows]}
+        clinicName={clinicName}
+        clinicId={clinicId}
+      />
 
       {/* Detail panel — desktop */}
       <div className="hidden flex-1 lg:block">{children}</div>

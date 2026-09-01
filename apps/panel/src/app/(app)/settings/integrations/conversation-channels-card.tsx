@@ -6,11 +6,20 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { type ChannelSettings, savePhoneChannel, saveWhatsAppChannel } from "./channel-actions";
+import { MetaEmbeddedSignupButton } from "./meta-embedded-signup-button";
 
 const inputClass =
   "h-10 w-full rounded-lg border border-stone-200 px-3 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100";
 
-export function ConversationChannelsCard({ settings }: { settings: ChannelSettings }) {
+export function ConversationChannelsCard({
+  settings,
+  metaAppId,
+  metaConfigurationId,
+}: {
+  settings: ChannelSettings;
+  metaAppId?: string;
+  metaConfigurationId?: string;
+}) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [whatsappProvider, setWhatsAppProvider] = useState<
@@ -48,6 +57,15 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
           </div>
         </div>
         <div className="mt-4 grid gap-3">
+          <MetaEmbeddedSignupButton
+            appId={metaAppId}
+            configurationId={metaConfigurationId}
+            connected={
+              settings.whatsapp?.provider === "meta_cloud" &&
+              settings.whatsapp.status === "active" &&
+              settings.whatsapp.hasSecret
+            }
+          />
           <select
             className={inputClass}
             name="provider"
@@ -141,8 +159,9 @@ export function ConversationChannelsCard({ settings }: { settings: ChannelSettin
         )}
         {whatsappProvider === "evolution" && (
           <p className="mt-3 text-xs leading-5 text-amber-700">
-            Usa solo un número de pruebas prescindible. Evolution utiliza WhatsApp Web y no debe
-            conectarse al número real del hospital.
+            Evolution utiliza WhatsApp Web. Vincula únicamente un número que la clínica haya
+            autorizado expresamente para estas pruebas y cierra la sesión al retirar esa
+            autorización.
           </p>
         )}
         <Button className="mt-4" size="sm" disabled={busy}>

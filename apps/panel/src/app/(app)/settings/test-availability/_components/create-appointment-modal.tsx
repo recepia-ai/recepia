@@ -1,22 +1,8 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useTransition,
-  useCallback,
-  useRef,
-} from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import {
-  Loader2,
-  X,
-  Plus,
-  ChevronDown,
-  Search,
-  UserPlus,
-  PawPrint,
-} from "lucide-react";
+import { Loader2, X, Plus, ChevronDown, Search, UserPlus, PawPrint } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -25,12 +11,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { formatClinicDate } from "@/lib/clinic-datetime";
 import { cn } from "@/lib/utils";
 import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
-import type {
-  ClientOption,
-  PetOption,
-} from "../_schemas/test-schemas";
+import type { ClientOption, PetOption } from "../_schemas/test-schemas";
 import { createClientSchema, createPetSchema } from "../_schemas/test-schemas";
 
 // ---------------------------------------------------------------------------
@@ -51,13 +35,7 @@ type Props = {
 // Component
 // ---------------------------------------------------------------------------
 
-export function CreateAppointmentModal({
-  slot,
-  open,
-  onClose,
-  onSlotGone,
-  serviceId,
-}: Props) {
+export function CreateAppointmentModal({ slot, open, onClose, onSlotGone, serviceId }: Props) {
   const [isPending, startTransition] = useTransition();
 
   // Client search state
@@ -111,34 +89,31 @@ export function CreateAppointmentModal({
   // Debounced client search
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleClientSearch = useCallback(
-    (q: string) => {
-      setClientQuery(q);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+  const handleClientSearch = useCallback((q: string) => {
+    setClientQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
-      if (q.length < 2) {
-        setClientOptions([]);
-        return;
-      }
+    if (q.length < 2) {
+      setClientOptions([]);
+      return;
+    }
 
-      debounceRef.current = setTimeout(async () => {
-        setSearchingClients(true);
-        try {
-          const { searchClients } = await import("../_actions/test-actions");
-          const result = await searchClients(q);
-          setSearchingClients(false);
-          if ("error" in result) {
-            toast.error(result.error);
-            return;
-          }
-          setClientOptions(result.clients);
-        } catch {
-          setSearchingClients(false);
+    debounceRef.current = setTimeout(async () => {
+      setSearchingClients(true);
+      try {
+        const { searchClients } = await import("../_actions/test-actions");
+        const result = await searchClients(q);
+        setSearchingClients(false);
+        if ("error" in result) {
+          toast.error(result.error);
+          return;
         }
-      }, 300);
-    },
-    [],
-  );
+        setClientOptions(result.clients);
+      } catch {
+        setSearchingClients(false);
+      }
+    }, 300);
+  }, []);
 
   // Load pets when client selected
   useEffect(() => {
@@ -186,9 +161,7 @@ export function CreateAppointmentModal({
         name: newClientName,
       });
       if (!parsed.success) {
-        toast.error(
-          parsed.error.issues.map((i) => i.message).join(", "),
-        );
+        toast.error(parsed.error.issues.map((i) => i.message).join(", "));
         return;
       }
 
@@ -218,9 +191,7 @@ export function CreateAppointmentModal({
         breed: newPetBreed || undefined,
       });
       if (!parsed.success) {
-        toast.error(
-          parsed.error.issues.map((i) => i.message).join(", "),
-        );
+        toast.error(parsed.error.issues.map((i) => i.message).join(", "));
         return;
       }
 
@@ -244,9 +215,7 @@ export function CreateAppointmentModal({
 
     // Create appointment
     startTransition(async () => {
-      const { createAppointmentWrapper } = await import(
-        "../_actions/test-actions"
-      );
+      const { createAppointmentWrapper } = await import("../_actions/test-actions");
 
       const result = await createAppointmentWrapper({
         client_id: clientId!,
@@ -260,9 +229,7 @@ export function CreateAppointmentModal({
 
       if ("error" in result) {
         if (result.error === "SLOT_NO_LONGER_AVAILABLE") {
-          toast.warning(
-            "El slot ya no está libre, refresca la búsqueda",
-          );
+          toast.warning("El slot ya no está libre, refresca la búsqueda");
           onSlotGone();
           onClose();
           return;
@@ -275,8 +242,7 @@ export function CreateAppointmentModal({
           toast.error("Reconecta Google Calendar en Integraciones", {
             action: {
               label: "Ir",
-              onClick: () =>
-                (window.location.href = "/settings/integrations"),
+              onClick: () => (window.location.href = "/settings/integrations"),
             },
           });
           return;
@@ -286,9 +252,7 @@ export function CreateAppointmentModal({
         return;
       }
 
-      toast.success(
-        `Cita creada · ID: ${result.appointment_id}`,
-      );
+      toast.success(`Cita creada · ID: ${result.appointment_id}`);
       onClose();
       // Refresh the page so the server component re-fetches
       window.location.reload();
@@ -304,21 +268,17 @@ export function CreateAppointmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-stone-900">
-              Crear cita de prueba
-            </h2>
+            <h2 className="text-sm font-semibold text-stone-900">Crear cita de prueba</h2>
             <p className="mt-0.5 text-xs text-stone-500">
-              {slot.vet_name} · {new Date(slot.starts_at).toLocaleString("es-ES", {
+              {slot.vet_name} ·{" "}
+              {formatClinicDate(slot.starts_at, {
                 weekday: "short",
                 day: "numeric",
                 month: "short",
@@ -339,9 +299,7 @@ export function CreateAppointmentModal({
           {/* ---- Client section ---- */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-stone-600">
-                Cliente
-              </label>
+              <label className="text-xs font-medium text-stone-600">Cliente</label>
               <button
                 type="button"
                 className={cn(
@@ -438,34 +396,28 @@ export function CreateAppointmentModal({
                       >
                         <span>
                           <span className="font-medium">{c.name}</span>
-                          <span className="ml-2 text-xs text-stone-400">
-                            {c.phone}
-                          </span>
+                          <span className="ml-2 text-xs text-stone-400">{c.phone}</span>
                         </span>
                         {selectedClientId === c.id && (
-                          <span className="text-[10px] text-emerald-600 font-medium">
-                            SELEC.
-                          </span>
+                          <span className="text-[10px] text-emerald-600 font-medium">SELEC.</span>
                         )}
                       </button>
                     ))}
                   </div>
                 )}
 
-                {clientQuery.length >= 2 &&
-                  !searchingClients &&
-                  clientOptions.length === 0 && (
-                    <p className="text-xs text-stone-400">
-                      Sin resultados.{" "}
-                      <button
-                        type="button"
-                        className="text-emerald-600 underline"
-                        onClick={() => setNewClientMode(true)}
-                      >
-                        Crear nuevo
-                      </button>
-                    </p>
-                  )}
+                {clientQuery.length >= 2 && !searchingClients && clientOptions.length === 0 && (
+                  <p className="text-xs text-stone-400">
+                    Sin resultados.{" "}
+                    <button
+                      type="button"
+                      className="text-emerald-600 underline"
+                      onClick={() => setNewClientMode(true)}
+                    >
+                      Crear nuevo
+                    </button>
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -473,9 +425,7 @@ export function CreateAppointmentModal({
           {/* ---- Pet section ---- */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-stone-600">
-                Mascota
-              </label>
+              <label className="text-xs font-medium text-stone-600">Mascota</label>
               {selectedClientId && !newClientMode && (
                 <button
                   type="button"
@@ -564,9 +514,7 @@ export function CreateAppointmentModal({
                             </span>
                           </span>
                           {selectedPetId === p.id && (
-                            <span className="text-[10px] text-emerald-600 font-medium">
-                              SELEC.
-                            </span>
+                            <span className="text-[10px] text-emerald-600 font-medium">SELEC.</span>
                           )}
                         </button>
                       ))}
@@ -584,9 +532,7 @@ export function CreateAppointmentModal({
                     </p>
                   )
                 ) : (
-                  <p className="text-xs text-stone-400">
-                    Selecciona o crea un cliente primero.
-                  </p>
+                  <p className="text-xs text-stone-400">Selecciona o crea un cliente primero.</p>
                 )}
               </>
             )}
@@ -595,10 +541,7 @@ export function CreateAppointmentModal({
           {/* ---- Notes ---- */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-stone-600">
-              Notas{" "}
-              <span className="text-stone-400">
-                (se añadirá prefijo [TEST])
-              </span>
+              Notas <span className="text-stone-400">(se añadirá prefijo [TEST])</span>
             </label>
             <textarea
               value={notes}
@@ -617,20 +560,10 @@ export function CreateAppointmentModal({
 
           {/* ---- Submit ---- */}
           <div className="flex items-center gap-3 pt-2 border-t border-stone-100">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              className="text-stone-500"
-            >
+            <Button type="button" variant="ghost" onClick={onClose} className="text-stone-500">
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="flex-1"
-              variant="default"
-            >
+            <Button type="submit" disabled={isPending} className="flex-1" variant="default">
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />

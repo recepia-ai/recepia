@@ -2,6 +2,7 @@
 
 import { Calendar, Clock, Syringe, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatClinicDate, formatClinicTime, toClinicDate } from "@/lib/clinic-datetime";
 import { cn } from "@/lib/utils";
 import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 
@@ -20,22 +21,19 @@ type Props = {
 // ---------------------------------------------------------------------------
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatClinicTime(iso);
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
+  const d = toClinicDate(iso);
+  const today = toClinicDate(new Date());
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   if (d.toDateString() === today.toDateString()) return "Hoy";
   if (d.toDateString() === tomorrow.toDateString()) return "Mañana";
 
-  return d.toLocaleDateString("es-ES", {
+  return formatClinicDate(iso, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -43,16 +41,14 @@ function formatDate(iso: string): string {
 }
 
 function durationMinutes(startsAt: string, endsAt: string): number {
-  return Math.round(
-    (new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000,
-  );
+  return Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000);
 }
 
 /** Group slots by YYYY-MM-DD (local date) */
 function groupByDate(slots: AvailableSlot[]): Map<string, AvailableSlot[]> {
   const map = new Map<string, AvailableSlot[]>();
   for (const s of slots) {
-    const key = new Date(s.starts_at).toLocaleDateString("es-ES", {
+    const key = formatClinicDate(s.starts_at, {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -111,18 +107,14 @@ export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
                     key={`${slot.vet_user_id}-${slot.starts_at}-${i}`}
                     className={cn(
                       "flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5",
-                      isSamuel
-                        ? "border-rose-200 bg-rose-50/50"
-                        : "border-stone-200 bg-white",
+                      isSamuel ? "border-rose-200 bg-rose-50/50" : "border-stone-200 bg-white",
                     )}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={cn(
                           "flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-medium",
-                          isSamuel
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-stone-100 text-stone-600",
+                          isSamuel ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600",
                         )}
                       >
                         {slot.vet_name
@@ -144,8 +136,7 @@ export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
                         </p>
                         <p className="flex items-center gap-1 text-xs text-stone-500">
                           <Clock className="size-3" strokeWidth={1.5} />
-                          {formatTime(slot.starts_at)} —{" "}
-                          {formatTime(slot.ends_at)}
+                          {formatTime(slot.starts_at)} — {formatTime(slot.ends_at)}
                           <span className="text-stone-300">·</span>
                           {dur} min
                         </p>

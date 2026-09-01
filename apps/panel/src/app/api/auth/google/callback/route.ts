@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { replaceSharedVetCalendars } from "@/lib/google-calendar-provisioning";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyState } from "@/lib/oauth-state";
 
@@ -162,98 +163,104 @@ export async function GET(request: NextRequest) {
   }
 
   // -------------------------------------------------------------------
-  // 5. Store tokens in Supabase Vault
+  // 5. Store or update tokens in Supabase Vault
   // -------------------------------------------------------------------
   const supabaseAdmin = createAdminClient();
+  const { data: existingIntegration } = await supabaseAdmin
+    .from("clinic_integrations")
+    .select("id, vault_secret_id")
+    .eq("clinic_id", clinicId)
+    .eq("provider", "google_calendar")
+    .maybeSingle();
+
+  const existing = existingIntegration as {
+    id: string;
+    vault_secret_id: string;
+  } | null;
+
+  let refreshToken = tokenData.refresh_token ?? null;
+  if (!refreshToken && existing?.vault_secret_id) {
+    const { data: oldSecret } = await supabaseAdmin.rpc("vault_read_secret", {
+      p_id: existing.vault_secret_id,
+    });
+    try {
+      refreshToken = JSON.parse((oldSecret as string | null) ?? "{}").refresh_token ?? null;
+    } catch {
+      refreshToken = null;
+    }
+  }
+
   const secretValue = JSON.stringify({
     access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token ?? null,
+    refresh_token: refreshToken,
   });
 
   let vaultSecretId: string | null = null;
   try {
-    const { data, error: vaultError } = await supabaseAdmin.rpc(
-      "vault_create_secret",
-      {
+    if (existing?.vault_secret_id) {
+      const { error: vaultError } = await supabaseAdmin.rpc("vault_update_secret", {
+        p_id: existing.vault_secret_id,
         p_secret: secretValue,
         p_name: `gcal_clinic_${clinicId}`,
         p_description: `Google Calendar tokens — clinic ${clinicId}`,
-      },
-    );
-
-    if (vaultError) {
-      console.error("[google/callback] Vault create_secret error:", vaultError);
-      return NextResponse.redirect(
-        new URL("/settings/integrations?error=vault_write", request.url),
-      );
+      });
+      if (vaultError) throw vaultError;
+      vaultSecretId = existing.vault_secret_id;
+    } else {
+      const { data, error: vaultError } = await supabaseAdmin.rpc("vault_create_secret", {
+        p_secret: secretValue,
+        p_name: `gcal_clinic_${clinicId}`,
+        p_description: `Google Calendar tokens — clinic ${clinicId}`,
+      });
+      if (vaultError) throw vaultError;
+      vaultSecretId = data as string;
     }
-
-    vaultSecretId = data as string;
   } catch (err) {
-    console.error("[google/callback] Vault create_secret exception:", err);
+    console.error("[google/callback] Vault write error:", err);
     return NextResponse.redirect(
       new URL("/settings/integrations?error=vault_write", request.url),
     );
   }
 
   // -------------------------------------------------------------------
-  // 6. UPSERT clinic_integrations
-  //    - Delete any existing row for this clinic+provider (cascade
-  //      doesn't reach Vault, so we'd need to delete the old Vault
-  //      secret separately; but simpler: just overwrite)
+  // 6. UPSERT clinic_integrations without deleting the existing Vault secret.
   // -------------------------------------------------------------------
   try {
-    // First, try to find and delete the old secret if it exists
-    const { data: existing } = await supabaseAdmin
-      .from("clinic_integrations")
-      .select("id, vault_secret_id")
-      .eq("clinic_id", clinicId)
-      .eq("provider", "google_calendar")
-      .maybeSingle();
-
-    if (existing) {
-      // Delete old vault secret (best effort)
-      try {
-        await supabaseAdmin.rpc("vault_delete_secret", {
-          p_id: (existing as any).vault_secret_id,
-        });
-      } catch {
-        // Orphaned secret — not fatal
-      }
-
-      // Delete old integration row
-      await supabaseAdmin
-        .from("clinic_integrations")
-        .delete()
-        .eq("id", (existing as any).id);
-    }
-
-    // Insert new integration row
     const expiresAt = tokenData.expires_in
       ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
       : null;
 
-    const { error: insertError } = await supabaseAdmin
-      .from("clinic_integrations")
-      .insert({
-        clinic_id: clinicId,
-        provider: "google_calendar",
-        vault_secret_id: vaultSecretId,
-        token_expires_at: expiresAt,
-        scope: tokenData.scope,
-        external_account_email: email,
-        metadata: {
-          connected_at: new Date().toISOString(),
-          client_id_prefix: clientId.slice(0, 12),
-        },
-      } as any);
+    const integrationValues = {
+      clinic_id: clinicId,
+      provider: "google_calendar",
+      vault_secret_id: vaultSecretId,
+      token_expires_at: expiresAt,
+      scope: tokenData.scope,
+      external_account_email: email,
+      metadata: {
+        connected_at: new Date().toISOString(),
+        client_id_prefix: clientId.slice(0, 12),
+      },
+    };
 
-    if (insertError) {
-      console.error("[google/callback] clinic_integrations insert error:", insertError);
+    const integrationWrite = existing
+      ? await (supabaseAdmin.from("clinic_integrations") as any)
+          .update(integrationValues)
+          .eq("id", existing.id)
+      : await (supabaseAdmin.from("clinic_integrations") as any).insert(integrationValues);
+
+    if (integrationWrite.error) {
+      console.error("[google/callback] clinic_integrations write error:", integrationWrite.error);
       return NextResponse.redirect(
         new URL("/settings/integrations?error=db_insert", request.url),
       );
     }
+
+    const provisioned = await replaceSharedVetCalendars(clinicId, tokenData.access_token);
+    if (provisioned.failed > 0) {
+      console.error("[google/callback] dedicated calendar provisioning incomplete", provisioned);
+    }
+    console.info("[google/callback] dedicated calendar provisioning complete", provisioned);
   } catch (err) {
     console.error("[google/callback] clinic_integrations error:", err);
     return NextResponse.redirect(
@@ -264,8 +271,6 @@ export async function GET(request: NextRequest) {
   // -------------------------------------------------------------------
   // 7. Success — redirect to integrations page
   // -------------------------------------------------------------------
-  // TODO(E5.X): after establishing vet_calendars, redirect to a
-  // calendar-picker flow instead of a generic success message.
   return NextResponse.redirect(
     new URL("/settings/integrations?success=connected", request.url),
   );

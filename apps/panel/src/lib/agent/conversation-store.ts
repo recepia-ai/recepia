@@ -1,5 +1,6 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { findClientByIdentity, normalizeIdentityPhone } from "@/lib/client-identity";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,19 +67,12 @@ export async function startConversation(
   channelThreadId?: string,
 ): Promise<ConversationRecord> {
   const metadata: Record<string, unknown> = {};
-  if (clientPhone) {
-    metadata.client_phone = clientPhone;
-  }
+  const normalizedPhone = clientPhone ? normalizeIdentityPhone(clientPhone) : null;
+  if (normalizedPhone) metadata.client_phone = normalizedPhone;
 
-  const { data: knownClient } = clientPhone
-    ? await supabaseAdmin
-        .from("clients")
-        .select("id")
-        .eq("clinic_id", clinicId)
-        .eq("phone", clientPhone)
-        .is("deleted_at", null)
-        .maybeSingle()
-    : { data: null };
+  const knownClient = normalizedPhone
+    ? await findClientByIdentity(supabaseAdmin, clinicId, { phone: normalizedPhone })
+    : null;
 
   const { data, error } = await supabaseAdmin
     .from("conversations")
