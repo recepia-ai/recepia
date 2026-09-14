@@ -22,13 +22,18 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
   const supabase = ctx.supabaseAdmin;
 
   if (!input.starts_at && !input.notes) {
-    return { success: false, error: "Debes proporcionar al menos starts_at o notes para modificar." };
+    return {
+      success: false,
+      error: "Debes proporcionar al menos starts_at o notes para modificar.",
+    };
   }
 
   // Look up the appointment with service info
   const { data: appointment, error: lookupError } = await supabase
     .from("appointments")
-    .select("id, status, starts_at, ends_at, google_event_id, google_calendar_id, service_id, vet_user_id, notes")
+    .select(
+      "id, status, starts_at, ends_at, google_event_id, google_calendar_id, service_id, vet_user_id, notes",
+    )
     .eq("id", input.appointment_id)
     .eq("clinic_id", ctx.clinicId)
     .maybeSingle();
@@ -85,7 +90,10 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     const tokenResult = await getValidAccessToken(ctx.clinicId);
     if ("error" in tokenResult) {
       ctx.logger("[modify_appointment] token error", tokenResult.error);
-      return { success: false, error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración." };
+      return {
+        success: false,
+        error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración.",
+      };
     }
 
     const patchBody: Record<string, unknown> = {};
@@ -109,7 +117,10 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
       if (!patchRes.ok) {
         const errText = await patchRes.text();
-        ctx.logger("[modify_appointment] Google Calendar PATCH error", { status: patchRes.status, body: errText });
+        ctx.logger("[modify_appointment] Google Calendar PATCH error", {
+          status: patchRes.status,
+          body: errText,
+        });
         return { success: false, error: "No se pudo actualizar el evento en Google Calendar." };
       }
     } catch (err) {
@@ -128,10 +139,10 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     updateData.notes = input.notes;
   }
 
-  const { error: updateError } = await (supabase
-    .from("appointments") as any)
+  const { error: updateError } = await (supabase.from("appointments") as any)
     .update(updateData)
-    .eq("id", input.appointment_id);
+    .eq("id", input.appointment_id)
+    .eq("clinic_id", ctx.clinicId);
 
   if (updateError) {
     ctx.logger("[modify_appointment] update error", updateError);

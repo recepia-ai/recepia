@@ -5,12 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "./_components/app-sidebar";
 import { AppHeader } from "./_components/app-header";
-
-type ClinicUserRow = {
-  role: string;
-  clinic_id: string;
-  clinics: { name: string; slug: string } | { name: string; slug: string }[] | null;
-};
+import { resolveOrganizationContext } from "@/lib/organization-context";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -24,37 +19,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  // Load user's clinic membership + clinic info in a single query.
-  const membershipQuery = () =>
-    supabase
-      .from("clinic_users")
-      .select("role, clinic_id, clinics(name, slug)")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-  const result = await membershipQuery();
-  let clinicUser = result.data as ClinicUserRow | null;
+  let organizationResult = await resolveOrganizationContext(supabase);
 
   // An invited user arrives here via the invite email with a session but no
   // membership row yet. Provision it from their pending invitation and re-read,
   // so they get access instead of the "Sin acceso a clínicas" screen.
-  if (!clinicUser) {
+  if (!organizationResult.ok && organizationResult.code === "NO_MEMBERSHIP") {
     const linked = await linkPendingInvitationForUser(user.id, user.email);
     if (linked) {
-      const retry = await membershipQuery();
-      clinicUser = retry.data as ClinicUserRow | null;
+      organizationResult = await resolveOrganizationContext(supabase);
     }
   }
 
-  // Normalise the nested join result (could be single object or array).
-  const clinic = clinicUser
-    ? Array.isArray(clinicUser.clinics)
-      ? (clinicUser.clinics[0] ?? null)
-      : clinicUser.clinics
-    : null;
-
-  // No clinic linked → friendly blocked screen (not an error).
-  if (!clinicUser || !clinic) {
+  if (!organizationResult.ok) {
     return (
       <html lang="es">
         <body className="antialiased">
@@ -63,10 +40,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-amber-100">
                 <span className="text-2xl">⚠️</span>
               </div>
-              <h1 className="text-lg font-semibold text-stone-900">Sin acceso a clínicas</h1>
+              <h1 className="text-lg font-semibold text-stone-900">Acceso no disponible</h1>
               <p className="mt-2 text-sm text-stone-500">
-                Tu usuario no está vinculado a ninguna clínica. Contacta con el administrador de
-                Recepia para que te asigne una.
+                {organizationResult.message}. Contacta con el administrador de Recepia para revisar
+                tu acceso.
               </p>
             </div>
           </main>
@@ -75,15 +52,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
+  const { actor, organization } = organizationResult.context;
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex h-screen overflow-hidden bg-stone-50">
         {/* Sidebar — fixed left */}
-        <AppSidebar clinicName={clinic.name} />
+        <AppSidebar clinicName={organization.name} />
 
         {/* Main area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          <AppHeader userEmail={user.email!} />
+          <AppHeader userEmail={actor.email ?? "Usuario"} />
 
           {/* Page content */}
           <main className="flex-1 overflow-y-auto px-8 py-6">{children}</main>

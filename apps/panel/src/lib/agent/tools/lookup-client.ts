@@ -48,6 +48,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     .from("pets")
     .select("id, name, species, breed")
     .eq("client_id", c.id)
+    .eq("clinic_id", ctx.clinicId)
     .eq("active", true)
     .order("name", { ascending: true });
 

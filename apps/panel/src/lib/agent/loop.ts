@@ -1,6 +1,7 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "./anthropic-client";
+import { hasExplicitAppointmentConfirmation } from "./appointment-confirmation";
 import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
 import type { MessageRecord } from "./conversation-store";
 import { saveMessage } from "./conversation-store";
@@ -201,6 +202,7 @@ export async function runAgentLoop(params: {
 
     const allToolCalls: ToolCallRecord[] = [];
     let finalText = "";
+    const appointmentConfirmed = hasExplicitAppointmentConfirmation(previousMessages, userMessage);
 
     // ---- Main loop ----
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -324,7 +326,7 @@ export async function runAgentLoop(params: {
               error_code: "UNKNOWN_TOOL",
             };
           } else {
-            const ctx = buildToolContext(clinicId, conversationId);
+            const ctx = buildToolContext(clinicId, conversationId, appointmentConfirmed);
             toolResult = await invokeTool(tool, tu.input as Record<string, unknown>, ctx);
           }
 

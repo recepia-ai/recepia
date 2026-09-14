@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import type {
   CheckAvailabilityInput,
@@ -53,8 +54,6 @@ type BusyInterval = {
   end: string;
 };
 
-type ClinicUserRow = { clinic_id: string; role: string };
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -62,22 +61,9 @@ type ClinicUserRow = { clinic_id: string; role: string };
 /** Get the clinic ID for the authenticated caller (any member, not just admin). */
 async function getCallerClinicId(): Promise<string | { error: string }> {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
-
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const cu = clinicUser as ClinicUserRow | null;
-  if (!cu) return { error: "Sin clínica asignada" };
-
-  return cu.clinic_id;
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  return organizationResult.context.organization.id;
 }
 
 /** Format a Date as an ISO 8601 string with the Madrid timezone offset. */
@@ -96,12 +82,7 @@ function pad(n: number): string {
 }
 
 /** Check if two ISO 8601 intervals overlap. */
-function overlaps(
-  aStart: string,
-  aEnd: string,
-  bStart: string,
-  bEnd: string,
-): boolean {
+function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
 }
 
@@ -115,41 +96,33 @@ async function getBusyIntervals(
   timeMin: string,
   timeMax: string,
   accessToken: string,
-): Promise<BusyInterval[]> {
+): Promise<{ ok: true; intervals: BusyInterval[] } | { ok: false }> {
   try {
-    const res = await fetch(
-      "https://www.googleapis.com/calendar/v3/freeBusy",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          timeMin,
-          timeMax,
-          items: [{ id: calendarId }],
-        }),
+    const res = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        timeMin,
+        timeMax,
+        items: [{ id: calendarId }],
+      }),
+    });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(
-        "[getBusyIntervals] freeBusy error:",
-        res.status,
-        errText,
-      );
-      return [];
+      console.error("[getBusyIntervals] freeBusy error:", res.status, errText);
+      return { ok: false };
     }
 
     const data = await res.json();
-    const busy: BusyInterval[] =
-      data.calendars?.[calendarId]?.busy ?? [];
-    return busy;
+    const busy: BusyInterval[] = data.calendars?.[calendarId]?.busy ?? [];
+    return { ok: true, intervals: busy };
   } catch (err) {
     console.error("[getBusyIntervals] network error:", err);
-    return [];
+    return { ok: false };
   }
 }
 
@@ -243,9 +216,7 @@ export async function checkAvailability(
   // ------------------------------------------------------------------
   const { data: serviceData, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select(
-      "id, name, duration_minutes, is_surgery, requires_specific_vet_user_id",
-    )
+    .select("id, name, duration_minutes, is_surgery, requires_specific_vet_user_id")
     .eq("id", service_id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -289,9 +260,7 @@ export async function checkAvailability(
 
     if (assignments && assignments.length > 0) {
       // N:M assignment exists → use those vets
-      candidateVetIds = (assignments as { vet_user_id: string }[]).map(
-        (a) => a.vet_user_id,
-      );
+      candidateVetIds = (assignments as { vet_user_id: string }[]).map((a) => a.vet_user_id);
     } else {
       // Fallback Y: no assignments → all vets in the clinic
       const { data: allVets } = await supabaseAdmin
@@ -335,9 +304,7 @@ export async function checkAvailability(
 
   // Build lookup maps
   const vetNameById = new Map(vets.map((v) => [v.id, v.display_name ?? "Sin nombre"]));
-  const calendarByVetId = new Map(
-    calendars.map((c) => [c.vet_user_id, c.google_calendar_id]),
-  );
+  const calendarByVetId = new Map(calendars.map((c) => [c.vet_user_id, c.google_calendar_id]));
 
   // ------------------------------------------------------------------
   // 6. Get a valid Google access token for freebusy queries
@@ -346,11 +313,11 @@ export async function checkAvailability(
   if ("error" in tokenResult) {
     if (tokenResult.error === "REAUTH_REQUIRED") {
       return {
-        error:
-          "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración.",
+        outcome: "degraded",
+        error: "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración.",
       };
     }
-    return { error: "Error al leer los tokens de Google Calendar." };
+    return { outcome: "degraded", error: "Error al leer los tokens de Google Calendar." };
   }
   const accessToken = tokenResult.access_token;
 
@@ -361,12 +328,8 @@ export async function checkAvailability(
   const toDate = new Date(date_to);
 
   // Normalize to start of day in Madrid timezone
-  const fromDay = fromMadrid(
-    formatInTimeZone(fromDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00",
-  );
-  const toDay = fromMadrid(
-    formatInTimeZone(toDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00",
-  );
+  const fromDay = fromMadrid(formatInTimeZone(fromDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00");
+  const toDay = fromMadrid(formatInTimeZone(toDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00");
 
   // Pre-compute the Madrid-local date strings for each day in the range
   const daysInRange: string[] = [];
@@ -426,11 +389,7 @@ export async function checkAvailability(
     );
 
     // Query freebusy for the full range (one API call per vet)
-    const timeMin = formatInTimeZone(
-      fromDay,
-      TIMEZONE,
-      "yyyy-MM-dd'T'HH:mm:ssXXX",
-    );
+    const timeMin = formatInTimeZone(fromDay, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
     const timeMax = formatInTimeZone(
       // Add one day to toDay for inclusive end
       new Date(toDay.getTime() + 24 * 60 * 60 * 1000),
@@ -438,17 +397,18 @@ export async function checkAvailability(
       "yyyy-MM-dd'T'HH:mm:ssXXX",
     );
 
-    const busyIntervals = await getBusyIntervals(
-      googleCalendarId,
-      timeMin,
-      timeMax,
-      accessToken,
-    );
+    const busyResult = await getBusyIntervals(googleCalendarId, timeMin, timeMax, accessToken);
+    if (!busyResult.ok) {
+      return {
+        outcome: "degraded",
+        error: "Google Calendar no está disponible; no se pueden confirmar huecos seguros.",
+      };
+    }
 
     // Filter: keep slots that don't overlap any busy interval
     const available = candidateSlots.filter(
       (slot) =>
-        !busyIntervals.some((busy) =>
+        !busyResult.intervals.some((busy) =>
           overlaps(slot.starts_at, slot.ends_at, busy.start, busy.end),
         ),
     );
@@ -470,9 +430,8 @@ export async function checkAvailability(
   // ------------------------------------------------------------------
   // 9. Sort all slots by starts_at, cap at MAX_SLOTS
   // ------------------------------------------------------------------
-  allSlots.sort(
-    (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
-  );
+  allSlots.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 
-  return { slots: allSlots.slice(0, MAX_SLOTS) };
+  const slots = allSlots.slice(0, MAX_SLOTS);
+  return { outcome: slots.length > 0 ? "available" : "unavailable", slots };
 }

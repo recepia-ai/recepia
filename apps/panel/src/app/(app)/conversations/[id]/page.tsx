@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CategoryBadge } from "@/app/(app)/_components/category-badge";
 import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Button } from "@/components/ui/button";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 import { ChannelBadge } from "../_components/channel-badge";
 import { EmptyDetail } from "../_components/empty-detail";
@@ -40,12 +41,17 @@ export default async function ConversationDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return <NotFound />;
+  const clinicId = organizationResult.context.organization.id;
 
   // Fetch conversation with client and pet joins.
   const { data: conv } = await supabase
     .from("conversations")
     .select("*")
     .eq("id", id)
+    .eq("clinic_id", clinicId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!conv) {
@@ -56,19 +62,32 @@ export default async function ConversationDetailPage({
 
   // Fetch client
   const { data: client } = convData.client_id
-    ? await supabase.from("clients").select("*").eq("id", convData.client_id).maybeSingle()
+    ? await supabase
+        .from("clients")
+        .select("*")
+        .eq("id", convData.client_id)
+        .eq("clinic_id", clinicId)
+        .is("deleted_at", null)
+        .maybeSingle()
     : { data: null };
 
   // Fetch the assigned pet and every active pet belonging to the identified client.
   const [{ data: pet }, { data: clientPets }] = await Promise.all([
     convData.pet_id
-      ? supabase.from("pets").select("*").eq("id", convData.pet_id).maybeSingle()
+      ? supabase
+          .from("pets")
+          .select("*")
+          .eq("id", convData.pet_id)
+          .eq("clinic_id", clinicId)
+          .is("deleted_at", null)
+          .maybeSingle()
       : Promise.resolve({ data: null }),
     convData.client_id
       ? supabase
           .from("pets")
           .select("*")
           .eq("client_id", convData.client_id)
+          .eq("clinic_id", clinicId)
           .eq("active", true)
           .is("deleted_at", null)
           .order("name", { ascending: true })
@@ -80,6 +99,7 @@ export default async function ConversationDetailPage({
     .from("messages")
     .select("*")
     .eq("conversation_id", id)
+    .eq("clinic_id", clinicId)
     .order("created_at", { ascending: true });
 
   const { data: callSessions } =
@@ -88,6 +108,7 @@ export default async function ConversationDetailPage({
           .from("call_sessions")
           .select("*")
           .eq("conversation_id", id)
+          .eq("clinic_id", clinicId)
           .order("started_at", { ascending: false })
       : { data: null };
 
@@ -95,7 +116,7 @@ export default async function ConversationDetailPage({
     ? await supabase
         .from("clinic_users")
         .select("display_name, email")
-        .eq("clinic_id", convData.clinic_id)
+        .eq("clinic_id", clinicId)
         .eq("user_id", convData.controlled_by)
         .maybeSingle()
     : { data: null };

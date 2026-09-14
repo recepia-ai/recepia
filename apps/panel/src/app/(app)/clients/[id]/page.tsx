@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatClinicDate, formatClinicTime } from "@/lib/clinic-datetime";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 import { relativeTime } from "../../conversations/_components/relative-time";
 import { EditClientDialog, PetEditorDialog } from "../_components/client-editors";
@@ -87,19 +88,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Get clinic context
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", user!.id)
-    .maybeSingle();
-
-  const clinicId = (clinicUser as { clinic_id: string } | null)?.clinic_id;
-  if (!clinicId) notFound();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) notFound();
+  const clinicId = organizationResult.context.organization.id;
 
   // 4 parallel queries
   const [clientRes, petsRes, apptsRes, convsRes] = await Promise.all([
@@ -123,6 +114,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         "id, starts_at, ends_at, status, notes, pet_id, services(name, duration_minutes), pets(name)",
       )
       .eq("client_id", id)
+      .eq("clinic_id", clinicId)
       .gte("starts_at", new Date().toISOString())
       .order("starts_at", { ascending: true })
       .limit(5),
@@ -130,6 +122,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       .from("v_active_conversations")
       .select("id, status, category, pet_name, last_message_at, channel")
       .eq("client_id", id)
+      .eq("clinic_id", clinicId)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(5),
   ]);

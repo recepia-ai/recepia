@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -31,20 +32,15 @@ export async function createPetRecord(formData: FormData): Promise<{
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
 
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { error: "No autenticado" };
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
-  if (!membership) return { error: "Sin clínica asignada" };
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  const { actor, organization } = organizationResult.context;
 
   const { data: pet } = await supabase
     .from("pets")
     .select("id")
     .eq("id", parsed.data.pet_id)
-    .eq("clinic_id", membership.clinic_id)
+    .eq("clinic_id", organization.id)
     .is("deleted_at", null)
     .maybeSingle();
   if (!pet) return { error: "La mascota no existe" };
@@ -60,7 +56,7 @@ export async function createPetRecord(formData: FormData): Promise<{
       return { error: "Solo se admiten PDF, JPG, PNG o WebP" };
     }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-120) || "documento";
-    filePath = `${membership.clinic_id}/${pet.id}/${crypto.randomUUID()}-${safeName}`;
+    filePath = `${organization.id}/${pet.id}/${crypto.randomUUID()}-${safeName}`;
     const upload = await supabase.storage.from("pet-records").upload(filePath, file, {
       contentType: file.type,
       upsert: false,
@@ -71,7 +67,7 @@ export async function createPetRecord(formData: FormData): Promise<{
   }
 
   const { error } = await supabase.from("pet_records").insert({
-    clinic_id: membership.clinic_id,
+    clinic_id: organization.id,
     pet_id: pet.id,
     record_type: parsed.data.record_type,
     title: parsed.data.title,
@@ -81,7 +77,7 @@ export async function createPetRecord(formData: FormData): Promise<{
     file_path: filePath,
     file_name: fileName,
     mime_type: mimeType,
-    created_by_user_id: auth.user.id,
+    created_by_user_id: actor.id,
   });
 
   if (error) {

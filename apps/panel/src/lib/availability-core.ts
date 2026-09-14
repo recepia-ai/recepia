@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import type { CheckAvailabilityInput, AvailableSlot, CheckAvailabilityState } from "@/app/(app)/_actions/availability-schemas";
+import type {
+  CheckAvailabilityInput,
+  AvailableSlot,
+  CheckAvailabilityState,
+} from "@/app/(app)/_actions/availability-schemas";
 import { checkAvailabilitySchema } from "@/app/(app)/_actions/availability-schemas";
 
 const TIMEZONE = "Europe/Madrid";
@@ -48,7 +52,7 @@ async function getBusyIntervals(
   timeMin: string,
   timeMax: string,
   accessToken: string,
-): Promise<BusyInterval[]> {
+): Promise<{ ok: true; intervals: BusyInterval[] } | { ok: false }> {
   try {
     const res = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
       method: "POST",
@@ -61,13 +65,13 @@ async function getBusyIntervals(
     if (!res.ok) {
       const errText = await res.text();
       console.error("[getBusyIntervals] freeBusy error:", res.status, errText);
-      return [];
+      return { ok: false };
     }
     const data = await res.json();
-    return data.calendars?.[calendarId]?.busy ?? [];
+    return { ok: true, intervals: data.calendars?.[calendarId]?.busy ?? [] };
   } catch (err) {
     console.error("[getBusyIntervals] network error:", err);
-    return [];
+    return { ok: false };
   }
 }
 
@@ -90,7 +94,10 @@ function generateSlotsForBlock(
     const endM = (currentMin + durationMinutes) % 60;
     const localStart = `${dateStr}T${pad(startH)}:${pad(startM)}:00`;
     const localEnd = `${dateStr}T${pad(endH)}:${pad(endM)}:00`;
-    slots.push({ starts_at: isoMadrid(fromMadrid(localStart)), ends_at: isoMadrid(fromMadrid(localEnd)) });
+    slots.push({
+      starts_at: isoMadrid(fromMadrid(localStart)),
+      ends_at: isoMadrid(fromMadrid(localEnd)),
+    });
     currentMin += SLOT_GRANULARITY_MIN;
   }
   return slots;
@@ -161,9 +168,21 @@ export async function checkAvailabilityForClinic(
 
   // Load vet details + hours + calendars
   const [vetsResult, hoursResult, calendarsResult] = await Promise.all([
-    supabaseAdmin.from("clinic_users").select("id, display_name").eq("clinic_id", clinicId).in("id", candidateVetIds),
-    supabaseAdmin.from("vet_consultation_hours").select("vet_user_id, day_of_week, start_time, end_time").eq("clinic_id", clinicId).in("vet_user_id", candidateVetIds),
-    supabaseAdmin.from("vet_calendars").select("vet_user_id, google_calendar_id").eq("clinic_id", clinicId).in("vet_user_id", candidateVetIds),
+    supabaseAdmin
+      .from("clinic_users")
+      .select("id, display_name")
+      .eq("clinic_id", clinicId)
+      .in("id", candidateVetIds),
+    supabaseAdmin
+      .from("vet_consultation_hours")
+      .select("vet_user_id, day_of_week, start_time, end_time")
+      .eq("clinic_id", clinicId)
+      .in("vet_user_id", candidateVetIds),
+    supabaseAdmin
+      .from("vet_calendars")
+      .select("vet_user_id, google_calendar_id")
+      .eq("clinic_id", clinicId)
+      .in("vet_user_id", candidateVetIds),
   ]);
 
   const vets = (vetsResult.data ?? []) as VetRow[];
@@ -177,9 +196,12 @@ export async function checkAvailabilityForClinic(
   const tokenResult = await getValidAccessToken(clinicId);
   if ("error" in tokenResult) {
     if (tokenResult.error === "REAUTH_REQUIRED") {
-      return { error: "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración." };
+      return {
+        outcome: "degraded",
+        error: "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración.",
+      };
     }
-    return { error: "Error al leer los tokens de Google Calendar." };
+    return { outcome: "degraded", error: "Error al leer los tokens de Google Calendar." };
   }
   const accessToken = tokenResult.access_token;
 
@@ -216,18 +238,40 @@ export async function checkAvailabilityForClinic(
     for (const hourBlock of vetHours) {
       const dates = datesByDayOfWeek.get(hourBlock.day_of_week) ?? [];
       for (const dateStr of dates) {
-        candidateSlots.push(...generateSlotsForBlock(dateStr, hourBlock.start_time, hourBlock.end_time, service.duration_minutes));
+        candidateSlots.push(
+          ...generateSlotsForBlock(
+            dateStr,
+            hourBlock.start_time,
+            hourBlock.end_time,
+            service.duration_minutes,
+          ),
+        );
       }
     }
     if (candidateSlots.length === 0) continue;
-    candidateSlots.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+    candidateSlots.sort(
+      (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+    );
 
     const timeMin = formatInTimeZone(fromDay, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
-    const timeMax = formatInTimeZone(new Date(toDay.getTime() + 24 * 60 * 60 * 1000), TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
+    const timeMax = formatInTimeZone(
+      new Date(toDay.getTime() + 24 * 60 * 60 * 1000),
+      TIMEZONE,
+      "yyyy-MM-dd'T'HH:mm:ssXXX",
+    );
 
-    const busyIntervals = await getBusyIntervals(googleCalendarId, timeMin, timeMax, accessToken);
+    const busyResult = await getBusyIntervals(googleCalendarId, timeMin, timeMax, accessToken);
+    if (!busyResult.ok) {
+      return {
+        outcome: "degraded",
+        error: "Google Calendar no está disponible; no se pueden confirmar huecos seguros.",
+      };
+    }
     const available = candidateSlots.filter(
-      (slot) => !busyIntervals.some((busy) => overlaps(slot.starts_at, slot.ends_at, busy.start, busy.end)),
+      (slot) =>
+        !busyResult.intervals.some((busy) =>
+          overlaps(slot.starts_at, slot.ends_at, busy.start, busy.end),
+        ),
     );
 
     for (const slot of available) {
@@ -243,5 +287,6 @@ export async function checkAvailabilityForClinic(
   }
 
   allSlots.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
-  return { slots: allSlots.slice(0, MAX_SLOTS) };
+  const slots = allSlots.slice(0, MAX_SLOTS);
+  return { outcome: slots.length > 0 ? "available" : "unavailable", slots };
 }

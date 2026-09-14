@@ -5,6 +5,7 @@ import { z } from "zod";
 import { normalizeDocumentId, normalizeIdentityPhone } from "@/lib/client-identity";
 import { readGestorVetClient } from "@/lib/gestorvet/discovery";
 import { gestorVetClientSummary } from "@/lib/gestorvet/native-adapters";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,14 +27,9 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
   if (!parsed.success) return { error: "La búsqueda no es válida" };
 
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { error: "No autenticado" };
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
-  if (!membership) return { error: "Sin clínica asignada" };
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  const clinicId = organizationResult.context.organization.id;
 
   const normalizedQuery = parsed.data;
   const nativeById = new Map<
@@ -54,28 +50,28 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
       supabase
         .from("clients")
         .select("id, name, phone, email")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .is("deleted_at", null)
         .ilike("name", `%${normalizedQuery}%`)
         .limit(50),
       supabase
         .from("clients")
         .select("id, name, phone, email")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .is("deleted_at", null)
         .ilike("phone", `%${normalizedQuery}%`)
         .limit(50),
       supabase
         .from("clients")
         .select("id, name, phone, email")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .is("deleted_at", null)
         .ilike("email", `%${normalizedQuery}%`)
         .limit(50),
       supabase
         .from("clients")
         .select("id, name, phone, email")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .is("deleted_at", null)
         .ilike("document_id", `%${normalizedQuery}%`)
         .limit(50),
@@ -90,7 +86,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
       supabase
         .from("pets")
         .select("client_id, name")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .eq("active", true)
         .is("deleted_at", null)
         .ilike("name", `%${normalizedQuery}%`)
@@ -98,7 +94,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
       supabase
         .from("pets")
         .select("client_id, name")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .eq("active", true)
         .is("deleted_at", null)
         .ilike("breed", `%${normalizedQuery}%`)
@@ -106,7 +102,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
       supabase
         .from("pets")
         .select("client_id, name")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .eq("active", true)
         .is("deleted_at", null)
         .ilike("microchip", `%${normalizedQuery}%`)
@@ -124,7 +120,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
       const { data: petOwners, error: ownersError } = await supabase
         .from("clients")
         .select("id, name, phone, email")
-        .eq("clinic_id", membership.clinic_id)
+        .eq("clinic_id", clinicId)
         .is("deleted_at", null)
         .in("id", petClientIds);
       if (ownersError) return { error: "No se pudieron cargar los propietarios" };
@@ -143,7 +139,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
     const { data: pets, error: petsError } = await supabase
       .from("pets")
       .select("id, client_id")
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .eq("active", true)
       .in("client_id", nativeIds);
     if (petsError) return { error: "No se pudieron contar las mascotas" };
@@ -159,7 +155,7 @@ export async function searchNativeGestorVetClients(query: string): Promise<{
   }));
 
   try {
-    const { client } = await readGestorVetClient(createAdminClient(), membership.clinic_id);
+    const { client } = await readGestorVetClient(createAdminClient(), clinicId);
     const numeric = /^\d+$/.test(parsed.data);
     const records = await client.getClients({
       id: numeric ? parsed.data : undefined,
@@ -215,15 +211,9 @@ const petSchema = z.object({
 
 async function editingContext() {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { error: "No autenticado" as const };
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
-  if (!membership) return { error: "Sin clínica asignada" as const };
-  return { supabase, clinicId: membership.clinic_id };
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  return { supabase, clinicId: organizationResult.context.organization.id };
 }
 
 export async function createClientDetails(formData: FormData): Promise<{

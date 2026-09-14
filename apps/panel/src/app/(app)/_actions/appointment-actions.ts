@@ -3,6 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getValidAccessToken } from "@/lib/google-tokens";
+import {
+  type OrganizationContext,
+  isOwnedByOrganization,
+  resolveOrganizationContext,
+} from "@/lib/organization-context";
 import { revalidatePath } from "next/cache";
 import type { CreateAppointmentInput, CreateAppointmentState } from "./appointment-schemas";
 import { createAppointmentSchema } from "./appointment-schemas";
@@ -11,21 +16,20 @@ import { createAppointmentSchema } from "./appointment-schemas";
 // Internal types
 // ---------------------------------------------------------------------------
 
-type ClinicUserRow = { clinic_id: string; role: string };
-
 type ServiceRow = {
   id: string;
+  clinic_id: string;
   name: string;
   duration_minutes: number;
   is_surgery: boolean;
   requires_specific_vet_user_id: string | null;
 };
 
-type ClientRow = { id: string; name: string };
+type ClientRow = { id: string; clinic_id: string; name: string };
 
-type PetRow = { id: string; name: string };
+type PetRow = { id: string; clinic_id: string; client_id: string; name: string };
 
-type VetRow = { id: string; display_name: string | null };
+type VetRow = { id: string; clinic_id: string; display_name: string | null };
 
 type VetCalendarRow = {
   vet_user_id: string;
@@ -36,33 +40,15 @@ type VetCalendarRow = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getCallerClinicId(): Promise<string | { error: string }> {
+async function getCallerContext(): Promise<OrganizationContext | { error: string }> {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
-
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const cu = clinicUser as ClinicUserRow | null;
-  if (!cu) return { error: "Sin clínica asignada" };
-
-  return cu.clinic_id;
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  return organizationResult.context;
 }
 
 /** Check if two ISO 8601 intervals overlap. */
-function overlaps(
-  aStart: string,
-  aEnd: string,
-  bStart: string,
-  bEnd: string,
-): boolean {
+function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
 }
 
@@ -77,21 +63,18 @@ async function isSlotFree(
   accessToken: string,
 ): Promise<boolean> {
   try {
-    const res = await fetch(
-      "https://www.googleapis.com/calendar/v3/freeBusy",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          timeMin: startsAt,
-          timeMax: endsAt,
-          items: [{ id: calendarId }],
-        }),
+    const res = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        timeMin: startsAt,
+        timeMax: endsAt,
+        items: [{ id: calendarId }],
+      }),
+    });
 
     if (!res.ok) {
       const errText = await res.text();
@@ -101,12 +84,9 @@ async function isSlotFree(
     }
 
     const data = await res.json();
-    const busy: Array<{ start: string; end: string }> =
-      data.calendars?.[calendarId]?.busy ?? [];
+    const busy: Array<{ start: string; end: string }> = data.calendars?.[calendarId]?.busy ?? [];
 
-    return !busy.some((b) =>
-      overlaps(startsAt, endsAt, b.start, b.end),
-    );
+    return !busy.some((b) => overlaps(startsAt, endsAt, b.start, b.end));
   } catch (err) {
     console.error("[isSlotFree] network error:", err);
     return false;
@@ -126,29 +106,21 @@ export async function createAppointment(
   const parsed = createAppointmentSchema.safeParse(input);
   if (!parsed.success) {
     return {
-      error: "Datos inválidos: " +
-        parsed.error.issues.map((i) => i.message).join(", "),
+      error: "Datos inválidos: " + parsed.error.issues.map((i) => i.message).join(", "),
     };
   }
 
-  const {
-    client_id,
-    pet_id,
-    vet_user_id,
-    service_id,
-    starts_at,
-    notes,
-    conversation_id,
-    created_by,
-  } = parsed.data;
+  const { client_id, pet_id, vet_user_id, service_id, starts_at, notes, conversation_id } =
+    parsed.data;
 
   // ------------------------------------------------------------------
   // 2. Auth — get clinic ID
   // ------------------------------------------------------------------
-  const clinicIdOrError = await getCallerClinicId();
-  if (typeof clinicIdOrError !== "string") return clinicIdOrError;
+  const callerContext = await getCallerContext();
+  if ("error" in callerContext) return callerContext;
 
-  const clinicId = clinicIdOrError;
+  const clinicId = callerContext.organization.id;
+  const createdBy = callerContext.membership.role === "admin" ? "admin" : "reception";
   const supabaseAdmin = createAdminClient();
 
   // ------------------------------------------------------------------
@@ -156,9 +128,7 @@ export async function createAppointment(
   // ------------------------------------------------------------------
   const { data: serviceData, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select(
-      "id, name, duration_minutes, is_surgery, requires_specific_vet_user_id",
-    )
+    .select("id, clinic_id, name, duration_minutes, is_surgery, requires_specific_vet_user_id")
     .eq("id", service_id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -168,6 +138,9 @@ export async function createAppointment(
   }
 
   const service = serviceData as unknown as ServiceRow;
+  if (!isOwnedByOrganization(clinicId, service)) {
+    return { error: "Servicio no encontrado en esta clínica." };
+  }
 
   // Surgery must go to the designated vet
   if (
@@ -189,50 +162,66 @@ export async function createAppointment(
   // ------------------------------------------------------------------
   // 5. Validate client and pet belong to this clinic
   // ------------------------------------------------------------------
-  const [clientResult, petResult, vetResult, calendarResult] =
-    await Promise.all([
-      supabaseAdmin
-        .from("clients")
-        .select("id, name")
-        .eq("id", client_id)
-        .eq("clinic_id", clinicId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("pets")
-        .select("id, name")
-        .eq("id", pet_id)
-        .eq("client_id", client_id)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("clinic_users")
-        .select("id, display_name")
-        .eq("id", vet_user_id)
-        .eq("clinic_id", clinicId)
-        .eq("staff_type", "vet")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("vet_calendars")
-        .select("vet_user_id, google_calendar_id")
-        .eq("vet_user_id", vet_user_id)
-        .eq("clinic_id", clinicId)
-        .maybeSingle(),
-    ]);
+  const [clientResult, petResult, vetResult, calendarResult] = await Promise.all([
+    supabaseAdmin
+      .from("clients")
+      .select("id, clinic_id, name")
+      .eq("id", client_id)
+      .eq("clinic_id", clinicId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("pets")
+      .select("id, clinic_id, client_id, name")
+      .eq("id", pet_id)
+      .eq("client_id", client_id)
+      .eq("clinic_id", clinicId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("clinic_users")
+      .select("id, clinic_id, display_name")
+      .eq("id", vet_user_id)
+      .eq("clinic_id", clinicId)
+      .eq("staff_type", "vet")
+      .maybeSingle(),
+    supabaseAdmin
+      .from("vet_calendars")
+      .select("vet_user_id, google_calendar_id")
+      .eq("vet_user_id", vet_user_id)
+      .eq("clinic_id", clinicId)
+      .maybeSingle(),
+  ]);
 
   const client = clientResult.data as ClientRow | null;
-  if (!client) return { error: "Cliente no encontrado en esta clínica." };
+  if (!client || !isOwnedByOrganization(clinicId, client)) {
+    return { error: "Cliente no encontrado en esta clínica." };
+  }
 
   const pet = petResult.data as PetRow | null;
-  if (!pet) return { error: "Mascota no encontrada para este cliente." };
+  if (!pet || !isOwnedByOrganization(clinicId, pet) || pet.client_id !== client_id) {
+    return { error: "Mascota no encontrada para este cliente." };
+  }
 
   const vet = vetResult.data as VetRow | null;
-  if (!vet) return { error: "Veterinario no encontrado en esta clínica." };
+  if (!vet || !isOwnedByOrganization(clinicId, vet)) {
+    return { error: "Veterinario no encontrado en esta clínica." };
+  }
 
   const calendar = calendarResult.data as VetCalendarRow | null;
   if (!calendar || !calendar.google_calendar_id) {
     return {
-      error:
-        "El veterinario no tiene un calendario asignado. No se puede crear la cita.",
+      error: "El veterinario no tiene un calendario asignado. No se puede crear la cita.",
     };
+  }
+
+  if (conversation_id) {
+    const { data: conversation } = await supabaseAdmin
+      .from("conversations")
+      .select("id")
+      .eq("id", conversation_id)
+      .eq("clinic_id", clinicId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!conversation) return { error: "Conversación no encontrada en esta clínica." };
   }
 
   // ------------------------------------------------------------------
@@ -242,36 +231,28 @@ export async function createAppointment(
   if ("error" in tokenResult) {
     if (tokenResult.error === "REAUTH_REQUIRED") {
       return {
-        error:
-          "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración.",
+        outcome: "degraded",
+        error: "La conexión con Google Calendar ha expirado. Por favor, reconecta la integración.",
       };
     }
-    return { error: "Error al leer los tokens de Google Calendar." };
+    return { outcome: "degraded", error: "Error al leer los tokens de Google Calendar." };
   }
   const accessToken = tokenResult.access_token;
 
   // ------------------------------------------------------------------
   // 7. Verify availability (race-condition guard)
   // ------------------------------------------------------------------
-  const slotFree = await isSlotFree(
-    calendar.google_calendar_id,
-    starts_at,
-    ends_at,
-    accessToken,
-  );
+  const slotFree = await isSlotFree(calendar.google_calendar_id, starts_at, ends_at, accessToken);
 
   if (!slotFree) {
-    return { error: "SLOT_NO_LONGER_AVAILABLE" };
+    return { outcome: "unavailable", error: "SLOT_NO_LONGER_AVAILABLE" };
   }
 
   // ------------------------------------------------------------------
   // 8. Create Google Calendar event
   // ------------------------------------------------------------------
   const eventSummary = `${client.name} — ${pet.name} (${service.name})`;
-  const eventDescription = [
-    `Cita creada por ${created_by}.`,
-    notes ? `Notas: ${notes}` : "",
-  ]
+  const eventDescription = [`Cita creada por ${createdBy}.`, notes ? `Notas: ${notes}` : ""]
     .filter(Boolean)
     .join("\n");
 
@@ -303,14 +284,10 @@ export async function createAppointment(
 
     if (!eventRes.ok) {
       const errText = await eventRes.text();
-      console.error(
-        "[createAppointment] Google event creation failed:",
-        eventRes.status,
-        errText,
-      );
+      console.error("[createAppointment] Google event creation failed:", eventRes.status, errText);
       return {
-        error:
-          "No se pudo crear el evento en Google Calendar. Verifica los permisos.",
+        outcome: "provider_failure",
+        error: "No se pudo crear el evento en Google Calendar. Verifica los permisos.",
       };
     }
 
@@ -318,19 +295,24 @@ export async function createAppointment(
     googleEventId = eventData.id as string;
 
     if (!googleEventId) {
-      return { error: "Google Calendar no devolvió un ID de evento." };
+      return {
+        outcome: "provider_failure",
+        error: "Google Calendar no devolvió un ID de evento.",
+      };
     }
   } catch (err) {
     console.error("[createAppointment] Google API network error:", err);
-    return { error: "Error de red al crear el evento en Google Calendar." };
+    return {
+      outcome: "provider_failure",
+      error: "Error de red al crear el evento en Google Calendar.",
+    };
   }
 
   // ------------------------------------------------------------------
   // 9. INSERT into appointments
   // ------------------------------------------------------------------
   try {
-    const { data: inserted, error: insertError } = await (supabaseAdmin
-      .from("appointments") as any)
+    const { data: inserted, error: insertError } = await (supabaseAdmin.from("appointments") as any)
       .insert({
         clinic_id: clinicId,
         client_id,
@@ -342,8 +324,8 @@ export async function createAppointment(
         status: "confirmed",
         google_event_id: googleEventId,
         google_calendar_id: calendar.google_calendar_id,
-        created_by,
-        created_by_user_id: null, // Will be set when created_by != "agent"
+        created_by: createdBy,
+        created_by_user_id: callerContext.membership.id,
         conversation_id: conversation_id ?? null,
         notes: notes ?? null,
       })
@@ -368,10 +350,7 @@ export async function createAppointment(
             },
           );
         } catch (rollbackErr) {
-          console.error(
-            "[createAppointment] Rollback (delete Google event) failed:",
-            rollbackErr,
-          );
+          console.error("[createAppointment] Rollback (delete Google event) failed:", rollbackErr);
         }
       }
 
@@ -391,6 +370,7 @@ export async function createAppointment(
 
     return {
       success: true,
+      outcome: "confirmed_external_booking",
       appointment_id: appointmentId,
       google_event_id: googleEventId,
     };

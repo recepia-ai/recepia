@@ -1,6 +1,8 @@
 import type { Database } from "@recepia/db";
+import { notFound } from "next/navigation";
 import { readGestorVetClient } from "@/lib/gestorvet/discovery";
 import { gestorVetAppointment } from "@/lib/gestorvet/native-adapters";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { CalendarClient } from "./_components/calendar-client";
@@ -19,10 +21,10 @@ type ApptRow = Database["public"]["Tables"]["appointments"]["Row"] & {
 
 export default async function CalendarPage() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) notFound();
+  const clinicId = organizationResult.context.organization.id;
+  const clinicName = organizationResult.context.organization.name;
 
   // Fetch appointments with joins for the date window
   const today = new Date();
@@ -36,6 +38,7 @@ export default async function CalendarPage() {
     .select(
       "id, starts_at, ends_at, status, notes, vet_user_id, clients(name, phone), pets(name, species), services(name, duration_minutes)",
     )
+    .eq("clinic_id", clinicId)
     .gte("starts_at", from.toISOString())
     .lte("starts_at", to.toISOString())
     .order("starts_at", { ascending: true });
@@ -44,59 +47,43 @@ export default async function CalendarPage() {
     throw new Error(`Failed to fetch appointments: ${apptError.message}`);
   }
 
-  // Fetch clinic config for business hours
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, clinics(name, slug)")
-    .eq("user_id", user!.id)
-    .maybeSingle();
-
-  const cu = clinicUser as {
-    clinic_id: string;
-    clinics: { name: string; slug: string } | { name: string; slug: string }[] | null;
-  } | null;
-
-  const clinic = cu ? (Array.isArray(cu.clinics) ? (cu.clinics[0] ?? null) : cu.clinics) : null;
-
-  const clinicName = clinic?.name ?? "tu clínica";
-
-  const [vetsResult, clientsResult, petsResult, servicesResult, vetLinksResult] = cu?.clinic_id
-    ? await Promise.all([
-        supabase
-          .from("clinic_users")
-          .select("id, display_name")
-          .eq("clinic_id", cu.clinic_id)
-          .eq("staff_type", "vet")
-          .order("display_name", { ascending: true }),
-        supabase
-          .from("clients")
-          .select("id, name, phone")
-          .eq("clinic_id", cu.clinic_id)
-          .is("deleted_at", null)
-          .order("name", { ascending: true })
-          .limit(500),
-        supabase
-          .from("pets")
-          .select("id, client_id, name")
-          .eq("clinic_id", cu.clinic_id)
-          .eq("active", true)
-          .is("deleted_at", null)
-          .order("name", { ascending: true })
-          .limit(1000),
-        supabase
-          .from("services")
-          .select("id, name, duration_minutes")
-          .eq("clinic_id", cu.clinic_id)
-          .eq("active", true)
-          .order("sort_order", { ascending: true }),
-        supabase
-          .from("integration_external_links")
-          .select("external_id, local_id")
-          .eq("clinic_id", cu.clinic_id)
-          .eq("provider", "gestorvet")
-          .eq("entity_type", "clinic_user"),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const [vetsResult, clientsResult, petsResult, servicesResult, vetLinksResult] = await Promise.all(
+    [
+      supabase
+        .from("clinic_users")
+        .select("id, display_name")
+        .eq("clinic_id", clinicId)
+        .eq("staff_type", "vet")
+        .order("display_name", { ascending: true }),
+      supabase
+        .from("clients")
+        .select("id, name, phone")
+        .eq("clinic_id", clinicId)
+        .is("deleted_at", null)
+        .order("name", { ascending: true })
+        .limit(500),
+      supabase
+        .from("pets")
+        .select("id, client_id, name")
+        .eq("clinic_id", clinicId)
+        .eq("active", true)
+        .is("deleted_at", null)
+        .order("name", { ascending: true })
+        .limit(1000),
+      supabase
+        .from("services")
+        .select("id, name, duration_minutes")
+        .eq("clinic_id", clinicId)
+        .eq("active", true)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("integration_external_links")
+        .select("external_id, local_id")
+        .eq("clinic_id", clinicId)
+        .eq("provider", "gestorvet")
+        .eq("entity_type", "clinic_user"),
+    ],
+  );
 
   const vets = (vetsResult.data ?? []).map((vet) => ({
     id: vet.id,
@@ -109,11 +96,11 @@ export default async function CalendarPage() {
 
   // Fetch business hours from clinic_config
   let businessHours: BusinessHours | null = null;
-  if (cu?.clinic_id) {
+  {
     const { data: config } = await supabase
       .from("clinic_config")
       .select("config")
-      .eq("clinic_id", cu.clinic_id)
+      .eq("clinic_id", clinicId)
       .maybeSingle();
 
     const cc = config as { config: Record<string, unknown> } | null;
@@ -162,9 +149,9 @@ export default async function CalendarPage() {
 
   let gestorVetRows: AppointmentWithDetails[] = [];
   let gestorVetConnected = false;
-  if (cu?.clinic_id) {
+  {
     try {
-      const { client } = await readGestorVetClient(createAdminClient(), cu.clinic_id);
+      const { client } = await readGestorVetClient(createAdminClient(), clinicId);
       const records = await client.getAppointments();
       gestorVetConnected = true;
       gestorVetRows = records.flatMap((record) => {

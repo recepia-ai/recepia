@@ -20,6 +20,14 @@ type Output = {
 };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
+  if (!ctx.appointmentConfirmed) {
+    return {
+      success: false,
+      error: "La cita requiere confirmación explícita del cliente antes de reservarse.",
+      error_code: "CONFIRMATION_REQUIRED",
+    };
+  }
+
   const notes = input.notes ? `Recepia: ${input.notes}` : undefined;
 
   const result = await createAppointmentForClinic(ctx.clinicId, {
@@ -33,8 +41,9 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     return {
       success: false,
       error: result.error ?? "Error desconocido al crear la cita.",
-      error_code:
-        result.error === "SLOT_NO_LONGER_AVAILABLE"
+      error_code: result.outcome
+        ? result.outcome.toUpperCase()
+        : result.error === "SLOT_NO_LONGER_AVAILABLE"
           ? "SLOT_NO_LONGER_AVAILABLE"
           : undefined,
     };

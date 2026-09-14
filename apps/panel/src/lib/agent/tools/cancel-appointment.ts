@@ -52,7 +52,10 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     const tokenResult = await getValidAccessToken(ctx.clinicId);
     if ("error" in tokenResult) {
       ctx.logger("[cancel_appointment] token error", tokenResult.error);
-      return { success: false, error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración." };
+      return {
+        success: false,
+        error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración.",
+      };
     }
 
     try {
@@ -66,7 +69,10 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
       if (!deleteRes.ok && deleteRes.status !== 410) {
         const errText = await deleteRes.text();
-        ctx.logger("[cancel_appointment] Google Calendar DELETE error", { status: deleteRes.status, body: errText });
+        ctx.logger("[cancel_appointment] Google Calendar DELETE error", {
+          status: deleteRes.status,
+          body: errText,
+        });
       }
     } catch (err) {
       ctx.logger("[cancel_appointment] Google Calendar network error (non-fatal)", err);
@@ -80,7 +86,8 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
       status: "cancelled",
       cancellation_reason: input.reason,
     })
-    .eq("id", input.appointment_id);
+    .eq("id", input.appointment_id)
+    .eq("clinic_id", ctx.clinicId);
 
   if (updateError) {
     ctx.logger("[cancel_appointment] update error", updateError);

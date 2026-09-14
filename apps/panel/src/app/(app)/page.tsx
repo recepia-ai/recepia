@@ -1,7 +1,7 @@
 import type { Database } from "@recepia/db";
 import { ArrowRight, CalendarDays, Clock3, MessageCircle, PawPrint, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { DashboardAutoRefresh } from "@/app/(app)/_components/dashboard-auto-refresh";
 import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,17 +15,11 @@ import { readGestorVetClient } from "@/lib/gestorvet/discovery";
 import { gestorVetAppointment } from "@/lib/gestorvet/native-adapters";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "./conversations/_components/relative-time";
 
 export const maxDuration = 30;
-
-type ClinicUserRow = {
-  role: string;
-  clinic_id: string;
-  display_name: string | null;
-  clinics: { name: string } | { name: string }[] | null;
-};
 
 type AppointmentRow = Pick<
   Database["public"]["Tables"]["appointments"]["Row"],
@@ -74,21 +68,14 @@ function comparison(today: number, yesterday: number): string {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("role, clinic_id, display_name, clinics(name)")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  const clinicUser = membership as ClinicUserRow | null;
-  if (!clinicUser) redirect("/login");
-
-  const clinic = single(clinicUser.clinics);
-  const clinicName = clinic?.name ?? "tu clínica";
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) {
+    if (organizationResult.code === "UNAUTHENTICATED") redirect("/login");
+    notFound();
+  }
+  const { actor, organization, membership } = organizationResult.context;
+  const clinicId = organization.id;
+  const clinicName = organization.name;
   const todayBounds = clinicDayBounds();
   const yesterdayReference = new Date(todayBounds.start);
   yesterdayReference.setUTCDate(yesterdayReference.getUTCDate() - 1);
@@ -109,21 +96,21 @@ export default async function DashboardPage() {
     supabase
       .from("conversations")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .gte("started_at", todayBounds.start.toISOString())
       .lt("started_at", todayBounds.end.toISOString()),
     supabase
       .from("conversations")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .gte("started_at", yesterdayBounds.start.toISOString())
       .lt("started_at", yesterdayBounds.end.toISOString()),
     supabase
       .from("appointments")
       .select("id, starts_at, ends_at, status, clients(name), pets(name), services(name)")
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .neq("status", "cancelled")
       .gte("starts_at", todayBounds.start.toISOString())
       .lt("starts_at", todayBounds.end.toISOString())
@@ -131,26 +118,26 @@ export default async function DashboardPage() {
     supabase
       .from("appointments")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .neq("status", "cancelled")
       .gte("starts_at", yesterdayBounds.start.toISOString())
       .lt("starts_at", yesterdayBounds.end.toISOString()),
     supabase
       .from("conversations")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .eq("status", "awaiting_human")
       .is("deleted_at", null),
     supabase
       .from("conversations")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .eq("status", "human_handling")
       .is("deleted_at", null),
     supabase
       .from("clients")
       .select("id", { count: "exact", head: true })
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .gte("created_at", todayBounds.start.toISOString())
       .lt("created_at", todayBounds.end.toISOString()),
@@ -159,7 +146,7 @@ export default async function DashboardPage() {
       .select(
         "id, client_name, client_phone, pet_name, status, channel, last_message_at, last_message_preview, started_at",
       )
-      .eq("clinic_id", clinicUser.clinic_id)
+      .eq("clinic_id", clinicId)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(6),
   ]);
@@ -179,7 +166,7 @@ export default async function DashboardPage() {
   const gestorVetToday: TodayAppointment[] = [];
   let gestorVetYesterdayCount = 0;
   try {
-    const { client } = await readGestorVetClient(createAdminClient(), clinicUser.clinic_id);
+    const { client } = await readGestorVetClient(createAdminClient(), clinicId);
     const records = await client.getAppointments();
     for (const record of records) {
       const appointment = gestorVetAppointment(record);
@@ -233,11 +220,11 @@ export default async function DashboardPage() {
       icon: UserPlus,
     },
   ];
-  const greetingName = firstName(clinicUser.display_name, user.email ?? null);
+  const greetingName = firstName(membership.displayName, actor.email);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <DashboardAutoRefresh clinicId={clinicUser.clinic_id} />
+      <DashboardAutoRefresh clinicId={clinicId} />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-stone-900">
           {greetingName ? `Bienvenido, ${greetingName}` : "Bienvenido"}
@@ -380,7 +367,7 @@ export default async function DashboardPage() {
       </div>
 
       <p className="text-xs text-stone-400">
-        Sesión: {ROLE_LABELS[clinicUser.role] ?? clinicUser.role} · Los datos se actualizan
+        Sesión: {ROLE_LABELS[membership.role] ?? membership.role} · Los datos se actualizan
         automáticamente.
       </p>
     </div>

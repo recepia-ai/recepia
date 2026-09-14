@@ -57,8 +57,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
   }
 
   // Merge escalation data into conversations.metadata JSONB
-  const { error } = await (ctx.supabaseAdmin
-    .from("conversations") as any)
+  const { error } = await (ctx.supabaseAdmin.from("conversations") as any)
     .update({
       status: "awaiting_human",
     })
@@ -76,6 +75,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
       .from("conversations")
       .select("metadata")
       .eq("id", ctx.conversationId)
+      .eq("clinic_id", ctx.clinicId)
       .maybeSingle();
 
     if (current) {
@@ -87,7 +87,8 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
       await (ctx.supabaseAdmin.from("conversations") as any)
         .update({ metadata: merged })
-        .eq("id", ctx.conversationId);
+        .eq("id", ctx.conversationId)
+        .eq("clinic_id", ctx.clinicId);
     }
   } catch (metaErr) {
     ctx.logger("[escalate_to_human] metadata merge error (non-fatal)", metaErr);

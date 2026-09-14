@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 import { PetsDirectory } from "./_components/pets-directory";
 
@@ -14,34 +15,29 @@ type PetRow = {
 
 export default async function PetsPage() {
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) notFound();
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
-  if (!membership) notFound();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) notFound();
+  const clinicId = organizationResult.context.organization.id;
 
   const [petsResult, clientsResult, recordsResult] = await Promise.all([
     supabase
       .from("pets")
       .select("id, name, species, breed, microchip, client_id, clients(name, phone)")
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .eq("active", true)
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     supabase
       .from("clients")
       .select("id, name, phone")
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .order("name", { ascending: true })
       .limit(500),
     supabase
       .from("pet_records")
       .select("id, pet_id")
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null),
   ]);
 
@@ -72,7 +68,7 @@ export default async function PetsPage() {
   return (
     <PetsDirectory
       pets={pets}
-      clinicId={membership.clinic_id}
+      clinicId={clinicId}
       clients={(clientsResult.data ?? []).map((client) => ({
         id: client.id,
         name: client.name,

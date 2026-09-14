@@ -107,10 +107,12 @@ export async function invokeTool<TInput, TOutput>(
 export function buildToolContext(
   clinicId: string,
   conversationId: string | null = null,
+  appointmentConfirmed = false,
 ): ToolContext {
   return {
     clinicId,
     conversationId,
+    appointmentConfirmed,
     supabaseAdmin: createAdminClient(),
     logger: (msg: string, data?: unknown) => {
       console.log(`[ToolContext] ${msg}`, data ?? "");

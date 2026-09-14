@@ -27,5 +27,5 @@ export type AvailableSlot = {
 };
 
 export type CheckAvailabilityState =
-  | { slots: AvailableSlot[] }
-  | { error: string };
+  | { slots: AvailableSlot[]; outcome?: "available" | "unavailable" }
+  | { error: string; outcome?: "degraded" | "error" };

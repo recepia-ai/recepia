@@ -1,5 +1,6 @@
 import type { Database } from "@recepia/db";
 import { redirect } from "next/navigation";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 import { ConversationsList } from "./_components/conversations-list";
 
@@ -10,32 +11,15 @@ type Channel = Database["public"]["Enums"]["channel_type"];
 export default async function ConversationsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  // Fetch clinic name for the subtitle.
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, clinics(name)")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const clinicRow = clinicUser as {
-    clinic_id: string;
-    clinics: { name: string } | { name: string }[] | null;
-  } | null;
-  const clinic = clinicRow
-    ? Array.isArray(clinicRow.clinics)
-      ? (clinicRow.clinics[0] ?? null)
-      : clinicRow.clinics
-    : null;
-  const clinicName = clinic?.name ?? "tu clínica";
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) redirect("/login");
+  const clinicId = organizationResult.context.organization.id;
+  const clinicName = organizationResult.context.organization.name;
 
   const { data: inboxConversations, error: inboxError } = await supabase
     .from("v_conversations_inbox")
     .select("*")
+    .eq("clinic_id", clinicId)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(200);
 
@@ -78,7 +62,7 @@ export default async function ConversationsLayout({ children }: { children: Reac
           started_at: c.started_at,
         }))}
         clinicName={clinicName}
-        clinicId={clinicRow?.clinic_id ?? null}
+        clinicId={clinicId}
       />
 
       {/* Detail panel */}

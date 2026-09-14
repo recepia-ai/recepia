@@ -27,4 +27,10 @@ export type CreateAppointmentState = {
   appointment_id?: string;
   google_event_id?: string;
   error?: string;
+  outcome?:
+    | "confirmed_external_booking"
+    | "unavailable"
+    | "degraded"
+    | "provider_failure"
+    | "error";
 };

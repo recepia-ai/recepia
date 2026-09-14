@@ -12,6 +12,9 @@ export type ToolContext = {
   /** The current conversation ID, or null if the tool is invoked outside a
    *  conversation (e.g. from a test page). */
   conversationId: string | null;
+  /** True only when the current client turn explicitly confirms a proposal
+   *  made by the Agent in the immediately preceding conversational turn. */
+  appointmentConfirmed: boolean;
   /** Supabase admin client (service_role, bypasses RLS). */
   supabaseAdmin: SupabaseClient<Database>;
   /** Lightweight logger — use for debugging and tracing. */

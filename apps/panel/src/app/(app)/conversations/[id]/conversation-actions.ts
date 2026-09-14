@@ -3,6 +3,7 @@
 import type { Database } from "@recepia/db";
 import { revalidatePath } from "next/cache";
 import { resolveClinicWhatsAppChannel, sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -14,6 +15,17 @@ import {
   takeControlSchema,
 } from "./conversation-schema";
 
+async function actionContext() {
+  const supabase = await createClient();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) return { error: organizationResult.message };
+  return {
+    supabase,
+    actorId: organizationResult.context.actor.id,
+    clinicId: organizationResult.context.organization.id,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // takeControl — sets status to human_handling
 // ---------------------------------------------------------------------------
@@ -22,12 +34,9 @@ export async function takeControl(
   _prevState: TakeControlState,
   formData: FormData,
 ): Promise<TakeControlState> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const context = await actionContext();
+  if ("error" in context) return { error: context.error };
+  const { supabase, actorId, clinicId } = context;
 
   // formData.get() can return FormDataEntryValue which may not survive
   // Next.js Server Action serialization as a plain string. Coerce explicitly.
@@ -50,20 +59,11 @@ export async function takeControl(
 
   const { conversation_id } = parsed.data;
 
-  // Verify user belongs to the conversation's clinic
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!clinicUser) return { error: "Sin clínica asignada" };
-
   const { data: convGuard } = await supabase
     .from("conversations")
     .select("id, channel")
     .eq("id", conversation_id)
-    .eq("clinic_id", clinicUser.clinic_id)
+    .eq("clinic_id", clinicId)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
@@ -75,11 +75,11 @@ export async function takeControl(
     .from("conversations")
     .update({
       status: "human_handling",
-      controlled_by: user.id,
+      controlled_by: actorId,
       controlled_at: new Date().toISOString(),
     })
     .eq("id", conversation_id)
-    .eq("clinic_id", clinicUser.clinic_id)
+    .eq("clinic_id", clinicId)
     .select()
     .maybeSingle();
 
@@ -105,12 +105,9 @@ export async function returnToAgent(
   _prevState: ReturnToAgentState,
   formData: FormData,
 ): Promise<ReturnToAgentState> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const context = await actionContext();
+  if ("error" in context) return { error: context.error };
+  const { supabase, clinicId } = context;
 
   // formData.get() can return FormDataEntryValue which may not survive
   // Next.js Server Action serialization as a plain string. Coerce explicitly.
@@ -133,26 +130,19 @@ export async function returnToAgent(
 
   const { conversation_id } = parsed.data;
 
-  // Verify user belongs to the conversation's clinic
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!clinicUser) return { error: "Sin clínica asignada" };
-
   const { data: convGuard } = await supabase
     .from("conversations")
     .select("id, metadata")
     .eq("id", conversation_id)
-    .eq("clinic_id", clinicUser.clinic_id)
+    .eq("clinic_id", clinicId)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
 
   const currentMetadata =
-    convGuard.metadata && typeof convGuard.metadata === "object" && !Array.isArray(convGuard.metadata)
+    convGuard.metadata &&
+    typeof convGuard.metadata === "object" &&
+    !Array.isArray(convGuard.metadata)
       ? (convGuard.metadata as Record<string, unknown>)
       : {};
   const { escalation, ...metadataWithoutActiveEscalation } = currentMetadata;
@@ -180,7 +170,7 @@ export async function returnToAgent(
       metadata: metadata as Database["public"]["Tables"]["conversations"]["Update"]["metadata"],
     })
     .eq("id", conversation_id)
-    .eq("clinic_id", clinicUser.clinic_id)
+    .eq("clinic_id", clinicId)
     .select()
     .maybeSingle();
 
@@ -206,12 +196,9 @@ export async function sendMessage(
   _prevState: SendMessageState,
   formData: FormData,
 ): Promise<SendMessageState> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No autenticado" };
+  const context = await actionContext();
+  if ("error" in context) return { error: context.error };
+  const { supabase, actorId, clinicId } = context;
 
   // formData.get() can return FormDataEntryValue which may not survive
   // Next.js Server Action serialization as a plain string. Coerce explicitly.
@@ -236,20 +223,11 @@ export async function sendMessage(
 
   const { conversation_id, content } = parsed.data;
 
-  // Verify user belongs to the conversation's clinic
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!clinicUser) return { error: "Sin clínica asignada" };
-
   const { data: convGuard } = await supabase
     .from("conversations")
     .select("id, status, channel, channel_thread_id")
     .eq("id", conversation_id)
-    .eq("clinic_id", clinicUser.clinic_id)
+    .eq("clinic_id", clinicId)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
@@ -270,7 +248,7 @@ export async function sendMessage(
     }
     try {
       const supabaseAdmin = createAdminClient();
-      const channel = await resolveClinicWhatsAppChannel(supabaseAdmin, clinicUser.clinic_id);
+      const channel = await resolveClinicWhatsAppChannel(supabaseAdmin, clinicId);
       const sent = await sendWhatsAppText(
         supabaseAdmin,
         channel,
@@ -286,13 +264,13 @@ export async function sendMessage(
   }
 
   const { error: insertError } = await supabase.from("messages").insert({
-    clinic_id: clinicUser.clinic_id,
+    clinic_id: clinicId,
     conversation_id,
     content,
     sender: "human",
     direction: "outbound",
     content_type: "text",
-    sender_user_id: user.id,
+    sender_user_id: actorId,
     provider_message_id: providerMessageId,
     metadata: providerMetadata,
   });

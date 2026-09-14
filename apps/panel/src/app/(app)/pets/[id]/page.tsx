@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatClinicDate, formatClinicTime } from "@/lib/clinic-datetime";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
 import { PetEditorDialog } from "../../clients/_components/client-editors";
 import { PetRecordDialog } from "../_components/pet-dialogs";
@@ -59,28 +60,23 @@ function formatDate(value: string): string {
 export default async function PetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) notFound();
-  const { data: membership } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
-  if (!membership) notFound();
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) notFound();
+  const clinicId = organizationResult.context.organization.id;
 
   const [petResult, recordsResult, appointmentsResult] = await Promise.all([
     supabase
       .from("pets")
       .select("*, clients(id, name, phone)")
       .eq("id", id)
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .maybeSingle(),
     supabase
       .from("pet_records")
       .select("*")
       .eq("pet_id", id)
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .is("deleted_at", null)
       .order("occurred_at", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -88,7 +84,7 @@ export default async function PetDetailPage({ params }: { params: Promise<{ id: 
       .from("appointments")
       .select("id, starts_at, status, notes, services(name)")
       .eq("pet_id", id)
-      .eq("clinic_id", membership.clinic_id)
+      .eq("clinic_id", clinicId)
       .order("starts_at", { ascending: false })
       .limit(20),
   ]);

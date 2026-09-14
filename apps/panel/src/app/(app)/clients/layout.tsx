@@ -2,6 +2,7 @@ import { readGestorVetClient } from "@/lib/gestorvet/discovery";
 import { gestorVetClientSummary } from "@/lib/gestorvet/native-adapters";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { ClientsList } from "./_components/clients-list";
 
 export const maxDuration = 30;
@@ -12,30 +13,12 @@ type ClientListRow = { id: string; name: string | null; phone: string; email: st
 export default async function ClientsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Fetch clinic info
-  const { data: clinicUser } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, clinics(name)")
-    .eq("user_id", user!.id)
-    .maybeSingle();
-
-  const cu = clinicUser as {
-    clinic_id: string;
-    clinics: { name: string } | { name: string }[] | null;
-  } | null;
-
-  const clinic = cu ? (Array.isArray(cu.clinics) ? (cu.clinics[0] ?? null) : cu.clinics) : null;
-
-  const clinicName = clinic?.name ?? "tu clínica";
-  const clinicId = cu?.clinic_id;
-
-  if (!clinicId) {
-    return <ClientsList clients={[]} clinicName={clinicName} clinicId={null} />;
+  const organizationResult = await resolveOrganizationContext(supabase);
+  if (!organizationResult.ok) {
+    return <ClientsList clients={[]} clinicName="clínica no disponible" clinicId={null} />;
   }
+  const clinicName = organizationResult.context.organization.name;
+  const clinicId = organizationResult.context.organization.id;
 
   // Fetch pet counts per client
   const petCountsRes = await supabase
