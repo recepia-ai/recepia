@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     .eq("slug", parsed.data.clinicSlug)
     .maybeSingle();
 
-  if (!clinic || clinic.status !== "active") {
+  if (clinic?.status !== "active") {
     return Response.json({ error: "Clínica no disponible" }, { status: 404 });
   }
 
@@ -87,24 +87,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const now = new Date().toISOString();
-  const event = inboundChannelEventSchema.parse({
-    type: "message.received",
-    clinicId: clinic.id,
-    channel: "web",
-    provider: "recepia-web",
-    eventId: parsed.data.messageId,
-    externalThreadId: parsed.data.sessionId,
-    externalMessageId: parsed.data.messageId,
-    occurredAt: now,
-    contact: {
-      externalId: parsed.data.sessionId,
-      phone: parsed.data.phone,
-    },
-    content: { kind: "text", text: parsed.data.message },
-  });
-
   try {
+    const event = inboundChannelEventSchema.parse({
+      type: "message.received",
+      clinicId: clinic.id,
+      channel: "web",
+      provider: "recepia-web",
+      eventId: parsed.data.messageId,
+      externalThreadId: parsed.data.sessionId,
+      externalMessageId: parsed.data.messageId,
+      occurredAt: new Date().toISOString(),
+      contact: {
+        externalId: parsed.data.sessionId,
+        phone: parsed.data.phone,
+      },
+      content: { kind: "text", text: parsed.data.message },
+    });
     const result = await processInboundMessage(supabaseAdmin, event);
     return Response.json(result);
   } catch (error) {

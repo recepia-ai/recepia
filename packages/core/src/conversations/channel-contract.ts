@@ -3,7 +3,7 @@ import { z } from "zod";
 export const channelSchema = z.enum(["web", "whatsapp", "phone"]);
 
 const baseEventSchema = z.object({
-  clinicId: z.string().uuid(),
+  clinicId: z.string().guid(),
   channel: channelSchema,
   provider: z.string().trim().min(1),
   eventId: z.string().trim().min(1),
@@ -61,7 +61,7 @@ export const inboundChannelEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export const outboundMessageSchema = z.object({
-  clinicId: z.string().uuid(),
+  clinicId: z.string().guid(),
   conversationId: z.string().uuid(),
   channel: channelSchema,
   externalThreadId: z.string().trim().min(1),

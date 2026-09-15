@@ -9,6 +9,17 @@ type ChatMessage = {
   content: string;
 };
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  const body = await response.text();
+  if (!body) return null;
+
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeSpanishPhone(value: string): string | null {
   const compact = value.replace(/[\s()-]/g, "");
   if (/^[679][0-9]{8}$/.test(compact)) return `+34${compact}`;
@@ -42,14 +53,14 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
     const syncMessages = async () => {
       const query = new URLSearchParams({ clinicSlug, sessionId, phone });
       const response = await fetch(`/api/channels/web/messages?${query}`, { cache: "no-store" });
-      if (!response.ok || cancelled) return;
-      const result = (await response.json()) as {
+      const result = await readJsonResponse<{
         messages?: Array<{
           id: string;
           sender: "agent" | "human" | "system";
           content: string | null;
         }>;
-      };
+      }>(response);
+      if (!response.ok || !result || cancelled) return;
       const fresh = (result.messages ?? []).filter(
         (message) => message.content && !seenServerMessages.current.has(message.id),
       );
@@ -101,13 +112,14 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ clinicSlug, sessionId, messageId, message: content, phone }),
       });
-      const result = (await response.json()) as {
+      const result = await readJsonResponse<{
         response?: string | null;
         queuedForHuman?: boolean;
         error?: string;
-      };
+      }>(response);
 
-      if (!response.ok) throw new Error(result.error ?? "No se pudo enviar el mensaje.");
+      if (!response.ok) throw new Error(result?.error ?? "No se pudo enviar el mensaje.");
+      if (!result) throw new Error("El servidor devolvió una respuesta vacía o no válida.");
 
       if (result.queuedForHuman) {
         setMessages((current) => [
