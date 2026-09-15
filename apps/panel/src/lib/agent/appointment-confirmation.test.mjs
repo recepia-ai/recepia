@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hasExplicitAppointmentConfirmation } from "./appointment-confirmation.ts";
+import {
+  getExplicitAppointmentConfirmation,
+  hasExplicitAppointmentConfirmation,
+} from "./appointment-confirmation.ts";
 
 test("accepts an affirmative reply after an explicit confirmation question", () => {
   assert.equal(
@@ -82,5 +85,52 @@ test("uses the latest conversational message and ignores tool evidence", () => {
       "Vale, adelante",
     ),
     true,
+  );
+});
+
+test("recognizes an explicit reschedule confirmation", () => {
+  assert.equal(
+    getExplicitAppointmentConfirmation(
+      [
+        {
+          sender: "agent",
+          content: "Voy a cambiar la cita al viernes a las 17:00. ¿Confirmas el cambio de la cita?",
+        },
+      ],
+      "Sí, confirmo el cambio",
+    ),
+    "modify",
+  );
+});
+
+test("recognizes an explicit cancellation confirmation", () => {
+  assert.equal(
+    getExplicitAppointmentConfirmation(
+      [
+        {
+          sender: "agent",
+          content: "Vas a cancelar la cita del jueves. ¿Confirmas la cancelación de la cita?",
+        },
+      ],
+      "Sí, confirmo la cancelación",
+    ),
+    "cancel",
+  );
+});
+
+test("does not treat cancellation confirmation as booking confirmation", () => {
+  const history = [
+    { sender: "agent", content: "Vas a cancelar esta cita. ¿Confirmas la cancelación de la cita?" },
+  ];
+  assert.equal(hasExplicitAppointmentConfirmation(history, "Sí"), false);
+});
+
+test("rejects a conditional cancellation confirmation", () => {
+  assert.equal(
+    getExplicitAppointmentConfirmation(
+      [{ sender: "agent", content: "¿Confirmas la cancelación de la cita?" }],
+      "Sí, pero mejor cámbiala",
+    ),
+    null,
   );
 });

@@ -66,6 +66,29 @@ export function isSameAppointmentToolInput(
   });
 }
 
+export function isSameAppointmentMutationToolInput(
+  toolName: string,
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+): boolean {
+  if (toolName === "create_appointment") return isSameAppointmentToolInput(left, right);
+  if (toolName === "modify_appointment") {
+    return (
+      left.appointment_id === right.appointment_id &&
+      left.notes === right.notes &&
+      (left.notes_mode ?? "append") === (right.notes_mode ?? "append") &&
+      ((typeof left.starts_at === "string" &&
+        typeof right.starts_at === "string" &&
+        sameInstant(left.starts_at, right.starts_at)) ||
+        left.starts_at === right.starts_at)
+    );
+  }
+  if (toolName === "cancel_appointment") {
+    return left.appointment_id === right.appointment_id && left.reason === right.reason;
+  }
+  return false;
+}
+
 export function markAppointmentResultReused<T extends { success: boolean }>(result: T): T {
   if (!result.success || !("data" in result) || !result.data || typeof result.data !== "object") {
     return result;
@@ -74,6 +97,21 @@ export function markAppointmentResultReused<T extends { success: boolean }>(resu
   return {
     ...result,
     data: { ...result.data, already_created: true },
+  };
+}
+
+export function markAppointmentMutationResultReused<T extends { success: boolean }>(
+  toolName: string,
+  result: T,
+): T {
+  if (toolName === "create_appointment") return markAppointmentResultReused(result);
+  if (!result.success || !("data" in result) || !result.data || typeof result.data !== "object") {
+    return result;
+  }
+
+  return {
+    ...result,
+    data: { ...result.data, already_applied: true },
   };
 }
 
@@ -96,7 +134,9 @@ export function shouldBlockBookingErrorEscalation(
 
   const hasBookingFailure = attempts.some(
     (attempt) =>
-      (attempt.name === "create_appointment" || attempt.name === "cancel_appointment") &&
+      (attempt.name === "create_appointment" ||
+        attempt.name === "modify_appointment" ||
+        attempt.name === "cancel_appointment") &&
       !attempt.output.success,
   );
 

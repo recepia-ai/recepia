@@ -1,10 +1,10 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "./anthropic-client";
-import { hasExplicitAppointmentConfirmation } from "./appointment-confirmation";
+import { getExplicitAppointmentConfirmation } from "./appointment-confirmation";
 import {
-  isSameAppointmentToolInput,
-  markAppointmentResultReused,
+  isSameAppointmentMutationToolInput,
+  markAppointmentMutationResultReused,
   shouldBlockBookingErrorEscalation,
 } from "./appointment-reliability";
 import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
@@ -207,7 +207,10 @@ export async function runAgentLoop(params: {
 
     const allToolCalls: ToolCallRecord[] = [];
     let finalText = "";
-    const appointmentConfirmed = hasExplicitAppointmentConfirmation(previousMessages, userMessage);
+    const appointmentConfirmation = getExplicitAppointmentConfirmation(
+      previousMessages,
+      userMessage,
+    );
 
     // ---- Main loop ----
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -323,14 +326,18 @@ export async function runAgentLoop(params: {
         for (const tu of toolUseBlocks) {
           const tool = getTool(tu.name as string);
           const toolInput = (tu.input as Record<string, unknown>) ?? {};
-          const repeatedAppointmentCall =
-            tu.name === "create_appointment"
-              ? allToolCalls.find(
-                  (call) =>
-                    call.name === "create_appointment" &&
-                    isSameAppointmentToolInput(call.input, toolInput),
-                )
-              : undefined;
+          const isAppointmentMutation = [
+            "create_appointment",
+            "modify_appointment",
+            "cancel_appointment",
+          ].includes(tu.name as string);
+          const repeatedAppointmentCall = isAppointmentMutation
+            ? allToolCalls.find(
+                (call) =>
+                  call.name === tu.name &&
+                  isSameAppointmentMutationToolInput(tu.name as string, call.input, toolInput),
+              )
+            : undefined;
           let toolResult: ToolResult<unknown>;
 
           if (!tool) {
@@ -340,7 +347,10 @@ export async function runAgentLoop(params: {
               error_code: "UNKNOWN_TOOL",
             };
           } else if (repeatedAppointmentCall) {
-            toolResult = markAppointmentResultReused(repeatedAppointmentCall.output);
+            toolResult = markAppointmentMutationResultReused(
+              tu.name as string,
+              repeatedAppointmentCall.output,
+            );
           } else if (
             tu.name === "escalate_to_human" &&
             shouldBlockBookingErrorEscalation(
@@ -356,7 +366,14 @@ export async function runAgentLoop(params: {
               error_code: "ESCALATION_NOT_JUSTIFIED",
             };
           } else {
-            const ctx = buildToolContext(clinicId, conversationId, appointmentConfirmed);
+            const ctx = buildToolContext(
+              clinicId,
+              conversationId,
+              appointmentConfirmation === "create",
+              appointmentConfirmation === "modify" || appointmentConfirmation === "cancel"
+                ? appointmentConfirmation
+                : null,
+            );
             toolResult = await invokeTool(tool, toolInput, ctx);
           }
 

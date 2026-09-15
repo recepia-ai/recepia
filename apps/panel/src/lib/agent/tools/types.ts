@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@recepia/db";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,8 @@ export type ToolContext = {
   /** True only when the current client turn explicitly confirms a proposal
    *  made by the Agent in the immediately preceding conversational turn. */
   appointmentConfirmed: boolean;
+  /** The appointment mutation explicitly confirmed in the current client turn. */
+  appointmentMutationConfirmed: "modify" | "cancel" | null;
   /** Supabase admin client (service_role, bypasses RLS). */
   supabaseAdmin: SupabaseClient<Database>;
   /** Lightweight logger — use for debugging and tracing. */

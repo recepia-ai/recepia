@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { uuidSchema } from "@/lib/uuid-schema";
+import { hasRequiredAppointmentMutationConfirmation } from "@/lib/agent/appointment-management";
 import { getValidAccessToken } from "@/lib/google-tokens";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import { uuidSchema } from "@/lib/uuid-schema";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
   appointment_id: uuidSchema,
@@ -13,9 +14,18 @@ type Input = z.infer<typeof inputSchema>;
 type Output = {
   appointment_id: string;
   cancelled: boolean;
+  already_applied: boolean;
 };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
+  if (!hasRequiredAppointmentMutationConfirmation(ctx.appointmentMutationConfirmed, "cancel")) {
+    return {
+      success: false,
+      error: "La cancelación requiere confirmación explícita del cliente.",
+      error_code: "CONFIRMATION_REQUIRED",
+    };
+  }
+
   const supabase = ctx.supabaseAdmin;
 
   // Look up the appointment
@@ -28,11 +38,15 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
   if (lookupError) {
     ctx.logger("[cancel_appointment] lookup error", lookupError);
-    return { success: false, error: "Error al buscar la cita." };
+    return { success: false, error: "Error al buscar la cita.", error_code: "LOOKUP_FAILED" };
   }
 
   if (!appointment) {
-    return { success: false, error: "Cita no encontrada en esta clínica." };
+    return {
+      success: false,
+      error: "Cita no encontrada en esta clínica.",
+      error_code: "APPOINTMENT_NOT_FOUND",
+    };
   }
 
   const appt = appointment as {
@@ -44,7 +58,21 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
   };
 
   if (appt.status === "cancelled") {
-    return { success: false, error: "La cita ya está cancelada." };
+    return {
+      success: true,
+      data: {
+        appointment_id: input.appointment_id,
+        cancelled: true,
+        already_applied: true,
+      },
+    };
+  }
+  if (appt.status !== "confirmed") {
+    return {
+      success: false,
+      error: "Solo se pueden cancelar citas confirmadas.",
+      error_code: "APPOINTMENT_NOT_CANCELLABLE",
+    };
   }
 
   // Delete Google Calendar event if it exists
@@ -54,7 +82,8 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
       ctx.logger("[cancel_appointment] token error", tokenResult.error);
       return {
         success: false,
-        error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración.",
+        error: "No se pudo obtener acceso a Google Calendar. Reconecta la integración.",
+        error_code: "GOOGLE_AUTH_REQUIRED",
       };
     }
 
@@ -67,15 +96,23 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
         },
       );
 
-      if (!deleteRes.ok && deleteRes.status !== 410) {
-        const errText = await deleteRes.text();
+      if (!deleteRes.ok && deleteRes.status !== 404 && deleteRes.status !== 410) {
         ctx.logger("[cancel_appointment] Google Calendar DELETE error", {
           status: deleteRes.status,
-          body: errText,
         });
+        return {
+          success: false,
+          error: "No se pudo cancelar el evento en Google Calendar.",
+          error_code: "GOOGLE_DELETE_FAILED",
+        };
       }
     } catch (err) {
-      ctx.logger("[cancel_appointment] Google Calendar network error (non-fatal)", err);
+      ctx.logger("[cancel_appointment] Google Calendar network error", err);
+      return {
+        success: false,
+        error: "Error de red al cancelar el evento en Google Calendar.",
+        error_code: "GOOGLE_NETWORK_ERROR",
+      };
     }
   }
 
@@ -91,7 +128,11 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
   if (updateError) {
     ctx.logger("[cancel_appointment] update error", updateError);
-    return { success: false, error: "Error al cancelar la cita en la base de datos." };
+    return {
+      success: false,
+      error: "Error al cancelar la cita en la base de datos. Puedes reintentar la misma operación.",
+      error_code: "DATABASE_UPDATE_FAILED",
+    };
   }
 
   return {
@@ -99,6 +140,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     data: {
       appointment_id: input.appointment_id,
       cancelled: true,
+      already_applied: false,
     },
   };
 }
@@ -106,7 +148,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 export const cancelAppointmentTool: Tool<Input, Output> = {
   name: "cancel_appointment",
   description:
-    "Cancela una cita existente. Busca la cita por appointment_id, elimina el evento de Google Calendar, y la marca como cancelada. Requiere el motivo de cancelación.",
+    "Cancela una cita confirmada. REQUIERE una confirmación explícita y pura de la cancelación en el turno inmediatamente anterior. Elimina el evento de Google Calendar y marca la cita como cancelada. Una repetición segura devuelve already_applied=true.",
   inputSchema,
   handler,
 };

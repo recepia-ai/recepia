@@ -1,13 +1,21 @@
 import { z } from "zod";
-import { uuidSchema } from "@/lib/uuid-schema";
-import { getValidAccessToken } from "@/lib/google-tokens";
+import {
+  hasRequiredAppointmentMutationConfirmation,
+  isRequestedRescheduleAvailable,
+  mergeAppointmentNotes,
+  updateGoogleCalendarNotes,
+} from "@/lib/agent/appointment-management";
+import { checkAvailabilityForClinic } from "@/lib/availability-core";
 import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import { getValidAccessToken } from "@/lib/google-tokens";
+import { uuidSchema } from "@/lib/uuid-schema";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
   appointment_id: uuidSchema,
   starts_at: z.string().datetime({ offset: true }).optional(),
-  notes: z.string().max(500).optional(),
+  notes: z.string().trim().min(1).max(500).optional(),
+  notes_mode: z.enum(["append", "replace"]).optional(),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -15,20 +23,45 @@ type Input = z.infer<typeof inputSchema>;
 type Output = {
   appointment_id: string;
   modified: boolean;
+  already_applied: boolean;
   starts_at?: string;
+  notes?: string;
 };
 
+type AppointmentRecord = {
+  id: string;
+  status: string;
+  starts_at: string;
+  ends_at: string;
+  google_event_id: string | null;
+  google_calendar_id: string | null;
+  service_id: string | null;
+  vet_user_id: string | null;
+  notes: string | null;
+};
+
+function sameInstant(left: string, right: string): boolean {
+  return Date.parse(left) === Date.parse(right);
+}
+
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
-  const supabase = ctx.supabaseAdmin;
+  if (!hasRequiredAppointmentMutationConfirmation(ctx.appointmentMutationConfirmed, "modify")) {
+    return {
+      success: false,
+      error: "La modificación requiere confirmación explícita del cliente.",
+      error_code: "CONFIRMATION_REQUIRED",
+    };
+  }
 
   if (!input.starts_at && !input.notes) {
     return {
       success: false,
       error: "Debes proporcionar al menos starts_at o notes para modificar.",
+      error_code: "INVALID_MODIFICATION",
     };
   }
 
-  // Look up the appointment with service info
+  const supabase = ctx.supabaseAdmin;
   const { data: appointment, error: lookupError } = await supabase
     .from("appointments")
     .select(
@@ -40,113 +73,183 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
   if (lookupError) {
     ctx.logger("[modify_appointment] lookup error", lookupError);
-    return { success: false, error: "Error al buscar la cita." };
+    return { success: false, error: "Error al buscar la cita.", error_code: "LOOKUP_FAILED" };
   }
-
   if (!appointment) {
-    return { success: false, error: "Cita no encontrada en esta clínica." };
+    return {
+      success: false,
+      error: "Cita no encontrada en esta clínica.",
+      error_code: "APPOINTMENT_NOT_FOUND",
+    };
   }
 
-  const appt = appointment as {
-    id: string;
-    status: string;
-    starts_at: string;
-    ends_at: string;
-    google_event_id: string | null;
-    google_calendar_id: string | null;
-    service_id: string;
-    vet_user_id: string | null;
-    notes: string | null;
-  };
+  const appt = appointment as AppointmentRecord;
+  if (appt.status !== "confirmed") {
+    return {
+      success: false,
+      error:
+        appt.status === "cancelled"
+          ? "No se puede modificar una cita cancelada."
+          : "Solo se pueden modificar citas confirmadas.",
+      error_code: "APPOINTMENT_NOT_MODIFIABLE",
+    };
+  }
 
-  if (appt.status === "cancelled") {
-    return { success: false, error: "No se puede modificar una cita cancelada." };
+  const changesStart = Boolean(input.starts_at && !sameInstant(input.starts_at, appt.starts_at));
+  const newNotes = input.notes
+    ? mergeAppointmentNotes(appt.notes, input.notes, input.notes_mode ?? "append")
+    : appt.notes;
+  const changesNotes = newNotes !== appt.notes;
+
+  if (!changesStart && !changesNotes) {
+    return {
+      success: true,
+      data: {
+        appointment_id: input.appointment_id,
+        modified: true,
+        already_applied: true,
+        starts_at: appt.starts_at,
+        notes: appt.notes ?? undefined,
+      },
+    };
   }
 
   let newStartsAt = appt.starts_at;
   let newEndsAt = appt.ends_at;
-  let newNotes = input.notes ?? appt.notes;
+  if (changesStart && input.starts_at) {
+    if (!appt.service_id || !appt.vet_user_id) {
+      return {
+        success: false,
+        error: "La cita no tiene servicio o veterinario válidos para comprobar disponibilidad.",
+        error_code: "APPOINTMENT_DATA_INCOMPLETE",
+      };
+    }
 
-  // Recalculate ends_at if starts_at changed
-  if (input.starts_at && input.starts_at !== appt.starts_at) {
-    const { data: service } = await supabase
+    const availability = await checkAvailabilityForClinic(ctx.clinicId, {
+      service_id: appt.service_id,
+      vet_user_id: appt.vet_user_id,
+      date_from: input.starts_at,
+      date_to: input.starts_at,
+    });
+    if (!("slots" in availability)) {
+      return {
+        success: false,
+        error: availability.error,
+        error_code: "AVAILABILITY_UNAVAILABLE",
+      };
+    }
+    if (!isRequestedRescheduleAvailable(availability.slots, input.starts_at, appt.vet_user_id)) {
+      return {
+        success: false,
+        error: "El horario elegido ya no está disponible. Consulta disponibilidad de nuevo.",
+        error_code: "SLOT_NO_LONGER_AVAILABLE",
+      };
+    }
+
+    const { data: service, error: serviceError } = await supabase
       .from("services")
       .select("duration_minutes")
       .eq("id", appt.service_id)
       .eq("clinic_id", ctx.clinicId)
       .maybeSingle();
-
-    if (!service) {
-      return { success: false, error: "Servicio asociado no encontrado." };
+    if (serviceError || !service) {
+      return {
+        success: false,
+        error: "Servicio asociado no encontrado.",
+        error_code: "SERVICE_NOT_FOUND",
+      };
     }
 
     const durationMs = (service as { duration_minutes: number }).duration_minutes * 60 * 1000;
     newStartsAt = input.starts_at;
-    newEndsAt = new Date(new Date(input.starts_at).getTime() + durationMs).toISOString();
+    newEndsAt = new Date(Date.parse(input.starts_at) + durationMs).toISOString();
   }
 
-  // Update Google Calendar event if it exists
   if (appt.google_event_id && appt.google_calendar_id) {
     const tokenResult = await getValidAccessToken(ctx.clinicId);
     if ("error" in tokenResult) {
       ctx.logger("[modify_appointment] token error", tokenResult.error);
       return {
         success: false,
-        error: "No se pudo obtener acceso a Google Calendar. Reconoce la integración.",
+        error: "No se pudo obtener acceso a Google Calendar. Reconecta la integración.",
+        error_code: "GOOGLE_AUTH_REQUIRED",
       };
     }
 
+    const eventUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(appt.google_calendar_id)}/events/${encodeURIComponent(appt.google_event_id)}`;
     const patchBody: Record<string, unknown> = {};
-    if (input.starts_at) {
+    if (changesStart) {
       patchBody.start = googleCalendarDateTime(newStartsAt);
       patchBody.end = googleCalendarDateTime(newEndsAt);
     }
 
     try {
-      const patchRes = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(appt.google_calendar_id)}/events/${encodeURIComponent(appt.google_event_id)}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${tokenResult.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(patchBody),
-        },
-      );
+      if (changesNotes && newNotes) {
+        const currentEvent = await fetch(eventUrl, {
+          headers: { Authorization: `Bearer ${tokenResult.access_token}` },
+        });
+        if (!currentEvent.ok) {
+          ctx.logger("[modify_appointment] Google Calendar GET error", {
+            status: currentEvent.status,
+          });
+          return {
+            success: false,
+            error: "No se pudo leer el evento de Google Calendar.",
+            error_code: "GOOGLE_READ_FAILED",
+          };
+        }
+        const eventData = (await currentEvent.json()) as { description?: string };
+        patchBody.description = updateGoogleCalendarNotes(eventData.description, newNotes);
+      }
 
+      const patchRes = await fetch(eventUrl, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${tokenResult.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(patchBody),
+      });
       if (!patchRes.ok) {
-        const errText = await patchRes.text();
         ctx.logger("[modify_appointment] Google Calendar PATCH error", {
           status: patchRes.status,
-          body: errText,
         });
-        return { success: false, error: "No se pudo actualizar el evento en Google Calendar." };
+        return {
+          success: false,
+          error: "No se pudo actualizar el evento en Google Calendar.",
+          error_code: "GOOGLE_UPDATE_FAILED",
+        };
       }
     } catch (err) {
       ctx.logger("[modify_appointment] Google Calendar network error", err);
-      return { success: false, error: "Error de red al actualizar Google Calendar." };
+      return {
+        success: false,
+        error: "Error de red al actualizar Google Calendar.",
+        error_code: "GOOGLE_NETWORK_ERROR",
+      };
     }
   }
 
-  // Update appointment in DB
   const updateData: Record<string, unknown> = {};
-  if (input.starts_at) {
+  if (changesStart) {
     updateData.starts_at = newStartsAt;
     updateData.ends_at = newEndsAt;
   }
-  if (input.notes) {
-    updateData.notes = input.notes;
-  }
+  if (changesNotes) updateData.notes = newNotes;
 
+  // biome-ignore lint/suspicious/noExplicitAny: Dynamic partial update is validated above.
   const { error: updateError } = await (supabase.from("appointments") as any)
     .update(updateData)
     .eq("id", input.appointment_id)
     .eq("clinic_id", ctx.clinicId);
-
   if (updateError) {
     ctx.logger("[modify_appointment] update error", updateError);
-    return { success: false, error: "Error al actualizar la cita en la base de datos." };
+    return {
+      success: false,
+      error:
+        "Error al actualizar la cita en la base de datos. Puedes reintentar la misma operación.",
+      error_code: "DATABASE_UPDATE_FAILED",
+    };
   }
 
   return {
@@ -154,7 +257,9 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     data: {
       appointment_id: input.appointment_id,
       modified: true,
-      starts_at: input.starts_at ? newStartsAt : undefined,
+      already_applied: false,
+      starts_at: changesStart ? newStartsAt : undefined,
+      notes: changesNotes ? (newNotes ?? undefined) : undefined,
     },
   };
 }
@@ -162,7 +267,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 export const modifyAppointmentTool: Tool<Input, Output> = {
   name: "modify_appointment",
   description:
-    "Modifica una cita existente (fecha/hora y/o notas). No se puede modificar una cita cancelada. Si cambias la fecha, recalcula la hora de fin según la duración del servicio.",
+    "Modifica fecha/hora y/o notas de una cita confirmada. REQUIERE una confirmación explícita de la modificación en el turno inmediatamente anterior. Para reprogramar, el Agent debe haber ofrecido un slot de check_availability y la tool vuelve a validar ese slot antes de cambiar nada. notes_mode=append preserva las notas existentes; usa replace solo si el cliente pide sustituirlas. Repeticiones ya aplicadas devuelven already_applied=true.",
   inputSchema,
   handler,
 };

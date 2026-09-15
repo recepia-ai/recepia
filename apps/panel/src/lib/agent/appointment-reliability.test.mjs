@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   findMatchingConfirmedAppointment,
+  isSameAppointmentMutationToolInput,
   isSameAppointmentToolInput,
+  markAppointmentMutationResultReused,
   markAppointmentResultReused,
   shouldBlockBookingErrorEscalation,
 } from "./appointment-reliability.ts";
@@ -60,6 +62,38 @@ test("marks a reused successful tool result without changing its appointment", (
     {
       success: true,
       data: { appointment_id: "appointment-1", already_created: true },
+    },
+  );
+});
+
+test("recognizes duplicate modify and cancel tool calls", () => {
+  assert.equal(
+    isSameAppointmentMutationToolInput(
+      "modify_appointment",
+      { appointment_id: "appointment-1", starts_at: "2026-09-18T17:00:00+02:00" },
+      { appointment_id: "appointment-1", starts_at: "2026-09-18T15:00:00.000Z" },
+    ),
+    true,
+  );
+  assert.equal(
+    isSameAppointmentMutationToolInput(
+      "cancel_appointment",
+      { appointment_id: "appointment-1", reason: "Petición del cliente" },
+      { appointment_id: "appointment-1", reason: "Petición del cliente" },
+    ),
+    true,
+  );
+});
+
+test("marks a reused modification result as already applied", () => {
+  assert.deepEqual(
+    markAppointmentMutationResultReused("modify_appointment", {
+      success: true,
+      data: { appointment_id: "appointment-1", modified: true, already_applied: false },
+    }),
+    {
+      success: true,
+      data: { appointment_id: "appointment-1", modified: true, already_applied: true },
     },
   );
 });

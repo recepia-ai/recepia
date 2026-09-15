@@ -66,6 +66,7 @@ export async function invokeTool<TInput, TOutput>(
   // console.error para visibilidad inmediata en terminal dev.
   // ------------------------------------------------------------------
   try {
+    // biome-ignore lint/suspicious/noExplicitAny: Generated table typing does not include debug-only tool payloads.
     const { error: insertErr } = await (ctx.supabaseAdmin.from("tool_invocations") as any).insert({
       clinic_id: ctx.clinicId,
       conversation_id: ctx.conversationId,
@@ -108,11 +109,13 @@ export function buildToolContext(
   clinicId: string,
   conversationId: string | null = null,
   appointmentConfirmed = false,
+  appointmentMutationConfirmed: "modify" | "cancel" | null = null,
 ): ToolContext {
   return {
     clinicId,
     conversationId,
     appointmentConfirmed,
+    appointmentMutationConfirmed,
     supabaseAdmin: createAdminClient(),
     logger: (msg: string, data?: unknown) => {
       console.log(`[ToolContext] ${msg}`, data ?? "");
