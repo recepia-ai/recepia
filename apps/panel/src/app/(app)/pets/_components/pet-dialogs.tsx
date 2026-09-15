@@ -164,7 +164,7 @@ export function PetRecordDialog({ petId }: { petId: string }) {
             Registra patologías, informes, radiografías y otros documentos de la mascota.
           </DialogDescription>
         </DialogHeader>
-        <form action={submit} encType="multipart/form-data" className="space-y-4">
+        <form action={submit} className="space-y-4">
           <input type="hidden" name="pet_id" value={petId} />
           <div className="grid gap-4 sm:grid-cols-2">
             <SelectField label="Tipo" name="record_type" defaultValue="pathology">
