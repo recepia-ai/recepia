@@ -14,8 +14,7 @@ export async function middleware(request: NextRequest) {
     pathname === "/aviso-legal" ||
     pathname === "/eliminacion-de-datos" ||
     pathname.startsWith("/chat/") ||
-    pathname.startsWith("/api/channels/") ||
-    pathname.startsWith("/api/test-agent");
+    pathname.startsWith("/api/channels/");
 
   // Webhooks and public routes must never depend on the dashboard session.
   // In particular, a temporary Auth outage must not stop inbound WhatsApp events.

@@ -1,10 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { startConversation, loadMessages } from "@/lib/agent/conversation-store";
 import { runAgentLoop } from "@/lib/agent/loop";
+import { isLegacyTestAgentApiEnabled } from "@/lib/test-routes";
 
 const CLINIC_ID = "00000000-0000-0000-0000-000000000001";
 
 export async function POST(request: Request) {
+  if (!isLegacyTestAgentApiEnabled()) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
   try {
     const { phone, message, conversationId } = await request.json();
     if (!message) {

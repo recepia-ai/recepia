@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAppBaseUrl } from "@/lib/app-url";
 import { ensureDedicatedVetCalendar } from "@/lib/google-calendar-provisioning";
 import { revalidatePath } from "next/cache";
 import {
@@ -116,10 +117,7 @@ export async function inviteMember(
   // Send email via Supabase Admin API
   try {
     const supabaseAdmin = createAdminClient();
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_VERCEL_URL ??
-      "https://recepia-panel.vercel.app";
+    const baseUrl = getAppBaseUrl();
 
     // The invite email authenticates the user and lands them on /auth/callback,
     // which exchanges the code for a session and drops them into the app. The
@@ -188,10 +186,7 @@ export async function resendInvitation(invitationId: string): Promise<InviteMemb
 
   try {
     const supabaseAdmin = createAdminClient();
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_VERCEL_URL ??
-      "https://recepia-panel.vercel.app";
+    const baseUrl = getAppBaseUrl();
 
     const redirectTo = `${baseUrl}/auth/callback?next=/`;
 
