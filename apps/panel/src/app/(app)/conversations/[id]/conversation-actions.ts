@@ -61,7 +61,7 @@ export async function takeControl(
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id, channel")
+    .select("id, channel, status, controlled_by")
     .eq("id", conversation_id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -69,6 +69,17 @@ export async function takeControl(
   if (!convGuard) return { error: "Conversación no encontrada" };
   if (convGuard.channel === "phone") {
     return { error: "Las llamadas se transfieren al equipo; no admiten control por chat." };
+  }
+  if (convGuard.status === "human_handling") {
+    return {
+      error:
+        convGuard.controlled_by === actorId
+          ? "Ya tienes el control de esta conversación."
+          : "Otra persona del equipo ya controla esta conversación.",
+    };
+  }
+  if (convGuard.status !== "active" && convGuard.status !== "awaiting_human") {
+    return { error: "Esta conversación ya está cerrada y no se puede tomar." };
   }
 
   const { data: updated, error } = await supabase
@@ -80,6 +91,7 @@ export async function takeControl(
     })
     .eq("id", conversation_id)
     .eq("clinic_id", clinicId)
+    .in("status", ["active", "awaiting_human"])
     .select()
     .maybeSingle();
 
@@ -107,7 +119,7 @@ export async function returnToAgent(
 ): Promise<ReturnToAgentState> {
   const context = await actionContext();
   if ("error" in context) return { error: context.error };
-  const { supabase, clinicId } = context;
+  const { supabase, actorId, clinicId } = context;
 
   // formData.get() can return FormDataEntryValue which may not survive
   // Next.js Server Action serialization as a plain string. Coerce explicitly.
@@ -132,12 +144,18 @@ export async function returnToAgent(
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id, metadata")
+    .select("id, status, controlled_by, metadata")
     .eq("id", conversation_id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
 
   if (!convGuard) return { error: "Conversación no encontrada" };
+  if (convGuard.status !== "human_handling") {
+    return { error: "La conversación no está bajo control humano." };
+  }
+  if (convGuard.controlled_by !== actorId) {
+    return { error: "Solo la persona que tomó la conversación puede devolverla a la IA." };
+  }
 
   const currentMetadata =
     convGuard.metadata &&
@@ -171,6 +189,8 @@ export async function returnToAgent(
     })
     .eq("id", conversation_id)
     .eq("clinic_id", clinicId)
+    .eq("status", "human_handling")
+    .eq("controlled_by", actorId)
     .select()
     .maybeSingle();
 
@@ -225,7 +245,7 @@ export async function sendMessage(
 
   const { data: convGuard } = await supabase
     .from("conversations")
-    .select("id, status, channel, channel_thread_id")
+    .select("id, status, channel, channel_thread_id, controlled_by")
     .eq("id", conversation_id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -238,6 +258,9 @@ export async function sendMessage(
   // Only allow sending when the human is in control
   if (convGuard.status !== "human_handling") {
     return { error: "Toma el control primero para enviar mensajes." };
+  }
+  if (convGuard.controlled_by !== actorId) {
+    return { error: "Otra persona del equipo tiene el control de esta conversación." };
   }
 
   let providerMessageId: string | undefined;

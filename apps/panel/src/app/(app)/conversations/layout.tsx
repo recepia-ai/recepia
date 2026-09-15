@@ -41,6 +41,25 @@ export default async function ConversationsLayout({ children }: { children: Reac
     ];
   });
 
+  const clientIds = [...new Set(rows.flatMap((row) => (row.client_id ? [row.client_id] : [])))];
+  const { data: inboxPets } =
+    clientIds.length > 0
+      ? await supabase
+          .from("pets")
+          .select("client_id, name")
+          .eq("clinic_id", clinicId)
+          .eq("active", true)
+          .is("deleted_at", null)
+          .in("client_id", clientIds)
+          .order("name", { ascending: true })
+      : { data: [] };
+  const petNamesByClient = new Map<string, string[]>();
+  for (const pet of inboxPets ?? []) {
+    const names = petNamesByClient.get(pet.client_id) ?? [];
+    names.push(pet.name);
+    petNamesByClient.set(pet.client_id, names);
+  }
+
   return (
     <div className="flex h-full">
       {/* List panel */}
@@ -50,6 +69,7 @@ export default async function ConversationsLayout({ children }: { children: Reac
           client_name: c.client_name,
           client_phone: c.client_phone,
           pet_name: c.pet_name,
+          pet_names: c.client_id ? (petNamesByClient.get(c.client_id) ?? []) : [],
           status: c.status,
           category: c.category,
           urgency_level: c.urgency_level,
@@ -59,7 +79,10 @@ export default async function ConversationsLayout({ children }: { children: Reac
           last_call_duration_seconds: c.last_call_duration_seconds,
           last_message_at: c.last_message_at,
           last_message_preview: c.last_message_preview,
+          last_message_sender: c.last_message_sender,
           started_at: c.started_at,
+          controlled_by: c.controlled_by,
+          metadata: c.metadata,
         }))}
         clinicName={clinicName}
         clinicId={clinicId}

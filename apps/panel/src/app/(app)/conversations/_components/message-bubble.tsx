@@ -11,10 +11,13 @@ type Props = {
 };
 
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString("es-ES", {
+  return new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    day: "2-digit",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(new Date(dateStr));
 }
 
 export function MessageBubble({ content, sender, createdAt, deliveryStatus }: Props) {
@@ -22,15 +25,14 @@ export function MessageBubble({ content, sender, createdAt, deliveryStatus }: Pr
   if (sender === "system") {
     return (
       <div className="flex justify-center py-2">
-        <span className="text-xs text-stone-400">
-          {content ?? "—"}
-        </span>
+        <span className="text-xs text-stone-400">{content ?? "—"}</span>
       </div>
     );
   }
 
   const isClient = sender === "client";
   const isHuman = sender === "human";
+  const senderLabel = isClient ? "Cliente" : isHuman ? "Equipo" : "Recepia IA";
 
   return (
     <div className={`flex ${isClient ? "justify-start" : "justify-end"}`}>
@@ -43,14 +45,13 @@ export function MessageBubble({ content, sender, createdAt, deliveryStatus }: Pr
               : "rounded-tr-md bg-emerald-50"
         }`}
       >
-        <p className="whitespace-pre-wrap text-sm text-stone-900">
-          {content ?? "—"}
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+          {senderLabel}
         </p>
+        <p className="whitespace-pre-wrap text-sm text-stone-900">{content ?? "—"}</p>
         <p className="mt-1 flex items-center gap-1 text-[10px] text-stone-400">
           {formatTime(createdAt)}
-          {!isClient && !isHuman && (
-            <Sparkles className="size-2.5 text-emerald-500" />
-          )}
+          {!isClient && !isHuman && <Sparkles className="size-2.5 text-emerald-500" />}
           {deliveryStatus === "failed" && (
             <span className="font-medium text-red-600">· No entregado</span>
           )}

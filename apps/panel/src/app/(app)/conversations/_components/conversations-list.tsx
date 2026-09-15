@@ -1,15 +1,21 @@
 "use client";
 
 import type { Database } from "@recepia/db";
-import { Globe2, History, MessageCircle, Phone, Plus, Search } from "lucide-react";
+import { CircleAlert, Globe2, History, MessageCircle, Phone, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Input } from "@/components/ui/input";
+import {
+  conversationControlState,
+  escalationReasonLabel,
+  readEscalationDetails,
+} from "@/lib/conversation-inbox";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { ChannelBadge } from "./channel-badge";
+import { ControlBadge } from "./control-badge";
 import { relativeTime } from "./relative-time";
 
 type ConversationRow = {
@@ -17,6 +23,7 @@ type ConversationRow = {
   client_name: string | null;
   client_phone: string | null;
   pet_name: string | null;
+  pet_names: string[];
   status: Database["public"]["Enums"]["conversation_status"];
   category: Database["public"]["Enums"]["conversation_category"] | null;
   urgency_level: Database["public"]["Enums"]["urgency_level"] | null;
@@ -26,7 +33,10 @@ type ConversationRow = {
   last_call_duration_seconds: number | null;
   last_message_at: string | null;
   last_message_preview: string | null;
+  last_message_sender: Database["public"]["Enums"]["message_sender"] | null;
   started_at: string;
+  controlled_by: string | null;
+  metadata: unknown;
 };
 
 function initials(name: string): string {
@@ -44,10 +54,9 @@ type Props = {
   clinicId: string | null;
 };
 
-type StatusFilter = "all" | "open" | "waiting" | "closed";
+type StatusFilter = "all" | "attention" | "ai" | "human" | "closed";
 type ChannelFilter = "all" | "whatsapp" | "phone" | "web";
 
-const OPEN_STATUSES = new Set(["active", "human_handling"]);
 const CLOSED_STATUSES = new Set(["completed", "transferred", "abandoned"]);
 
 function formatDuration(seconds: number): string {
@@ -159,12 +168,9 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
         return false;
       }
 
-      if (statusFilter === "open" && !OPEN_STATUSES.has(conversation.status)) {
-        return false;
-      }
-      if (statusFilter === "waiting" && conversation.status !== "awaiting_human") {
-        return false;
-      }
+      if (statusFilter === "attention" && conversation.status !== "awaiting_human") return false;
+      if (statusFilter === "ai" && conversation.status !== "active") return false;
+      if (statusFilter === "human" && conversation.status !== "human_handling") return false;
       if (statusFilter === "closed" && !CLOSED_STATUSES.has(conversation.status)) {
         return false;
       }
@@ -176,7 +182,7 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
       return [
         conversation.client_name,
         conversation.client_phone,
-        conversation.pet_name,
+        ...conversation.pet_names,
         conversation.last_message_preview,
       ].some((value) => value?.toLocaleLowerCase("es").includes(normalizedQuery));
     });
@@ -238,47 +244,33 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
             />
           </div>
         </div>
-        <div className="flex items-center rounded-lg border border-stone-200 bg-white p-0.5">
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-[11px] font-medium",
-              statusFilter === "all" ? "bg-stone-100 text-stone-700" : "text-stone-500",
-            )}
-          >
-            Todas
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("open")}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-[11px] font-medium",
-              statusFilter === "open" ? "bg-stone-100 text-stone-700" : "text-stone-500",
-            )}
-          >
-            Activas
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("waiting")}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-[11px] font-medium",
-              statusFilter === "waiting" ? "bg-stone-100 text-stone-700" : "text-stone-500",
-            )}
-          >
-            Esperando
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("closed")}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-[11px] font-medium",
-              statusFilter === "closed" ? "bg-stone-100 text-stone-700" : "text-stone-500",
-            )}
-          >
-            Histórico
-          </button>
+        <div className="flex flex-wrap gap-1 rounded-lg border border-stone-200 bg-white p-1">
+          {(
+            [
+              ["all", "Todas"],
+              ["attention", "Atención"],
+              ["ai", "IA"],
+              ["human", "Equipo"],
+              ["closed", "Cerradas"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value)}
+              aria-pressed={statusFilter === value}
+              className={cn(
+                "rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+                statusFilter === value
+                  ? value === "attention"
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-stone-100 text-stone-700"
+                  : "text-stone-500 hover:bg-stone-50",
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="grid grid-cols-4 gap-1 rounded-lg bg-stone-100 p-1">
           {(
@@ -327,6 +319,14 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
             const href = `/conversations/${conv.id}`;
             const isActive = pathname === href;
             const displayName = conv.client_name ?? conv.client_phone ?? "Sin nombre";
+            const controlState = conversationControlState(conv.status);
+            const escalation = readEscalationDetails(conv.metadata);
+            const petLabel = conv.pet_names.length > 0 ? conv.pet_names.join(", ") : conv.pet_name;
+            const preview =
+              conv.last_message_sender === "system" &&
+              /^\[tool_/i.test(conv.last_message_preview ?? "")
+                ? "Actividad técnica registrada"
+                : conv.last_message_preview;
 
             return (
               <Link
@@ -335,9 +335,11 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
                 prefetch={true}
                 className={cn(
                   "block border-b border-stone-100 px-4 py-3 transition-colors",
-                  isActive
+                  controlState === "attention" && "border-l-2 border-amber-500 bg-amber-50/60",
+                  isActive && controlState !== "attention"
                     ? "border-l-2 border-emerald-500 bg-emerald-50/50 pl-[14px]"
-                    : "border-l-2 border-transparent hover:bg-stone-50",
+                    : controlState !== "attention" &&
+                        "border-l-2 border-transparent hover:bg-stone-50",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -353,10 +355,10 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
                         <span className="truncate text-sm font-medium text-stone-900">
                           {displayName}
                         </span>
-                        {conv.pet_name && (
+                        {petLabel && (
                           <>
                             <span className="text-stone-300">·</span>
-                            <span className="truncate text-xs text-stone-500">{conv.pet_name}</span>
+                            <span className="truncate text-xs text-stone-500">{petLabel}</span>
                           </>
                         )}
                       </div>
@@ -368,11 +370,22 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
                     {/* Bottom row */}
                     <div className="mt-1 flex items-center gap-2">
                       <StatusBadge status={conv.status} />
+                      <ControlBadge status={conv.status} compact />
                       <ChannelBadge channel={conv.channel} />
                     </div>
+                    {controlState === "attention" && (
+                      <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-800">
+                        <CircleAlert className="size-3" strokeWidth={2} />
+                        <span className="truncate">
+                          {escalation
+                            ? escalationReasonLabel(escalation.reason)
+                            : "Pendiente del equipo"}
+                        </span>
+                      </div>
+                    )}
                     <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-stone-400">
-                        {conv.last_message_preview ??
+                        {preview ??
                           (conv.channel === "phone" && conv.call_count > 0
                             ? `Llamada${conv.last_call_duration_seconds !== null ? ` · ${formatDuration(conv.last_call_duration_seconds)}` : ""}`
                             : conv.message_count > 0

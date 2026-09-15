@@ -88,7 +88,9 @@ export function MessageInputBar({ conversationId, clientName, status, channel }:
       {isActive && (
         <div className="flex items-center gap-2 rounded-lg bg-stone-50 px-4 py-2.5">
           <Sparkles className="size-4 shrink-0 text-emerald-500" strokeWidth={1.75} />
-          <p className="text-sm text-stone-400">El agente está respondiendo a {clientName}…</p>
+          <p className="text-sm text-stone-500">
+            Recepia IA atenderá automáticamente los próximos mensajes de {clientName}.
+          </p>
         </div>
       )}
 

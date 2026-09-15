@@ -1,16 +1,21 @@
 import type { Database } from "@recepia/db";
-import { ArrowLeft, Mail, MessageSquare, PawPrint, Phone } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { CategoryBadge } from "@/app/(app)/_components/category-badge";
-import { StatusBadge } from "@/app/(app)/_components/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  escalationReasonLabel,
+  isTechnicalConversationMessage,
+  readEscalationDetails,
+} from "@/lib/conversation-inbox";
 import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createClient } from "@/lib/supabase/server";
-import { ChannelBadge } from "../_components/channel-badge";
+import { ControlBadge } from "../_components/control-badge";
 import { EmptyDetail } from "../_components/empty-detail";
 import { MessageBubble } from "../_components/message-bubble";
 import { CallSessionCard } from "./call-session-card";
 import { ConversationAutoRefresh } from "./conversation-auto-refresh";
+import { type AppointmentContext, ConversationContextPanel } from "./conversation-context-panel";
 import { MessageInputBar } from "./message-input-bar";
 import { ReturnToAgentButton } from "./return-to-agent-button";
 import { TakeControlButton } from "./take-control-button";
@@ -20,6 +25,10 @@ type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type PetRow = Database["public"]["Tables"]["pets"]["Row"];
 type MsgRow = Database["public"]["Tables"]["messages"]["Row"];
 type CallSessionRow = Database["public"]["Tables"]["call_sessions"]["Row"];
+type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"] & {
+  pets: { name: string } | { name: string }[] | null;
+  services: { name: string } | { name: string }[] | null;
+};
 
 const SPECIES_ICONS: Record<string, string> = {
   dog: "🐕",
@@ -121,26 +130,113 @@ export default async function ConversationDetailPage({
         .maybeSingle()
     : { data: null };
 
+  const { data: upcomingAppointments } = convData.client_id
+    ? await supabase
+        .from("appointments")
+        .select("id, starts_at, status, vet_user_id, pets(name), services(name), updated_at")
+        .eq("clinic_id", clinicId)
+        .eq("client_id", convData.client_id)
+        .eq("status", "confirmed")
+        .gte("starts_at", new Date().toISOString())
+        .order("starts_at", { ascending: true })
+        .limit(5)
+    : { data: [] };
+  const appointmentRows = (upcomingAppointments ?? []) as AppointmentRow[];
+  const appointmentVetIds = [
+    ...new Set(
+      appointmentRows.flatMap((appointment) =>
+        appointment.vet_user_id ? [appointment.vet_user_id] : [],
+      ),
+    ),
+  ];
+  const { data: appointmentVets } =
+    appointmentVetIds.length > 0
+      ? await supabase
+          .from("clinic_users")
+          .select("id, display_name")
+          .eq("clinic_id", clinicId)
+          .in("id", appointmentVetIds)
+      : { data: [] };
+  const vetNameById = new Map(
+    (appointmentVets ?? []).map((vet) => [vet.id, vet.display_name ?? "Veterinario sin nombre"]),
+  );
+
   const clientData = client as ClientRow | null;
   const petData = pet as PetRow | null;
   const clientPetRows = (clientPets ?? []) as PetRow[];
   const msgs = (messages ?? []) as MsgRow[];
   const calls = (callSessions ?? []) as CallSessionRow[];
+  const escalation = readEscalationDetails(convData.metadata);
+  const primaryMessages = msgs.filter(
+    (message) =>
+      !isTechnicalConversationMessage({
+        sender: message.sender,
+        content: message.content,
+        contentType: message.content_type,
+      }),
+  );
+  const technicalMessages = msgs.filter((message) =>
+    isTechnicalConversationMessage({
+      sender: message.sender,
+      content: message.content,
+      contentType: message.content_type,
+    }),
+  );
+  const appointmentContext: AppointmentContext[] = appointmentRows.map((appointment) => {
+    const petRelation = appointment.pets
+      ? Array.isArray(appointment.pets)
+        ? appointment.pets[0]
+        : appointment.pets
+      : null;
+    const serviceRelation = appointment.services
+      ? Array.isArray(appointment.services)
+        ? appointment.services[0]
+        : appointment.services
+      : null;
+    return {
+      id: appointment.id,
+      startsAt: appointment.starts_at,
+      status: appointment.status,
+      petName: petRelation?.name ?? "Mascota sin identificar",
+      serviceName: serviceRelation?.name ?? "Servicio sin identificar",
+      vetName: appointment.vet_user_id
+        ? (vetNameById.get(appointment.vet_user_id) ?? "Veterinario sin identificar")
+        : "Veterinario sin identificar",
+    };
+  });
+  const contextProps = {
+    client: clientData
+      ? {
+          id: clientData.id,
+          name: clientData.name,
+          phone: clientData.phone,
+          email: clientData.email,
+        }
+      : null,
+    pets: clientPetRows.map((clientPet) => ({
+      id: clientPet.id,
+      name: clientPet.name,
+      species: clientPet.species,
+      breed: clientPet.breed,
+      selected: clientPet.id === convData.pet_id,
+    })),
+    appointments: appointmentContext,
+    channel: convData.channel,
+    status: convData.status,
+    controllerName: controller?.display_name ?? controller?.email ?? null,
+  };
   const latestMessage = msgs.at(-1);
   const conversationVersion = [
     convData.updated_at,
     clientData?.updated_at,
     petData?.updated_at,
     ...clientPetRows.flatMap((clientPet) => [clientPet.id, clientPet.updated_at]),
+    ...appointmentRows.flatMap((appointment) => [appointment.id, appointment.updated_at]),
     latestMessage?.created_at,
     latestMessage?.id,
   ]
     .filter(Boolean)
     .join(":");
-
-  const hasPhone = Boolean(clientData?.phone);
-  const hasEmail = Boolean(clientData?.email);
-  const hasContactInfo = hasPhone || hasEmail;
 
   return (
     <div className="flex h-full flex-col bg-white">
@@ -186,6 +282,7 @@ export default async function ConversationDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ControlBadge status={convData.status} />
           {convData.channel !== "phone" &&
             (convData.status === "active" || convData.status === "awaiting_human") && (
               <TakeControlButton conversationId={id} />
@@ -194,131 +291,95 @@ export default async function ConversationDetailPage({
         </div>
       </header>
 
-      {/* Meta info */}
-      <div className="shrink-0 space-y-4 border-b border-stone-100 bg-stone-50 px-6 py-4">
-        <div className="grid grid-cols-3 gap-6">
-          {/* Client info */}
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
-              Cliente
-            </p>
-            <p className="mt-1 text-sm font-medium text-stone-900">{clientData?.name ?? "—"}</p>
-            {clientData && (
-              <Link
-                href={`/clients/${clientData.id}`}
-                className="mt-1 inline-flex text-[11px] font-medium text-emerald-700 hover:underline"
-              >
-                Ver ficha del cliente
-              </Link>
-            )}
-            {hasContactInfo && (
-              <div className="mt-1 space-y-0.5">
-                {clientData?.phone && (
-                  <p className="flex items-center gap-1 text-xs text-stone-500">
-                    <Phone className="size-3" strokeWidth={1.75} />
-                    {clientData.phone}
-                  </p>
-                )}
-                {clientData?.email && (
-                  <p className="flex items-center gap-1 text-xs text-stone-500">
-                    <Mail className="size-3" strokeWidth={1.75} />
-                    {clientData.email}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Client pets */}
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
-              Mascotas del cliente
-            </p>
-            {clientPetRows.length > 0 ? (
-              <div className="mt-1.5 space-y-1.5">
-                {clientPetRows.map((clientPet) => (
-                  <Link
-                    key={clientPet.id}
-                    href={`/pets/${clientPet.id}`}
-                    className="block rounded-md border border-stone-200 bg-white px-2.5 py-2 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40"
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-stone-900">
-                      <PawPrint className="size-3.5 text-stone-400" strokeWidth={1.75} />
-                      {clientPet.name}
-                      {clientPet.id === convData.pet_id && (
-                        <span className="ml-auto text-[10px] font-medium text-emerald-700">
-                          En esta conversación
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-stone-500">
-                      {[clientPet.species, clientPet.breed].filter(Boolean).join(" · ")}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-stone-400">Sin mascotas vinculadas</p>
-            )}
-          </div>
-
-          {/* Conversation status */}
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
-              Conversación
-            </p>
-            <div className="mt-1 space-y-1.5">
-              <StatusBadge status={convData.status} />
-              <ChannelBadge channel={convData.channel} />
-              {controller && (
-                <p className="text-xs text-stone-500">
-                  En control: {controller.display_name ?? controller.email ?? "miembro del equipo"}
-                </p>
-              )}
+      {escalation && (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-700" strokeWidth={2} />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-amber-900">
+                {escalationReasonLabel(escalation.reason)} · prioridad {escalation.urgency}
+              </p>
+              <p className="mt-0.5 text-xs leading-5 text-amber-800">{escalation.summary}</p>
             </div>
+            {convData.channel !== "phone" && convData.status === "awaiting_human" && (
+              <TakeControlButton conversationId={id} compact />
+            )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Messages timeline */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {calls.length > 0 && (
-          <div className="mx-auto mb-4 max-w-3xl space-y-3">
-            {calls.map((call) => (
-              <CallSessionCard key={call.id} call={call} />
-            ))}
-          </div>
-        )}
-        {msgs.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <EmptyDetail />
-          </div>
-        ) : (
-          <div className="mx-auto max-w-3xl space-y-3">
-            {msgs.map((m) => (
-              <MessageBubble
-                key={m.id}
-                content={m.content}
-                sender={m.sender}
-                createdAt={m.created_at}
-                deliveryStatus={
-                  m.metadata && typeof m.metadata === "object" && !Array.isArray(m.metadata)
-                    ? String((m.metadata as Record<string, unknown>).delivery_status ?? "")
-                    : undefined
-                }
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <details className="shrink-0 border-b border-stone-200 bg-stone-50 xl:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-xs font-semibold text-stone-700">
+          Contexto del caso
+          <ChevronDown className="size-4 text-stone-400" strokeWidth={1.75} />
+        </summary>
+        <ConversationContextPanel {...contextProps} />
+      </details>
 
-      {/* Input bar */}
-      <MessageInputBar
-        conversationId={id}
-        clientName={clientData?.name ?? clientData?.phone ?? "el cliente"}
-        status={convData.status}
-        channel={convData.channel}
-      />
+      <div className="flex min-h-0 flex-1">
+        <section className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+            {calls.length > 0 && (
+              <div className="mx-auto mb-4 max-w-3xl space-y-3">
+                {calls.map((call) => (
+                  <CallSessionCard key={call.id} call={call} />
+                ))}
+              </div>
+            )}
+            {primaryMessages.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <EmptyDetail />
+              </div>
+            ) : (
+              <div className="mx-auto max-w-3xl space-y-3">
+                {primaryMessages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    content={message.content}
+                    sender={message.sender}
+                    createdAt={message.created_at}
+                    deliveryStatus={
+                      message.metadata &&
+                      typeof message.metadata === "object" &&
+                      !Array.isArray(message.metadata)
+                        ? String(
+                            (message.metadata as Record<string, unknown>).delivery_status ?? "",
+                          )
+                        : undefined
+                    }
+                  />
+                ))}
+
+                {technicalMessages.length > 0 && (
+                  <details className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-medium text-stone-500">
+                      Evidencia técnica · {technicalMessages.length} eventos
+                    </summary>
+                    <div className="mt-2 space-y-1 border-t border-stone-200 pt-2">
+                      {technicalMessages.map((message) => (
+                        <p key={message.id} className="font-mono text-[10px] text-stone-500">
+                          {message.content ?? "Evento técnico"}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+
+          <MessageInputBar
+            conversationId={id}
+            clientName={clientData?.name ?? clientData?.phone ?? "el cliente"}
+            status={convData.status}
+            channel={convData.channel}
+          />
+        </section>
+
+        <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-stone-200 bg-stone-50/70 xl:block">
+          <ConversationContextPanel {...contextProps} />
+        </aside>
+      </div>
     </div>
   );
 }
