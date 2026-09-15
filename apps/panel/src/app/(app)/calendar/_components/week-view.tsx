@@ -2,6 +2,7 @@
 
 import { toClinicDate } from "@/lib/clinic-datetime";
 import { AppointmentCard } from "./appointment-card";
+import { formatCalendarAriaDate } from "./calendar-date-label";
 import {
   addDays,
   appointmentsForDay,
@@ -122,7 +123,7 @@ export function WeekView({ weekStart, appointments, businessHours, onEmptySlotCl
                       disabled={!available || !onEmptySlotClick}
                       aria-label={
                         available
-                          ? `Crear cita el ${day.toLocaleDateString()} a las ${slot.start}`
+                          ? `Crear cita el ${formatCalendarAriaDate(day)} a las ${slot.start}`
                           : undefined
                       }
                       onClick={() => onEmptySlotClick?.(day, slot.start)}

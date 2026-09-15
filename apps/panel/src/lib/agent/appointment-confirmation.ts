@@ -6,7 +6,7 @@ type ConfirmationMessage = {
 const CONFIRMATION_QUESTION =
   /\b(confirmas|confirmar|confirmación|confirmacion)\b[^?]*\b(cita|reserva|reserve|reservar)\b[^?]*\?/i;
 const AFFIRMATIVE_REPLY =
-  /^(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok)(?:[\s,.!¡;:]+(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok|gracias|por favor))*[\s.!¡]*$/i;
+  /^(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok)(?:[\s,.!¡;:]+(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok|gracias|por favor|(?:la|esta|esa)?\s*(?:cita|reserva)))*[\s.!¡]*$/i;
 
 export function hasExplicitAppointmentConfirmation(
   previousMessages: ConfirmationMessage[],

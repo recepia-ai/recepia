@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { uuidSchema } from "@/lib/uuid-schema";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
   client_id: uuidSchema.describe("ID del cliente cuyas citas buscar"),
@@ -74,19 +74,30 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     };
   }
 
-  const vetIds = [...new Set(data?.map((r: Record<string, unknown>) => r.vet_user_id as string).filter(Boolean) ?? [])];
+  const vetIds = [
+    ...new Set(
+      data?.map((r: Record<string, unknown>) => r.vet_user_id as string).filter(Boolean) ?? [],
+    ),
+  ];
   if (vetIds.length > 0) {
-    const { data: vets } = await (supabase as unknown as ReturnType<typeof import("@supabase/supabase-js").createClient>)
+    const { data: vets } = await (
+      supabase as unknown as ReturnType<typeof import("@supabase/supabase-js").createClient>
+    )
       .from("users")
       .select("id, full_name")
       .in("id", vetIds);
 
-    const vetMap = new Map(((vets ?? []) as { id: string; full_name: string }[]).map((v) => [v.id, v.full_name]));
+    const vetMap = new Map(
+      ((vets ?? []) as { id: string; full_name: string }[]).map((v) => [v.id, v.full_name]),
+    );
     for (const appt of appointments) {
-      const row = data?.find((r: Record<string, unknown>) => r.id === appt.id) as Record<string, unknown> | undefined;
+      const row = data?.find((r: Record<string, unknown>) => r.id === appt.id) as
+        | Record<string, unknown>
+        | undefined;
       const vetId = row?.vet_user_id as string | undefined;
-      if (vetId && vetMap.has(vetId)) {
-        appt.vet_name = vetMap.get(vetId)!;
+      const vetName = vetId ? vetMap.get(vetId) : undefined;
+      if (vetName) {
+        appt.vet_name = vetName;
       }
     }
   }
@@ -100,7 +111,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 export const lookupAppointments: Tool<Input, Output> = {
   name: "lookup_appointments",
   description:
-    "Busca citas de un cliente (por client_id). Opcionalmente filtra por pet_id (mascota) y/o status (scheduled, completed, cancelled). Devuelve hasta 20 citas ordenadas por fecha descendente.",
+    "Busca citas de un cliente (por client_id). Opcionalmente filtra por pet_id (mascota) y/o status (confirmed, completed, cancelled). Devuelve hasta 20 citas ordenadas por fecha descendente.",
   inputSchema,
   handler,
 };

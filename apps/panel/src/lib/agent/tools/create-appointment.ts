@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { uuidSchema } from "@/lib/uuid-schema";
+import {
+  type ExistingAppointment,
+  findMatchingConfirmedAppointment,
+} from "@/lib/agent/appointment-reliability";
 import { createAppointmentForClinic } from "@/lib/appointment-core";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import { uuidSchema } from "@/lib/uuid-schema";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
   client_id: uuidSchema,
@@ -16,7 +20,8 @@ type Input = z.infer<typeof inputSchema>;
 
 type Output = {
   appointment_id: string;
-  google_event_id: string;
+  google_event_id: string | null;
+  already_created: boolean;
 };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
@@ -26,6 +31,49 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
       error: "La cita requiere confirmación explícita del cliente antes de reservarse.",
       error_code: "CONFIRMATION_REQUIRED",
     };
+  }
+
+  if (ctx.conversationId) {
+    const { data: existingRows, error: existingError } = await ctx.supabaseAdmin
+      .from("appointments")
+      .select(
+        "id, conversation_id, client_id, pet_id, vet_user_id, service_id, starts_at, status, google_event_id",
+      )
+      .eq("clinic_id", ctx.clinicId)
+      .eq("conversation_id", ctx.conversationId)
+      .eq("status", "confirmed")
+      .limit(20);
+
+    if (existingError) {
+      return {
+        success: false,
+        error: "No se pudo verificar si la cita ya estaba creada. Inténtalo de nuevo.",
+        error_code: "APPOINTMENT_STATE_UNAVAILABLE",
+      };
+    }
+
+    const existing = findMatchingConfirmedAppointment(
+      (existingRows ?? []) as ExistingAppointment[],
+      {
+        conversation_id: ctx.conversationId,
+        client_id: input.client_id,
+        pet_id: input.pet_id,
+        vet_user_id: input.vet_user_id,
+        service_id: input.service_id,
+        starts_at: input.starts_at,
+      },
+    );
+
+    if (existing) {
+      return {
+        success: true,
+        data: {
+          appointment_id: existing.id,
+          google_event_id: existing.google_event_id,
+          already_created: true,
+        },
+      };
+    }
   }
 
   const notes = input.notes ? `Recepia: ${input.notes}` : undefined;
@@ -49,11 +97,20 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     };
   }
 
+  if (!result.appointment_id) {
+    return {
+      success: false,
+      error: "La reserva no devolvió un identificador de cita.",
+      error_code: "APPOINTMENT_RESULT_INVALID",
+    };
+  }
+
   return {
     success: true,
     data: {
-      appointment_id: result.appointment_id!,
-      google_event_id: result.google_event_id!,
+      appointment_id: result.appointment_id,
+      google_event_id: result.google_event_id ?? null,
+      already_created: false,
     },
   };
 }
@@ -61,7 +118,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 export const createAppointmentTool: Tool<Input, Output> = {
   name: "create_appointment",
   description:
-    "Crea una cita confirmada. INVOCAR SOLO tras confirmar con el cliente día, hora, servicio y mascota. Requiere client_id, pet_id, vet_user_id, service_id, starts_at.",
+    "Crea una cita confirmada. INVOCAR SOLO tras confirmar con el cliente día, hora, servicio y mascota. Si la misma cita ya fue creada en esta conversación, devuelve su resultado con already_created=true sin crear otra. Requiere client_id, pet_id, vet_user_id, service_id, starts_at.",
   inputSchema,
   handler,
 };

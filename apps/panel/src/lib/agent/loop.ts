@@ -2,6 +2,11 @@ import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "./anthropic-client";
 import { hasExplicitAppointmentConfirmation } from "./appointment-confirmation";
+import {
+  isSameAppointmentToolInput,
+  markAppointmentResultReused,
+  shouldBlockBookingErrorEscalation,
+} from "./appointment-reliability";
 import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
 import type { MessageRecord } from "./conversation-store";
 import { saveMessage } from "./conversation-store";
@@ -31,7 +36,7 @@ export type LoopResult = {
 };
 
 /** Shape of an Anthropic message param (simplified for our use). */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Anthropic message blocks vary by content type.
 type AnthropicMessageParam = Record<string, any>;
 
 // ---------------------------------------------------------------------------
@@ -206,7 +211,7 @@ export async function runAgentLoop(params: {
 
     // ---- Main loop ----
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: Response is narrowed from Anthropic content blocks below.
       let response: any;
       try {
         response = await anthropic.messages.create({
@@ -215,10 +220,10 @@ export async function runAgentLoop(params: {
           system: systemPrompt,
           messages: anthropicMessages as Array<{
             role: "user" | "assistant";
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // biome-ignore lint/suspicious/noExplicitAny: Anthropic accepts its complete content union here.
             content: any;
           }>,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // biome-ignore lint/suspicious/noExplicitAny: Zod-generated tool schemas match the SDK at runtime.
           tools: tools as any,
         });
       } catch (apiErr) {
@@ -252,15 +257,15 @@ export async function runAgentLoop(params: {
       }
 
       // Separate text and tool_use blocks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: Anthropic content is narrowed by its type discriminator.
       const textBlocks = response.content.filter((b: any) => b.type === "text");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: Anthropic content is narrowed by its type discriminator.
       const toolUseBlocks = response.content.filter((b: any) => b.type === "tool_use") as any[];
 
       // ---- Case 1: Final text response ----
       if (response.stop_reason === "end_turn") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         finalText = textBlocks
+          // biome-ignore lint/suspicious/noExplicitAny: Filtered blocks contain Anthropic text content.
           .map((b: any) => ("text" in b ? (b as { text: string }).text : ""))
           .join("");
 
@@ -317,6 +322,15 @@ export async function runAgentLoop(params: {
 
         for (const tu of toolUseBlocks) {
           const tool = getTool(tu.name as string);
+          const toolInput = (tu.input as Record<string, unknown>) ?? {};
+          const repeatedAppointmentCall =
+            tu.name === "create_appointment"
+              ? allToolCalls.find(
+                  (call) =>
+                    call.name === "create_appointment" &&
+                    isSameAppointmentToolInput(call.input, toolInput),
+                )
+              : undefined;
           let toolResult: ToolResult<unknown>;
 
           if (!tool) {
@@ -325,9 +339,25 @@ export async function runAgentLoop(params: {
               error: `Tool desconocida: ${tu.name}`,
               error_code: "UNKNOWN_TOOL",
             };
+          } else if (repeatedAppointmentCall) {
+            toolResult = markAppointmentResultReused(repeatedAppointmentCall.output);
+          } else if (
+            tu.name === "escalate_to_human" &&
+            shouldBlockBookingErrorEscalation(
+              (tu.input as Record<string, unknown> | undefined)?.reason,
+              userMessage,
+              allToolCalls,
+            )
+          ) {
+            toolResult = {
+              success: false,
+              error:
+                "La incidencia de reserva no justifica escalar. Informa del estado real y continúa de forma autónoma o pide al cliente que reintente.",
+              error_code: "ESCALATION_NOT_JUSTIFIED",
+            };
           } else {
             const ctx = buildToolContext(clinicId, conversationId, appointmentConfirmed);
-            toolResult = await invokeTool(tool, tu.input as Record<string, unknown>, ctx);
+            toolResult = await invokeTool(tool, toolInput, ctx);
           }
 
           allToolCalls.push({
@@ -362,6 +392,10 @@ export async function runAgentLoop(params: {
 
           // If escalation tool was invoked, terminate the loop
           if (tu.name === "escalate_to_human") {
+            if (!toolResult.success && toolResult.error_code === "ESCALATION_NOT_JUSTIFIED") {
+              continue;
+            }
+
             if (toolResult.success) {
               const escalationReason =
                 ((tu.input as Record<string, unknown> | undefined)?.reason as string | undefined) ??
