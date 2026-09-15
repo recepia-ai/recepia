@@ -42,6 +42,26 @@ test("rejects a non-affirmative reply", () => {
   );
 });
 
+test("rejects an affirmative prefix followed by changed appointment conditions", () => {
+  assert.equal(
+    hasExplicitAppointmentConfirmation(
+      [{ sender: "agent", content: "¿Confirmas que reserve esta cita el martes a las 10:00?" }],
+      "Sí, pero mejor mañana",
+    ),
+    false,
+  );
+});
+
+test("rejects a terse affirmative that proposes a different time", () => {
+  assert.equal(
+    hasExplicitAppointmentConfirmation(
+      [{ sender: "agent", content: "¿Confirmas que reserve esta cita el martes a las 10:00?" }],
+      "Vale, a las once",
+    ),
+    false,
+  );
+});
+
 test("uses the latest conversational message and ignores tool evidence", () => {
   assert.equal(
     hasExplicitAppointmentConfirmation(
