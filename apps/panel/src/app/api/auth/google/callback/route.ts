@@ -1,7 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { replaceSharedVetCalendars } from "@/lib/google-calendar-provisioning";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyState } from "@/lib/oauth-state";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -41,9 +41,7 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error("[google/callback] Google returned error:", error);
     // TODO: log to observability system
-    return NextResponse.redirect(
-      new URL("/settings/integrations?error=oauth_denied", request.url),
-    );
+    return NextResponse.redirect(new URL("/settings/integrations?error=oauth_denied", request.url));
   }
 
   const code = searchParams.get("code");
@@ -76,9 +74,7 @@ export async function GET(request: NextRequest) {
 
   if (!clientId || !clientSecret || !redirectUri) {
     console.error("[google/callback] Missing Google OAuth env vars");
-    return NextResponse.redirect(
-      new URL("/settings/integrations?error=config", request.url),
-    );
+    return NextResponse.redirect(new URL("/settings/integrations?error=config", request.url));
   }
 
   let tokenData: GoogleTokenResponse;
@@ -123,9 +119,7 @@ export async function GET(request: NextRequest) {
     try {
       const parts = tokenData.id_token.split(".");
       if (parts.length === 3 && parts[1]) {
-        const payload = JSON.parse(
-          Buffer.from(parts[1], "base64url").toString("utf8"),
-        );
+        const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
         email = payload.email ?? null;
       }
     } catch (err) {
@@ -136,12 +130,9 @@ export async function GET(request: NextRequest) {
   // Strategy B: userinfo endpoint (fallback if id_token missing or decode failed)
   if (!email) {
     try {
-      const userinfoRes = await fetch(
-        "https://www.googleapis.com/oauth2/v2/userinfo",
-        {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        },
-      );
+      const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
       if (userinfoRes.ok) {
         const userinfo = await userinfoRes.json();
         email = userinfo.email ?? null;
@@ -198,18 +189,19 @@ export async function GET(request: NextRequest) {
   let vaultSecretId: string | null = null;
   try {
     if (existing?.vault_secret_id) {
+      // Omitting p_name preserves the unique name assigned at creation.
       const { error: vaultError } = await supabaseAdmin.rpc("vault_update_secret", {
         p_id: existing.vault_secret_id,
         p_secret: secretValue,
-        p_name: `gcal_clinic_${clinicId}`,
         p_description: `Google Calendar tokens — clinic ${clinicId}`,
       });
       if (vaultError) throw vaultError;
       vaultSecretId = existing.vault_secret_id;
     } else {
+      // A prior partial callback can leave an unlinked secret behind, so names must be unique.
       const { data, error: vaultError } = await supabaseAdmin.rpc("vault_create_secret", {
         p_secret: secretValue,
-        p_name: `gcal_clinic_${clinicId}`,
+        p_name: `gcal_clinic_${clinicId}_${crypto.randomUUID()}`,
         p_description: `Google Calendar tokens — clinic ${clinicId}`,
       });
       if (vaultError) throw vaultError;
@@ -217,9 +209,7 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error("[google/callback] Vault write error:", err);
-    return NextResponse.redirect(
-      new URL("/settings/integrations?error=vault_write", request.url),
-    );
+    return NextResponse.redirect(new URL("/settings/integrations?error=vault_write", request.url));
   }
 
   // -------------------------------------------------------------------
@@ -251,9 +241,7 @@ export async function GET(request: NextRequest) {
 
     if (integrationWrite.error) {
       console.error("[google/callback] clinic_integrations write error:", integrationWrite.error);
-      return NextResponse.redirect(
-        new URL("/settings/integrations?error=db_insert", request.url),
-      );
+      return NextResponse.redirect(new URL("/settings/integrations?error=db_insert", request.url));
     }
 
     const provisioned = await replaceSharedVetCalendars(clinicId, tokenData.access_token);
@@ -263,15 +251,11 @@ export async function GET(request: NextRequest) {
     console.info("[google/callback] dedicated calendar provisioning complete", provisioned);
   } catch (err) {
     console.error("[google/callback] clinic_integrations error:", err);
-    return NextResponse.redirect(
-      new URL("/settings/integrations?error=db_error", request.url),
-    );
+    return NextResponse.redirect(new URL("/settings/integrations?error=db_error", request.url));
   }
 
   // -------------------------------------------------------------------
   // 7. Success — redirect to integrations page
   // -------------------------------------------------------------------
-  return NextResponse.redirect(
-    new URL("/settings/integrations?success=connected", request.url),
-  );
+  return NextResponse.redirect(new URL("/settings/integrations?success=connected", request.url));
 }

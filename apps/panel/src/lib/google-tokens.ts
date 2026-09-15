@@ -9,9 +9,7 @@ import type { GoogleTokenRefreshResponse } from "./google-calendar-types";
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000; // 5 minutes before expiry → refresh
 
-type TokenResult =
-  | { access_token: string }
-  | { error: "REAUTH_REQUIRED" | "UNEXPECTED" };
+type TokenResult = { access_token: string } | { error: "REAUTH_REQUIRED" | "UNEXPECTED" };
 
 /**
  * Returns a valid Google access_token for the given clinic, refreshing it
@@ -20,9 +18,7 @@ type TokenResult =
  * On reauth: returns `{ error: "REAUTH_REQUIRED" }` → UI should prompt admin
  * to reconnect Google Calendar.
  */
-export async function getValidAccessToken(
-  clinicId: string,
-): Promise<TokenResult> {
+export async function getValidAccessToken(clinicId: string): Promise<TokenResult> {
   const supabaseAdmin = createAdminClient();
 
   // 1. Find the integration
@@ -99,19 +95,16 @@ export async function getValidAccessToken(
     });
 
     // vault_update_secret wrapped in public schema via vault_wrappers migration
-    const vaultName = `gcal_clinic_${clinicId}`;
     const vaultDesc = `Google Calendar tokens — clinic ${clinicId}`;
+    // Omitting p_name preserves the unique name assigned at creation.
     await supabaseAdmin.rpc("vault_update_secret", {
       p_id: intRow.vault_secret_id,
       p_secret: newSecret,
-      p_name: vaultName,
       p_description: vaultDesc,
     });
 
     // 6. Update token_expires_at
-    const newExpiresAt = new Date(
-      Date.now() + data.expires_in * 1000,
-    ).toISOString();
+    const newExpiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
 
     await supabaseAdmin
       .from("clinic_integrations")
