@@ -126,6 +126,28 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
             )}
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="slug" className="text-sm text-stone-700">
+              Dirección del chat público
+            </Label>
+            <div className="flex items-center rounded-md border border-stone-200 bg-stone-50 pl-3 focus-within:ring-2 focus-within:ring-emerald-500/20">
+              <span className="shrink-0 text-sm text-stone-400">/chat/</span>
+              <Input
+                id="slug"
+                {...register("slug")}
+                disabled={readOnly}
+                aria-invalid={errors.slug ? true : undefined}
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+              />
+            </div>
+            <p className="text-xs text-amber-700">
+              Cambiarlo modifica el enlace público que usan los clientes.
+            </p>
+            {errors.slug && (
+              <p className="text-xs text-destructive">{errors.slug.message}</p>
+            )}
+          </div>
+
           {/* legal_name */}
           <div className="space-y-1.5">
             <Label htmlFor="legal_name" className="text-sm text-stone-700">

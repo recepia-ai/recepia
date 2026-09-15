@@ -219,6 +219,7 @@ export async function checkAvailability(
     .select("id, name, duration_minutes, is_surgery, requires_specific_vet_user_id")
     .eq("id", service_id)
     .eq("clinic_id", clinicId)
+    .eq("active", true)
     .maybeSingle();
 
   if (serviceError || !serviceData) {

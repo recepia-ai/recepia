@@ -31,6 +31,7 @@ export async function updateClinic(
 
   const raw = {
     name: formData.get("name"),
+    slug: formData.get("slug"),
     legal_name: formData.get("legal_name"),
     tax_id: formData.get("tax_id"),
     email: formData.get("email"),
@@ -52,6 +53,7 @@ export async function updateClinic(
   // Campos con default se mantienen si están vacíos (locales, tz, country)
   const payload = {
     name: parsed.data.name,
+    slug: parsed.data.slug,
     legal_name: parsed.data.legal_name || null,
     tax_id: parsed.data.tax_id || null,
     email: parsed.data.email || null,

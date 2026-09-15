@@ -64,6 +64,7 @@ async function handler(
       "id, name, duration_minutes, price_min_cents, price_max_cents, is_surgery, requires_fasting",
     )
     .eq("clinic_id", ctx.clinicId)
+    .eq("active", true)
     .order("name");
 
   if (error) {
@@ -91,10 +92,11 @@ async function handler(
 
   // Exactly 1 match (partial or exact) → found: true.
   // This is what fixes bug: previously "cachorro" returned 1 suggestion as found:false.
-  if (matches.length === 1) {
+  const exactMatch = matches.length === 1 ? matches[0] : undefined;
+  if (exactMatch) {
     return {
       success: true,
-      data: { found: true, service: matches[0]! },
+      data: { found: true, service: exactMatch },
     };
   }
 

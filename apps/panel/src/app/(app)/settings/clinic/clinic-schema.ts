@@ -61,6 +61,12 @@ export const clinicSchema = z.object({
     .trim()
     .min(2, "Nombre demasiado corto")
     .max(100, "Máximo 100 caracteres"),
+  slug: z
+    .string()
+    .trim()
+    .min(2, "Identificador demasiado corto")
+    .max(80, "Máximo 80 caracteres")
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Usa minúsculas, números y guiones"),
   legal_name: z
     .string()
     .trim()

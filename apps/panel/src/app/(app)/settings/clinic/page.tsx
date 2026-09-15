@@ -6,6 +6,7 @@ type ClinicUserRow = { clinic_id: string; role: string };
 
 type ClinicRow = {
   name: string;
+  slug: string;
   legal_name: string | null;
   tax_id: string | null;
   email: string | null;
@@ -61,6 +62,7 @@ export default async function SettingsClinicPage() {
   const isAdmin = cu.role === "admin";
   const defaults: ClinicFormValues = {
     name: cl.name ?? "",
+    slug: cl.slug ?? "",
     legal_name: cl.legal_name ?? "",
     tax_id: cl.tax_id ?? "",
     email: cl.email ?? "",
