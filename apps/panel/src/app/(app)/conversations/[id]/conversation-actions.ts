@@ -2,6 +2,7 @@
 
 import type { Database } from "@recepia/db";
 import { revalidatePath } from "next/cache";
+import { failedWhatsAppDeliveryMetadata } from "@/lib/channels/whatsapp-delivery";
 import { resolveClinicWhatsAppChannel, sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
 import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -263,12 +264,32 @@ export async function sendMessage(
     return { error: "Otra persona del equipo tiene el control de esta conversación." };
   }
 
-  let providerMessageId: string | undefined;
-  let providerMetadata: Record<string, string> = {};
   if (convGuard.channel === "whatsapp") {
     if (!convGuard.channel_thread_id) {
       return { error: "La conversación no tiene destinatario de WhatsApp." };
     }
+
+    const pendingMetadata = { delivery_status: "sending", source: "operator" };
+    const { data: pendingMessage, error: insertError } = await supabase
+      .from("messages")
+      .insert({
+        clinic_id: clinicId,
+        conversation_id,
+        content,
+        sender: "human",
+        direction: "outbound",
+        content_type: "text",
+        sender_user_id: actorId,
+        metadata: pendingMetadata,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !pendingMessage) {
+      console.error("[sendMessage] could not persist pending WhatsApp message", insertError);
+      return { error: "No se pudo guardar el mensaje, así que no se envió por WhatsApp." };
+    }
+
     try {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveClinicWhatsAppChannel(supabaseAdmin, clinicId);
@@ -278,12 +299,43 @@ export async function sendMessage(
         convGuard.channel_thread_id,
         content,
       );
-      providerMessageId = `${channel.provider}:${sent.externalMessageId}`;
-      providerMetadata = { delivery_status: "accepted", accepted_at: sent.acceptedAt };
+      const { error: updateError } = await supabase
+        .from("messages")
+        .update({
+          provider_message_id: `${channel.provider}:${sent.externalMessageId}`,
+          metadata: {
+            ...pendingMetadata,
+            delivery_status: "accepted",
+            accepted_at: sent.acceptedAt,
+          },
+        })
+        .eq("id", pendingMessage.id)
+        .eq("clinic_id", clinicId);
+
+      if (updateError) {
+        console.error("[sendMessage] WhatsApp accepted but status update failed", updateError);
+        return {
+          error:
+            "WhatsApp aceptó el mensaje, pero no se pudo actualizar su estado. Recarga la conversación.",
+        };
+      }
     } catch (error) {
       console.error("[sendMessage] WhatsApp delivery failed", error);
+      await supabase
+        .from("messages")
+        .update({
+          metadata: failedWhatsAppDeliveryMetadata(
+            pendingMetadata,
+          ) as Database["public"]["Tables"]["messages"]["Update"]["metadata"],
+        })
+        .eq("id", pendingMessage.id)
+        .eq("clinic_id", clinicId);
       return { error: "WhatsApp no ha aceptado el mensaje. No se ha marcado como enviado." };
     }
+
+    revalidatePath(`/conversations/${conversation_id}`);
+    revalidatePath("/conversations");
+    return { success: true };
   }
 
   const { error: insertError } = await supabase.from("messages").insert({
@@ -294,8 +346,7 @@ export async function sendMessage(
     direction: "outbound",
     content_type: "text",
     sender_user_id: actorId,
-    provider_message_id: providerMessageId,
-    metadata: providerMetadata,
+    metadata: {},
   });
 
   if (insertError) {

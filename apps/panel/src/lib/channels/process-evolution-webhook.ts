@@ -1,4 +1,7 @@
+import type { Database } from "@recepia/db";
 import { processInboundMessage } from "@/lib/channels/process-inbound-message";
+import { configObject } from "@/lib/channels/whatsapp-cloud";
+import { failedWhatsAppDeliveryMetadata } from "@/lib/channels/whatsapp-delivery";
 import {
   type EvolutionWebhook,
   inboundEventFromEvolution,
@@ -18,7 +21,8 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
 
   const { data: outbound } = await supabaseAdmin
     .from("messages")
-    .select("id")
+    .select("id, metadata")
+    .eq("clinic_id", channel.clinic_id)
     .eq("conversation_id", result.conversationId ?? "")
     .eq("direction", "outbound")
     .eq("sender", "agent")
@@ -39,8 +43,13 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
         .from("messages")
         .update({
           provider_message_id: `evolution:${sent.externalMessageId}`,
-          metadata: { delivery_status: "accepted", accepted_at: sent.acceptedAt },
+          metadata: {
+            ...configObject(outbound.metadata),
+            delivery_status: "accepted",
+            accepted_at: sent.acceptedAt,
+          },
         })
+        .eq("clinic_id", channel.clinic_id)
         .eq("id", outbound.id);
     }
   } catch (error) {
@@ -49,12 +58,11 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
       await supabaseAdmin
         .from("messages")
         .update({
-          metadata: {
-            delivery_status: "failed",
-            delivery_error: "El proveedor de WhatsApp no aceptó el mensaje.",
-            failed_at: new Date().toISOString(),
-          },
+          metadata: failedWhatsAppDeliveryMetadata(
+            configObject(outbound.metadata),
+          ) as Database["public"]["Tables"]["messages"]["Update"]["metadata"],
         })
+        .eq("clinic_id", channel.clinic_id)
         .eq("id", outbound.id);
     }
     if (result.conversationId) {
