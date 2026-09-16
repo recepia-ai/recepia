@@ -26,7 +26,7 @@ function initials(name: string): string {
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
+    .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
 }
 
@@ -85,7 +85,7 @@ export function ClientsList({ clients, clinicName, clinicId }: Props) {
       ? nativeClients.filter((client) =>
           [client.name, client.phone, client.email]
             .filter(Boolean)
-            .some((value) => value!.toLocaleLowerCase("es-ES").includes(normalized)),
+            .some((value) => value?.toLocaleLowerCase("es-ES").includes(normalized)),
         )
       : nativeClients;
     const nativeById = new Map(local.map((client) => [client.id, client]));
@@ -120,7 +120,7 @@ export function ClientsList({ clients, clinicName, clinicId }: Props) {
       <div className="shrink-0 space-y-3 px-4 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-stone-900">Clientes</h2>
+            <h1 className="text-base font-semibold tracking-tight text-stone-900">Clientes</h1>
             <p className="text-xs text-stone-500">
               {nativeClients.length} RECEPIA · {gestorVetClients.length} GestorVet visibles en{" "}
               {clinicName}

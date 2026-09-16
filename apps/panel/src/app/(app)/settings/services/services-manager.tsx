@@ -265,7 +265,7 @@ export function ServicesManager({
       <div>
         <h2 className="text-base font-semibold text-stone-900">Servicios</h2>
         <p className="mt-0.5 text-xs text-stone-500">
-          Configura el catálogo que utiliza recepción y consulta el Agent.
+          Configura el catálogo que utilizan recepción y el asistente de la clínica.
         </p>
       </div>
       {!readOnly && (

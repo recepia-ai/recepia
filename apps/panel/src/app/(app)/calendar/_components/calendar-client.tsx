@@ -118,8 +118,10 @@ export function CalendarClient({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Calendario</h1>
-          <p className="mt-1 text-sm text-stone-500">Gestiona las citas de {clinicName}.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-stone-900">Agenda</h1>
+          <p className="mt-1 text-sm text-stone-500">
+            Consulta y gestiona las citas de {clinicName}.
+          </p>
         </div>
         <Button
           variant="outline"
@@ -138,8 +140,8 @@ export function CalendarClient({
             <span className="font-semibold">GestorVet conectado:</span> {gestorVetCount}{" "}
             {gestorVetCount === 1 ? "cita visible" : "citas visibles"} en este periodo.
           </p>
-          <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-700">
-            Solo lectura
+          <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[10px] font-medium text-violet-700">
+            Sincronizado en solo lectura
           </span>
         </div>
       )}
@@ -148,13 +150,25 @@ export function CalendarClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Date navigator */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="size-8" onClick={goPrev}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={goPrev}
+            aria-label="Periodo anterior"
+          >
             <ChevronLeft className="size-4 text-stone-500" strokeWidth={1.75} />
           </Button>
           <span className="min-w-[180px] text-center text-sm font-medium text-stone-700">
             {dateLabel}
           </span>
-          <Button variant="ghost" size="icon" className="size-8" onClick={goNext}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={goNext}
+            aria-label="Periodo siguiente"
+          >
             <ChevronRight className="size-4 text-stone-500" strokeWidth={1.75} />
           </Button>
           {todayBtn && (
@@ -189,6 +203,7 @@ export function CalendarClient({
                 type="button"
                 key={v.key}
                 onClick={() => setView(v.key)}
+                aria-pressed={view === v.key}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   view === v.key
                     ? "bg-stone-100 text-stone-700"

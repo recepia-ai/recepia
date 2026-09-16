@@ -103,9 +103,13 @@ export function PetsDirectory({
       {visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-stone-200 bg-white px-6 py-16 text-center">
           <PawPrint className="mx-auto size-8 text-stone-300" />
-          <p className="mt-3 text-sm font-medium text-stone-700">No hay mascotas que mostrar</p>
+          <p className="mt-3 text-sm font-medium text-stone-700">
+            {query ? "No hay resultados para esta búsqueda" : "Todavía no hay mascotas"}
+          </p>
           <p className="mt-1 text-xs text-stone-400">
-            Crea una mascota y vincúlala a uno de los clientes existentes.
+            {query
+              ? "Prueba con otro nombre, propietario, raza o microchip."
+              : "Crea una mascota y vincúlala a uno de los clientes existentes."}
           </p>
         </div>
       ) : (

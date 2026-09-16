@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,12 +36,15 @@ export function LoginForm({ emailRedirectTo }: { emailRedirectTo: string }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Recepia</CardTitle>
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
+      <Card className="w-full max-w-md border-stone-200 shadow-card-hero">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-xl bg-emerald-700 text-base font-bold text-white">
+            R
+          </div>
+          <CardTitle className="text-xl font-semibold text-stone-900">Accede a Recepia</CardTitle>
           <CardDescription>
-            Introduce tu email y te enviaremos un enlace para acceder.
+            Gestiona la recepción y la agenda de tu clínica veterinaria.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -57,14 +61,27 @@ export function LoginForm({ emailRedirectTo }: { emailRedirectTo: string }) {
                 disabled={loading}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Enviando..." : "Enviar enlace mágico"}
+            <Button type="submit" className="h-10 w-full" disabled={loading}>
+              {loading && <Loader2 className="size-4 animate-spin" />}
+              {loading ? "Enviando…" : "Enviar enlace de acceso"}
             </Button>
             {message && (
-              <p className="rounded-md bg-green-50 p-3 text-sm text-green-700">{message}</p>
+              <p
+                aria-live="polite"
+                className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"
+              >
+                {message}
+              </p>
             )}
-            {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+            {error && (
+              <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                No hemos podido enviar el enlace. Comprueba el email y vuelve a intentarlo.
+              </p>
+            )}
           </form>
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-stone-400">
+            <LockKeyhole className="size-3.5" /> Acceso seguro sin contraseña
+          </p>
         </CardContent>
       </Card>
     </div>

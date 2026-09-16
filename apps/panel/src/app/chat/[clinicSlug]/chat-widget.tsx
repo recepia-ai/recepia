@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowUp, Loader2, Phone, Sparkles } from "lucide-react";
+import { ArrowUp, Loader2, Phone, RotateCcw, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
@@ -27,7 +28,15 @@ function normalizeSpanishPhone(value: string): string | null {
   return null;
 }
 
-export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; clinicName: string }) {
+export function ChatWidget({
+  clinicSlug,
+  clinicName,
+  clinicPhone,
+}: {
+  clinicSlug: string;
+  clinicName: string;
+  clinicPhone: string | null;
+}) {
   const [sessionId, setSessionId] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneConfirmed, setPhoneConfirmed] = useState(false);
@@ -35,6 +44,7 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [failedContent, setFailedContent] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const seenServerMessages = useRef(new Set<string>());
 
@@ -105,6 +115,7 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
     setMessages((current) => [...current, { id: messageId, sender: "client", content }]);
     setInput("");
     setSending(true);
+    setFailedContent(null);
 
     try {
       const response = await fetch("/api/channels/web/message", {
@@ -132,6 +143,7 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
         ]);
       }
     } catch (error) {
+      setFailedContent(content);
       setMessages((current) => [
         ...current,
         {
@@ -193,6 +205,13 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
           <p className="mt-4 text-center text-[11px] leading-5 text-stone-400">
             Puedes pedir hablar con una persona del equipo en cualquier momento.
           </p>
+          <p className="mt-2 text-center text-[11px] leading-5 text-stone-400">
+            Al continuar aceptas nuestra{" "}
+            <Link href="/privacidad" className="underline underline-offset-2 hover:text-stone-600">
+              política de privacidad
+            </Link>
+            .
+          </p>
         </form>
       ) : (
         <>
@@ -222,6 +241,18 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
                 <Loader2 className="size-3.5 animate-spin" /> Recepia está consultando tu ficha…
               </div>
             )}
+            {failedContent && !sending && (
+              <button
+                type="button"
+                onClick={() => {
+                  setInput(failedContent);
+                  setFailedContent(null);
+                }}
+                className="mx-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+              >
+                <RotateCcw className="size-3.5" /> Recuperar el último mensaje
+              </button>
+            )}
             <div ref={endRef} />
           </div>
 
@@ -235,6 +266,7 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
               placeholder="Escribe tu mensaje…"
               rows={1}
               disabled={sending}
+              aria-label="Mensaje"
               className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-stone-200 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:opacity-60"
             />
             <button
@@ -246,6 +278,19 @@ export function ChatWidget({ clinicSlug, clinicName }: { clinicSlug: string; cli
               <ArrowUp className="size-4" strokeWidth={2} />
             </button>
           </form>
+          <footer className="flex items-center justify-between border-t border-stone-100 px-4 py-2 text-[10px] text-stone-400">
+            <span>Atención segura de {clinicName}</span>
+            <span className="flex items-center gap-2">
+              {clinicPhone && (
+                <a href={`tel:${clinicPhone}`} className="hover:text-stone-600">
+                  Llamar a la clínica
+                </a>
+              )}
+              <Link href="/privacidad" className="hover:text-stone-600">
+                Privacidad
+              </Link>
+            </span>
+          </footer>
         </>
       )}
     </div>

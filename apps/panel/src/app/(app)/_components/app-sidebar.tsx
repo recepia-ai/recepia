@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Calendar,
-  Database,
-  LayoutDashboard,
-  MessageSquare,
-  PawPrint,
-  Settings,
-  Users,
-} from "lucide-react";
+import { Calendar, LayoutDashboard, MessageSquare, PawPrint, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -31,10 +23,9 @@ const NAV_ITEMS: NavItem[] = [
     icon: MessageSquare,
     enabled: true,
   },
-  { href: "/calendar", label: "Calendario", icon: Calendar, enabled: true },
+  { href: "/calendar", label: "Agenda", icon: Calendar, enabled: true },
   { href: "/clients", label: "Clientes", icon: Users, enabled: true },
   { href: "/pets", label: "Mascotas", icon: PawPrint, enabled: true },
-  { href: "/gestorvet", label: "GestorVet", icon: Database, enabled: true },
   { href: "/settings", label: "Ajustes", icon: Settings, enabled: true },
 ];
 
@@ -49,10 +40,10 @@ export function AppSidebar({ clinicName }: Props) {
 
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-stone-200 bg-white shadow-sidebar">
-      {/* Brand — gradient monogram */}
+      {/* Brand */}
       <div className="flex h-14 items-center px-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-teal-700">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-emerald-700">
             <span className="text-sm font-bold text-white">R</span>
           </div>
           <span className="text-base font-semibold text-stone-900">Recepia</span>
@@ -68,7 +59,7 @@ export function AppSidebar({ clinicName }: Props) {
       <div className="mx-3 border-t border-stone-100" />
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-3 py-3">
+      <nav aria-label="Navegación principal" className="flex-1 space-y-0.5 px-3 py-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -77,13 +68,14 @@ export function AppSidebar({ clinicName }: Props) {
             <Link
               key={item.href}
               href={item.enabled ? item.href : "#"}
+              aria-current={isActive ? "page" : undefined}
               aria-disabled={!item.enabled}
               tabIndex={item.enabled ? undefined : -1}
               className={cn(
                 "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 item.enabled &&
                   isActive &&
-                  "bg-gradient-to-r from-emerald-500/10 to-teal-600/5 border-l-2 border-emerald-500 text-emerald-700 -ml-1 pl-[11px]",
+                  "-ml-1 border-l-2 border-emerald-500 bg-emerald-50 text-emerald-800 pl-[11px]",
                 item.enabled &&
                   !isActive &&
                   "text-stone-600 hover:bg-stone-50 hover:text-stone-900",
@@ -114,7 +106,7 @@ export function AppSidebar({ clinicName }: Props) {
       <div className="border-t border-stone-200 px-4 py-3">
         <p className="flex items-center gap-1.5 text-[11px] text-stone-400">
           <span className="inline-block size-1.5 shrink-0 rounded-full bg-emerald-500" />
-          Powered by Claude AI
+          Recepción asistida por IA
         </p>
       </div>
     </aside>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Database } from "@recepia/db";
-import { CircleAlert, Globe2, History, MessageCircle, Phone, Plus, Search } from "lucide-react";
+import { CircleAlert, Globe2, History, MessageCircle, Phone, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -209,24 +209,12 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
     >
       {/* Header */}
       <div className="shrink-0 space-y-3 px-4 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight text-stone-900">
-              Conversaciones
-            </h2>
-            <p className="text-xs text-stone-500">
-              {filteredConversations.length}{" "}
-              {filteredConversations.length === 1 ? "resultado" : "resultados"} en {clinicName}
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-400"
-          >
-            <Plus className="size-3.5" strokeWidth={1.75} />
-            Nueva
-          </button>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight text-stone-900">Conversaciones</h1>
+          <p className="text-xs text-stone-500">
+            {filteredConversations.length}{" "}
+            {filteredConversations.length === 1 ? "resultado" : "resultados"} en {clinicName}
+          </p>
         </div>
 
         {/* Filter bar */}
@@ -237,7 +225,8 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
               strokeWidth={1.75}
             />
             <Input
-              placeholder="Buscar..."
+              placeholder="Buscar cliente, mascota o mensaje…"
+              aria-label="Buscar conversaciones"
               className="h-8 pl-8 text-xs"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

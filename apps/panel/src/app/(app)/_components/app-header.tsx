@@ -1,6 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/server";
+import { HeaderRouteName } from "./header-route-name";
 
 type Props = {
   userEmail: string;
@@ -17,15 +18,14 @@ export function AppHeader({ userEmail }: Props) {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-stone-200 bg-white px-6">
-      {/* Left: page title (static for now, dynamic later) */}
-      <span className="text-sm font-medium tracking-tight text-stone-700">
-        Dashboard
-      </span>
+      <HeaderRouteName />
 
       {/* Right: user + divider + logout */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-stone-500">{userEmail}</span>
-        <span aria-hidden className="h-4 w-px bg-stone-200" />
+        <span className="hidden max-w-64 truncate text-sm text-stone-500 lg:inline">
+          {userEmail}
+        </span>
+        <span aria-hidden className="hidden h-4 w-px bg-stone-200 lg:block" />
         <form action={signOut}>
           <Button
             variant="ghost"

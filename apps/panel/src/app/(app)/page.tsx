@@ -13,9 +13,9 @@ import {
 } from "@/lib/clinic-datetime";
 import { readGestorVetClient } from "@/lib/gestorvet/discovery";
 import { gestorVetAppointment } from "@/lib/gestorvet/native-adapters";
+import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { resolveOrganizationContext } from "@/lib/organization-context";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "./conversations/_components/relative-time";
 
@@ -200,24 +200,28 @@ export default async function DashboardPage() {
       value: conversationsToday.count ?? 0,
       detail: comparison(conversationsToday.count ?? 0, conversationsYesterday.count ?? 0),
       icon: MessageCircle,
+      href: "/conversations",
     },
     {
       label: "Citas hoy",
       value: todayAppointmentCount,
       detail: comparison(todayAppointmentCount, yesterdayAppointmentCount),
       icon: CalendarDays,
+      href: "/calendar",
     },
     {
       label: "Necesitan atención",
       value: needsAttention,
       detail: `${waitingConversations.count ?? 0} esperando · ${humanConversations.count ?? 0} con humano`,
       icon: Clock3,
+      href: "/conversations",
     },
     {
       label: "Clientes nuevos",
       value: newClients.count ?? 0,
       detail: "Registrados hoy",
       icon: UserPlus,
+      href: "/clients",
     },
   ];
   const greetingName = firstName(membership.displayName, actor.email);
@@ -239,20 +243,27 @@ export default async function DashboardPage() {
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <Card key={metric.label} className="rounded-xl border-stone-200 shadow-card">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-                    {metric.label}
+            <Link
+              key={metric.label}
+              href={metric.href}
+              aria-label={`${metric.label}: ${metric.value}`}
+              className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+            >
+              <Card className="h-full rounded-xl border-stone-200 shadow-card transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-card-hero">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                      {metric.label}
+                    </p>
+                    <Icon className="size-4 text-stone-400" strokeWidth={1.75} />
+                  </div>
+                  <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-stone-900">
+                    {metric.value}
                   </p>
-                  <Icon className="size-4 text-stone-400" strokeWidth={1.75} />
-                </div>
-                <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-stone-900">
-                  {metric.value}
-                </p>
-                <p className="mt-1 text-xs text-stone-400">{metric.detail}</p>
-              </CardContent>
-            </Card>
+                  <p className="mt-1 text-xs text-stone-400">{metric.detail}</p>
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
       </div>
@@ -272,7 +283,7 @@ export default async function DashboardPage() {
               href="/calendar"
               className="flex items-center gap-1 text-xs font-medium text-emerald-700"
             >
-              Ver calendario <ArrowRight className="size-3.5" />
+              Ver agenda <ArrowRight className="size-3.5" />
             </Link>
           </CardHeader>
           <CardContent className="px-0 pb-1">
