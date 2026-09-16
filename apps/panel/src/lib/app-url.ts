@@ -1,7 +1,7 @@
-const FALLBACK_APP_URL = "https://recepia-panel.vercel.app";
+const LOCAL_APP_URL = "http://localhost:3000";
 
 type AppUrlEnvironment = Partial<
-  Record<"NEXT_PUBLIC_APP_URL" | "VERCEL_BRANCH_URL" | "VERCEL_URL", string>
+  Record<"NEXT_PUBLIC_APP_URL" | "NODE_ENV" | "VERCEL_BRANCH_URL" | "VERCEL_URL", string>
 >;
 
 function withHttps(value: string): string {
@@ -12,12 +12,19 @@ function withHttps(value: string): string {
 export function getAppBaseUrl(
   environment: AppUrlEnvironment = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NODE_ENV: process.env.NODE_ENV,
     VERCEL_BRANCH_URL: process.env.VERCEL_BRANCH_URL,
     VERCEL_URL: process.env.VERCEL_URL,
   },
 ): string {
-  const configured =
-    environment.NEXT_PUBLIC_APP_URL ?? environment.VERCEL_BRANCH_URL ?? environment.VERCEL_URL;
+  if (environment.NEXT_PUBLIC_APP_URL) return withHttps(environment.NEXT_PUBLIC_APP_URL);
+  if (environment.NODE_ENV === "development") return LOCAL_APP_URL;
 
-  return configured ? withHttps(configured) : FALLBACK_APP_URL;
+  const configured = environment.VERCEL_BRANCH_URL ?? environment.VERCEL_URL;
+
+  return configured ? withHttps(configured) : LOCAL_APP_URL;
+}
+
+export function getAuthCallbackUrl(environment?: AppUrlEnvironment): string {
+  return `${getAppBaseUrl(environment)}/auth/callback?next=/`;
 }
