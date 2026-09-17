@@ -15,7 +15,7 @@ export const vapiWebhookSchema = z.object({
   message: z
     .object({
       type: z.string().min(1),
-      timestamp: z.string().optional(),
+      timestamp: z.union([z.string(), z.number()]).optional(),
       status: z.string().optional(),
       endedReason: z.string().optional(),
       transcript: z.string().optional(),

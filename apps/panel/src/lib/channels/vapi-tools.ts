@@ -1,6 +1,12 @@
 import type { z } from "zod";
+import type { AppointmentConfirmationAction } from "@/lib/agent/appointment-confirmation";
 import { buildToolContext, invokeTool } from "@/lib/agent/tools/invoke-tool";
 import { getTool, listTools } from "@/lib/agent/tools/registry";
+import {
+  type VapiFunctionCall,
+  vapiToolCallArguments,
+  vapiToolCallName,
+} from "@/lib/channels/vapi-payload";
 
 // ---------------------------------------------------------------------------
 // Vapi custom-function tools
@@ -52,37 +58,14 @@ export function buildVapiToolDefinitions(): VapiToolDefinition[] {
 // Ejecucion de tool-calls
 // ---------------------------------------------------------------------------
 
-export type VapiFunctionCall = {
-  id?: string;
-  name?: string;
-  arguments?: unknown;
-  function?: { name?: string; arguments?: unknown };
+export type { VapiFunctionCall } from "@/lib/channels/vapi-payload";
+
+export type VapiToolResult = { name: string; toolCallId: string; result: string };
+
+type VapiToolExecution = {
+  callId: string;
+  confirmation: AppointmentConfirmationAction | null;
 };
-
-export type VapiToolResult = { toolCallId: string; result: string };
-
-function parseArguments(raw: unknown): Record<string, unknown> {
-  if (raw == null) return {};
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "object" && parsed !== null
-        ? (parsed as Record<string, unknown>)
-        : {};
-    } catch {
-      return {};
-    }
-  }
-  return typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-}
-
-function callName(call: VapiFunctionCall): string {
-  return call.function?.name ?? call.name ?? "";
-}
-
-function callArgs(call: VapiFunctionCall): Record<string, unknown> {
-  return parseArguments(call.function?.arguments ?? call.arguments);
-}
 
 /**
  * Ejecuta una lista de tool-calls de Vapi contra el registry del agente y
@@ -95,38 +78,119 @@ export async function handleVapiToolCalls(
   clinicId: string,
   conversationId: string | null,
   toolCalls: VapiFunctionCall[],
+  execution: VapiToolExecution,
 ): Promise<{ results: VapiToolResult[] }> {
-  const ctx = buildToolContext(clinicId, conversationId);
+  const ctx = buildToolContext(
+    clinicId,
+    conversationId,
+    execution.confirmation === "create",
+    execution.confirmation === "modify" || execution.confirmation === "cancel"
+      ? execution.confirmation
+      : null,
+  );
 
   const results = await Promise.all(
     toolCalls.map(async (call): Promise<VapiToolResult> => {
       const toolCallId = call.id ?? "";
-      const name = callName(call);
+      const name = vapiToolCallName(call);
+      const input = vapiToolCallArguments(call);
       const tool = getTool(name);
 
-      if (!tool) {
+      if (!toolCallId) {
         return {
+          name,
           toolCallId,
           result: JSON.stringify({
             success: false,
-            error: `Tool desconocida: ${name}`,
+            error: "Vapi no proporcionó un identificador para esta tool-call.",
+            error_code: "MISSING_TOOL_CALL_ID",
           }),
         };
       }
 
-      const parsed = tool.inputSchema.safeParse(callArgs(call));
-      if (!parsed.success) {
+      const eventId = `${execution.callId}:tool:${toolCallId}`;
+      const { error: claimError } = await ctx.supabaseAdmin.from("channel_events").insert({
+        clinic_id: clinicId,
+        conversation_id: conversationId,
+        channel: "phone",
+        provider: "vapi",
+        event_id: eventId,
+        event_type: `tool-calls:${name || "unknown"}`,
+        status: "processing",
+        payload: JSON.parse(
+          JSON.stringify({
+            call_id: execution.callId,
+            tool_call_id: toolCallId,
+            tool_name: name,
+            input,
+          }),
+        ),
+        occurred_at: new Date().toISOString(),
+      });
+
+      if (claimError?.code === "23505") {
+        const { data: existing } = await ctx.supabaseAdmin
+          .from("channel_events")
+          .select("status, result")
+          .eq("clinic_id", clinicId)
+          .eq("provider", "vapi")
+          .eq("event_id", eventId)
+          .maybeSingle();
+        const stored = existing?.result as { tool_result?: unknown } | null;
+        if (typeof stored?.tool_result === "string") {
+          return { name, toolCallId, result: stored.tool_result };
+        }
         return {
+          name,
           toolCallId,
           result: JSON.stringify({
+            success: false,
+            error: "Esta operación ya se está procesando. No la repitas todavía.",
+            error_code: "TOOL_CALL_IN_PROGRESS",
+          }),
+        };
+      }
+      if (claimError) throw claimError;
+
+      let result: string;
+
+      if (!tool) {
+        result = JSON.stringify({
+          success: false,
+          error: `Tool desconocida: ${name}`,
+          error_code: "UNKNOWN_TOOL",
+        });
+      } else {
+        const parsed = tool.inputSchema.safeParse(input);
+        if (!parsed.success) {
+          result = JSON.stringify({
             success: false,
             error: `Parametros invalidos para ${name}: ${parsed.error.message}`,
-          }),
-        };
+            error_code: "INVALID_TOOL_ARGUMENTS",
+          });
+        } else {
+          const outcome = await invokeTool(tool, parsed.data, ctx);
+          result = JSON.stringify(outcome);
+        }
       }
 
-      const outcome = await invokeTool(tool, parsed.data, ctx);
-      return { toolCallId, result: JSON.stringify(outcome) };
+      const parsedResult = JSON.parse(result) as { success?: boolean; error?: string };
+      const { error: evidenceError } = await ctx.supabaseAdmin
+        .from("channel_events")
+        .update({
+          status: parsedResult.success ? "completed" : "failed",
+          result: { tool_result: result },
+          error_message: parsedResult.success ? null : (parsedResult.error ?? "Tool fallida"),
+          processed_at: new Date().toISOString(),
+        })
+        .eq("clinic_id", clinicId)
+        .eq("provider", "vapi")
+        .eq("event_id", eventId);
+      if (evidenceError) {
+        console.error(`[vapi] could not finalize tool evidence for ${name}`, evidenceError);
+      }
+
+      return { name, toolCallId, result };
     }),
   );
 

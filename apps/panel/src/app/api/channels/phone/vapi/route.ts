@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
+import { getExplicitAppointmentConfirmation } from "@/lib/agent/appointment-confirmation";
 import {
   ensureVapiCall,
   resolveVapiChannel,
@@ -7,16 +8,13 @@ import {
   vapiWebhookSchema,
 } from "@/lib/channels/vapi";
 import {
-  handleVapiToolCalls,
-  type VapiFunctionCall,
-} from "@/lib/channels/vapi-tools";
+  extractVapiToolCalls,
+  isFinalVapiTranscript,
+  vapiConfirmationConversation,
+  vapiOccurredAt,
+} from "@/lib/channels/vapi-payload";
+import { handleVapiToolCalls, type VapiFunctionCall } from "@/lib/channels/vapi-tools";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-function extractToolCalls(payload: unknown): VapiFunctionCall[] {
-  const message = (payload as { message?: Record<string, unknown> })?.message;
-  const list = message?.toolCallList ?? message?.toolCalls;
-  return Array.isArray(list) ? (list as VapiFunctionCall[]) : [];
-}
 
 function secureEqual(actual: string | null, expected: string): boolean {
   if (!actual) return false;
@@ -41,12 +39,12 @@ async function persistVapiEvent(payload: unknown) {
     event_type: message.type,
     status: "completed",
     payload: JSON.parse(JSON.stringify(payload)),
-    occurred_at: message.timestamp ?? new Date().toISOString(),
+    occurred_at: vapiOccurredAt(message.timestamp),
     processed_at: new Date().toISOString(),
   });
   if (eventError && eventError.code !== "23505") throw eventError;
 
-  if (message.type === "transcript" && message.transcriptType === "final" && message.transcript) {
+  if (isFinalVapiTranscript(message.type, message.transcriptType) && message.transcript) {
     const sender = message.role === "user" ? "client" : "agent";
     await supabaseAdmin.from("messages").upsert(
       {
@@ -110,7 +108,15 @@ export async function POST(request: Request) {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
       await ensureVapiCall(supabaseAdmin, channel, parsed.data);
-      return Response.json(await vapiAssistantResponse(supabaseAdmin, channel, parsed.data));
+      const response = await vapiAssistantResponse(supabaseAdmin, channel, parsed.data);
+      after(async () => {
+        try {
+          await persistVapiEvent(payload);
+        } catch (error) {
+          console.error("[vapi] assistant-request persistence failed", error);
+        }
+      });
+      return Response.json(response);
     } catch (error) {
       console.error("[vapi] assistant request failed", error);
       return Response.json({
@@ -120,13 +126,23 @@ export async function POST(request: Request) {
   }
 
   if (parsed.data.message.type === "tool-calls") {
-    const rawCalls = extractToolCalls(payload);
+    const rawCalls: VapiFunctionCall[] = extractVapiToolCalls(payload);
     try {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
       const { conversation } = await ensureVapiCall(supabaseAdmin, channel, parsed.data);
+      const confirmationContext = vapiConfirmationConversation(payload);
+      const confirmation = confirmationContext.currentUserMessage
+        ? getExplicitAppointmentConfirmation(
+            confirmationContext.previousMessages,
+            confirmationContext.currentUserMessage,
+          )
+        : null;
       return Response.json(
-        await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls),
+        await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls, {
+          callId: parsed.data.message.call.id,
+          confirmation,
+        }),
       );
     } catch (error) {
       console.error("[vapi] tool-calls failed", error);
@@ -134,6 +150,7 @@ export async function POST(request: Request) {
       // en vez de quedarse colgado.
       return Response.json({
         results: rawCalls.map((call) => ({
+          name: call.function?.name ?? call.name ?? "",
           toolCallId: call.id ?? "",
           result: JSON.stringify({
             success: false,
