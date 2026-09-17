@@ -16,18 +16,64 @@ export default async function ConversationsLayout({ children }: { children: Reac
   const clinicId = organizationResult.context.organization.id;
   const clinicName = organizationResult.context.organization.name;
 
-  const { data: inboxConversations, error: inboxError } = await supabase
-    .from("v_conversations_inbox")
-    .select("*")
-    .eq("clinic_id", clinicId)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(200);
+  const [{ data: nonPhoneConversations, error: inboxError }, { data: callSessions }] =
+    await Promise.all([
+      supabase
+        .from("v_conversations_inbox")
+        .select("*")
+        .eq("clinic_id", clinicId)
+        .neq("channel", "phone")
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200),
+      supabase
+        .from("call_sessions")
+        .select("*")
+        .eq("clinic_id", clinicId)
+        .order("started_at", { ascending: false })
+        .limit(200),
+    ]);
 
   if (inboxError) {
     throw new Error(`No se pudo cargar la bandeja: ${inboxError.message}`);
   }
 
-  const rows = (inboxConversations ?? []).flatMap((row) => {
+  const callConversationIds = (callSessions ?? []).map((call) => call.conversation_id);
+  const { data: phoneConversations } =
+    callConversationIds.length > 0
+      ? await supabase
+          .from("v_conversations_inbox")
+          .select("*")
+          .eq("clinic_id", clinicId)
+          .in("id", callConversationIds)
+      : { data: [] };
+  const phoneConversationById = new Map((phoneConversations ?? []).map((row) => [row.id, row]));
+  const inboxConversations = [
+    ...(nonPhoneConversations ?? []),
+    ...(callSessions ?? []).flatMap((call) => {
+      const conversation = phoneConversationById.get(call.conversation_id);
+      return conversation
+        ? [
+            {
+              ...conversation,
+              client_phone: conversation.client_phone ?? call.from_number,
+              last_message_at: conversation.last_message_at ?? call.ended_at ?? call.started_at,
+              started_at: call.started_at,
+              call_count: 1,
+              last_call_duration_seconds: call.duration_seconds,
+              call_status: call.status,
+              call_from_number: call.from_number,
+              call_transcript_status: call.transcript_status,
+            },
+          ]
+        : [];
+    }),
+  ].sort(
+    (left, right) =>
+      new Date(right.last_message_at ?? right.started_at ?? 0).getTime() -
+      new Date(left.last_message_at ?? left.started_at ?? 0).getTime(),
+  );
+
+  const rows = inboxConversations.flatMap((row) => {
     if (!row.id || !row.status || !row.channel || !row.started_at) return [];
     return [
       {
@@ -83,6 +129,16 @@ export default async function ConversationsLayout({ children }: { children: Reac
           started_at: c.started_at,
           controlled_by: c.controlled_by,
           metadata: c.metadata,
+          call_status:
+            "call_status" in c && typeof c.call_status === "string" ? c.call_status : null,
+          call_from_number:
+            "call_from_number" in c && typeof c.call_from_number === "string"
+              ? c.call_from_number
+              : null,
+          call_transcript_status:
+            "call_transcript_status" in c && typeof c.call_transcript_status === "string"
+              ? c.call_transcript_status
+              : null,
         }))}
         clinicName={clinicName}
         clinicId={clinicId}

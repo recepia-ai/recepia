@@ -1,12 +1,13 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getValidAccessToken } from "@/lib/google-tokens";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import type {
-  CheckAvailabilityInput,
   AvailableSlot,
+  CheckAvailabilityInput,
   CheckAvailabilityState,
 } from "@/app/(app)/_actions/availability-schemas";
 import { checkAvailabilitySchema } from "@/app/(app)/_actions/availability-schemas";
+import { resolveAvailabilityWindow } from "@/lib/availability-window";
+import { getValidAccessToken } from "@/lib/google-tokens";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const TIMEZONE = "Europe/Madrid";
 const SLOT_GRANULARITY_MIN = 30;
@@ -109,10 +110,12 @@ export async function checkAvailabilityForClinic(
 ): Promise<CheckAvailabilityState> {
   const parsed = checkAvailabilitySchema.safeParse(input);
   if (!parsed.success) {
-    return { error: "Datos inválidos: " + parsed.error.issues.map((i) => i.message).join(", ") };
+    return { error: `Datos inválidos: ${parsed.error.issues.map((i) => i.message).join(", ")}` };
   }
 
   const { date_from, date_to, service_id, vet_user_id } = parsed.data;
+  const requestedWindow = resolveAvailabilityWindow(date_from, date_to);
+  if (requestedWindow.error) return { outcome: "error", error: requestedWindow.error };
   const supabaseAdmin = createAdminClient();
 
   // Load service
@@ -209,8 +212,8 @@ export async function checkAvailabilityForClinic(
   // Date range
   const fromDate = new Date(date_from);
   const toDate = new Date(date_to);
-  const fromDay = fromMadrid(formatInTimeZone(fromDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00");
-  const toDay = fromMadrid(formatInTimeZone(toDate, TIMEZONE, "yyyy-MM-dd") + "T00:00:00");
+  const fromDay = fromMadrid(`${formatInTimeZone(fromDate, TIMEZONE, "yyyy-MM-dd")}T00:00:00`);
+  const toDay = fromMadrid(`${formatInTimeZone(toDate, TIMEZONE, "yyyy-MM-dd")}T00:00:00`);
 
   const daysInRange: string[] = [];
   const cursor = new Date(fromDay);
@@ -221,9 +224,9 @@ export async function checkAvailabilityForClinic(
 
   const datesByDayOfWeek = new Map<number, string[]>();
   for (const ds of daysInRange) {
-    const dow = fromZonedTime(ds + "T12:00:00", TIMEZONE).getUTCDay();
+    const dow = fromZonedTime(`${ds}T12:00:00`, TIMEZONE).getUTCDay();
     if (!datesByDayOfWeek.has(dow)) datesByDayOfWeek.set(dow, []);
-    datesByDayOfWeek.get(dow)!.push(ds);
+    datesByDayOfWeek.get(dow)?.push(ds);
   }
 
   // For each vet, compute slots
@@ -270,6 +273,7 @@ export async function checkAvailabilityForClinic(
     }
     const available = candidateSlots.filter(
       (slot) =>
+        new Date(slot.starts_at) >= requestedWindow.earliest &&
         !busyResult.intervals.some((busy) =>
           overlaps(slot.starts_at, slot.ends_at, busy.start, busy.end),
         ),

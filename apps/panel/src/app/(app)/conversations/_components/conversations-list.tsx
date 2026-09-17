@@ -37,6 +37,9 @@ type ConversationRow = {
   started_at: string;
   controlled_by: string | null;
   metadata: unknown;
+  call_status: string | null;
+  call_from_number: string | null;
+  call_transcript_status: string | null;
 };
 
 function initials(name: string): string {
@@ -316,6 +319,19 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
               /^\[tool_/i.test(conv.last_message_preview ?? "")
                 ? "Actividad técnica registrada"
                 : conv.last_message_preview;
+            const callSummary =
+              conv.channel === "phone"
+                ? [
+                    conv.call_from_number,
+                    conv.last_call_duration_seconds !== null
+                      ? formatDuration(conv.last_call_duration_seconds)
+                      : null,
+                    conv.call_status,
+                    conv.call_transcript_status === "completed" ? "transcript" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : null;
 
             return (
               <Link
@@ -374,7 +390,8 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
                     )}
                     <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-stone-400">
-                        {preview ??
+                        {callSummary ??
+                          preview ??
                           (conv.channel === "phone" && conv.call_count > 0
                             ? `Llamada${conv.last_call_duration_seconds !== null ? ` · ${formatDuration(conv.last_call_duration_seconds)}` : ""}`
                             : conv.message_count > 0

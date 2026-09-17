@@ -25,6 +25,7 @@ type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type PetRow = Database["public"]["Tables"]["pets"]["Row"];
 type MsgRow = Database["public"]["Tables"]["messages"]["Row"];
 type CallSessionRow = Database["public"]["Tables"]["call_sessions"]["Row"];
+type ChannelEventRow = Database["public"]["Tables"]["channel_events"]["Row"];
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"] & {
   pets: { name: string } | { name: string }[] | null;
   services: { name: string } | { name: string }[] | null;
@@ -120,6 +121,18 @@ export default async function ConversationDetailPage({
           .eq("clinic_id", clinicId)
           .order("started_at", { ascending: false })
       : { data: null };
+  const callIds = (callSessions ?? []).map((call) => call.provider_call_id);
+  const { data: callToolEvents } =
+    callIds.length > 0
+      ? await supabase
+          .from("channel_events")
+          .select("*")
+          .eq("clinic_id", clinicId)
+          .eq("provider", "vapi")
+          .like("event_type", "tool-calls:%")
+          .order("occurred_at", { ascending: true })
+          .limit(500)
+      : { data: [] };
 
   const { data: controller } = convData.controlled_by
     ? await supabase
@@ -166,6 +179,7 @@ export default async function ConversationDetailPage({
   const clientPetRows = (clientPets ?? []) as PetRow[];
   const msgs = (messages ?? []) as MsgRow[];
   const calls = (callSessions ?? []) as CallSessionRow[];
+  const toolEvents = (callToolEvents ?? []) as ChannelEventRow[];
   const escalation = readEscalationDetails(convData.metadata);
   const primaryMessages = msgs.filter(
     (message) =>
@@ -321,9 +335,28 @@ export default async function ConversationDetailPage({
           <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
             {calls.length > 0 && (
               <div className="mx-auto mb-4 max-w-3xl space-y-3">
-                {calls.map((call) => (
-                  <CallSessionCard key={call.id} call={call} />
-                ))}
+                {calls.map((call) => {
+                  const tools = toolEvents
+                    .filter((event) => event.event_id.startsWith(`${call.provider_call_id}:tool:`))
+                    .map((event) => {
+                      const payload =
+                        event.payload &&
+                        typeof event.payload === "object" &&
+                        !Array.isArray(event.payload)
+                          ? (event.payload as Record<string, unknown>)
+                          : {};
+                      return {
+                        id: event.id,
+                        eventType: event.event_type,
+                        status: event.status,
+                        occurredAt: event.occurred_at,
+                        input: payload.input ?? null,
+                        result: event.result,
+                        errorMessage: event.error_message,
+                      };
+                    });
+                  return <CallSessionCard key={call.id} call={call} tools={tools} />;
+                })}
               </div>
             )}
             {primaryMessages.length === 0 ? (

@@ -46,19 +46,17 @@ async function persistVapiEvent(payload: unknown) {
 
   if (isFinalVapiTranscript(message.type, message.transcriptType) && message.transcript) {
     const sender = message.role === "user" ? "client" : "agent";
-    await supabaseAdmin.from("messages").upsert(
-      {
-        clinic_id: channel.clinic_id,
-        conversation_id: conversation.id,
-        direction: sender === "client" ? "inbound" : "outbound",
-        sender,
-        content_type: "text",
-        content: message.transcript,
-        provider_message_id: `vapi:${eventId}`,
-        metadata: { source: "live_transcript" },
-      },
-      { onConflict: "clinic_id,provider_message_id", ignoreDuplicates: true },
-    );
+    const { error: messageError } = await supabaseAdmin.from("messages").insert({
+      clinic_id: channel.clinic_id,
+      conversation_id: conversation.id,
+      direction: sender === "client" ? "inbound" : "outbound",
+      sender,
+      content_type: "text",
+      content: message.transcript,
+      provider_message_id: `vapi:${eventId}`,
+      metadata: { source: "live_transcript" },
+    });
+    if (messageError && messageError.code !== "23505") throw messageError;
   }
 
   if (message.type === "end-of-call-report") {

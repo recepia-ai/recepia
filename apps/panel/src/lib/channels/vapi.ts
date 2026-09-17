@@ -1,5 +1,6 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatInTimeZone } from "date-fns-tz";
 import { z } from "zod";
 import { startConversation } from "@/lib/agent/conversation-store";
 
@@ -109,27 +110,6 @@ export async function ensureVapiCall(
 ) {
   const callId = webhook.message.call.id;
   const { caller, called } = callParties(webhook);
-  const { data: existingConversation } = await supabaseAdmin
-    .from("conversations")
-    .select("*")
-    .eq("clinic_id", channel.clinic_id)
-    .eq("channel", "phone")
-    .eq("channel_thread_id", callId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  let conversation: ConversationRow | null = existingConversation;
-
-  if (!conversation) {
-    conversation = (await startConversation(
-      supabaseAdmin,
-      channel.clinic_id,
-      "phone",
-      caller || undefined,
-      callId,
-    )) as unknown as ConversationRow;
-  }
-  if (!conversation) throw new Error("No se pudo crear la conversación telefónica");
-
   const status = webhook.message.status;
   const mappedStatus =
     status === "in-progress"
@@ -149,6 +129,16 @@ export async function ensureVapiCall(
     .eq("provider_call_id", callId)
     .maybeSingle();
   if (existingCall) {
+    const { data: existingConversation, error: conversationError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", existingCall.conversation_id)
+      .eq("clinic_id", channel.clinic_id)
+      .single();
+    if (conversationError || !existingConversation) {
+      throw new Error("La llamada existe, pero su conversación canónica no está disponible");
+    }
+    const conversation = existingConversation as ConversationRow;
     if (!mappedStatus) return { conversation, callSession: existingCall, caller, called };
     const { data: updatedCall, error: updateError } = await supabaseAdmin
       .from("call_sessions")
@@ -166,6 +156,34 @@ export async function ensureVapiCall(
     return { conversation, callSession: updatedCall, caller, called };
   }
 
+  const { data: existingConversations, error: existingConversationError } = await supabaseAdmin
+    .from("conversations")
+    .select("*")
+    .eq("clinic_id", channel.clinic_id)
+    .eq("channel", "phone")
+    .eq("channel_thread_id", callId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (existingConversationError) {
+    throw new Error(
+      `No se pudo resolver la conversación telefónica: ${existingConversationError.message}`,
+    );
+  }
+  let conversation: ConversationRow | null =
+    (existingConversations?.[0] as ConversationRow | undefined) ?? null;
+
+  if (!conversation) {
+    conversation = (await startConversation(
+      supabaseAdmin,
+      channel.clinic_id,
+      "phone",
+      caller || undefined,
+      callId,
+    )) as unknown as ConversationRow;
+  }
+  if (!conversation) throw new Error("No se pudo crear la conversación telefónica");
+
   const { data: callSession, error } = await supabaseAdmin
     .from("call_sessions")
     .insert({
@@ -182,6 +200,31 @@ export async function ensureVapiCall(
     })
     .select("*")
     .single();
+  if (error?.code === "23505") {
+    const { data: racedCall, error: racedCallError } = await supabaseAdmin
+      .from("call_sessions")
+      .select("*")
+      .eq("provider", "vapi")
+      .eq("provider_call_id", callId)
+      .single();
+    if (racedCallError || !racedCall) {
+      throw new Error("Otra petición registró la llamada, pero no se pudo recuperar");
+    }
+    const { data: canonicalConversation, error: canonicalError } = await supabaseAdmin
+      .from("conversations")
+      .select("*")
+      .eq("id", racedCall.conversation_id)
+      .single();
+    if (canonicalError || !canonicalConversation) {
+      throw new Error("No se pudo recuperar la conversación canónica de la llamada");
+    }
+    return {
+      conversation: canonicalConversation as ConversationRow,
+      callSession: racedCall,
+      caller,
+      called,
+    };
+  }
   if (error) throw new Error(`No se pudo registrar la llamada: ${error.message}`);
   return { conversation, callSession, caller, called };
 }
@@ -197,7 +240,7 @@ export async function vapiAssistantResponse(
   const { caller } = callParties(webhook);
 
   const [{ data: clinic }, { data: services }, { data: client }] = await Promise.all([
-    supabaseAdmin.from("clinics").select("name").eq("id", channel.clinic_id).single(),
+    supabaseAdmin.from("clinics").select("name, timezone").eq("id", channel.clinic_id).single(),
     supabaseAdmin
       .from("services")
       .select(
@@ -229,11 +272,17 @@ export async function vapiAssistantResponse(
           .limit(10),
       ])
     : [{ data: [] }, { data: [] }];
+  const timezone = clinic?.timezone ?? "Europe/Madrid";
+  const now = new Date();
 
   return {
     assistantId,
     assistantOverrides: {
       variableValues: {
+        currentLocalDate: formatInTimeZone(now, timezone, "yyyy-MM-dd"),
+        currentLocalTime: formatInTimeZone(now, timezone, "HH:mm:ss"),
+        currentLocalIso: formatInTimeZone(now, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+        timezone,
         clinicName: clinic?.name ?? "el hospital veterinario",
         customerPhone: caller || "no disponible",
         customerName: client?.name ?? "cliente no identificado",
