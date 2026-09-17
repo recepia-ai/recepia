@@ -1,14 +1,18 @@
 import { z } from "zod";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // find_service_by_name
 // ---------------------------------------------------------------------------
 
 const inputSchema = z.object({
-  name: z.string().trim().min(1).describe(
-    "Nombre o descripcion del servicio buscado, ej. 'revision cachorro', 'vacuna', 'ecografia'",
-  ),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      "Nombre o descripcion del servicio buscado, ej. 'revision cachorro', 'vacuna', 'ecografia'",
+    ),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -45,17 +49,32 @@ type Output =
 // - Lowercases
 // - Trims whitespace
 function normalizeForSearch(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-async function handler(
-  input: Input,
-  ctx: ToolContext,
-): Promise<ToolResult<Output>> {
+export function rankServiceSuggestions(
+  services: Pick<ServiceRow, "id" | "name">[],
+  query: string,
+): ServiceSuggestion[] {
+  const queryTokens = new Set(normalizeForSearch(query).split(/\s+/).filter(Boolean));
+  if (queryTokens.size === 0) return [];
+
+  return services
+    .map((service) => {
+      const serviceTokens = new Set(normalizeForSearch(service.name).split(/\s+/).filter(Boolean));
+      const sharedTokens = [...queryTokens].filter((token) => serviceTokens.has(token)).length;
+      return { service, score: sharedTokens / queryTokens.size };
+    })
+    .filter(({ score }) => score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.service.name.localeCompare(right.service.name),
+    )
+    .slice(0, 5)
+    .map(({ service }) => ({ id: service.id, name: service.name }));
+}
+
+async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
   // Fetch ALL services for this clinic — small dataset (~40 rows max).
   // Filtering is done in TS with accent-insensitive normalization.
   const { data, error } = await ctx.supabaseAdmin
@@ -86,9 +105,7 @@ async function handler(
     };
   }
 
-  const matches = allServices.filter((s) =>
-    normalizeForSearch(s.name).includes(normalizedQuery),
-  );
+  const matches = allServices.filter((s) => normalizeForSearch(s.name).includes(normalizedQuery));
 
   // Exactly 1 match (partial or exact) → found: true.
   // This is what fixes bug: previously "cachorro" returned 1 suggestion as found:false.
@@ -101,12 +118,16 @@ async function handler(
   }
 
   if (matches.length === 0) {
+    const suggestions = rankServiceSuggestions(allServices, input.name);
     return {
       success: true,
       data: {
         found: false,
-        suggestions: [],
-        message: "No hay ningun servicio con ese nombre en el catalogo.",
+        suggestions,
+        message:
+          suggestions.length > 0
+            ? "No hay una coincidencia exacta. Pregunta al cliente si se refiere a una de estas opciones."
+            : "No hay ningun servicio con ese nombre en el catalogo.",
       },
     };
   }

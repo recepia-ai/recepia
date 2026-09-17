@@ -15,14 +15,10 @@
  * Opcional: VAPI_ASSISTANT_ID=<id> (por defecto el de Hospital Dr. Patino).
  */
 import { buildVapiToolDefinitions } from "../src/lib/channels/vapi-tools";
-import {
-  VOICE_FIRST_MESSAGE,
-  VOICE_SYSTEM_PROMPT,
-} from "../src/lib/channels/vapi-voice-prompt";
+import { VOICE_FIRST_MESSAGE, VOICE_SYSTEM_PROMPT } from "../src/lib/channels/vapi-voice-prompt";
 
 const KEY = process.env.VAPI_PRIVATE_KEY;
-const ASSISTANT_ID =
-  process.env.VAPI_ASSISTANT_ID ?? "e2bb61c0-269c-4736-883a-da0d64005d42";
+const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID ?? "e2bb61c0-269c-4736-883a-da0d64005d42";
 const API = "https://api.vapi.ai";
 
 if (!KEY) {
@@ -46,8 +42,15 @@ async function main() {
   }
   const assistant = (await getRes.json()) as {
     model?: { messages?: Msg[]; [k: string]: unknown };
+    transcriber?: Record<string, unknown>;
   };
   const model = { ...(assistant.model ?? {}) };
+  const transcriber = {
+    ...(assistant.transcriber ?? {}),
+    language: "es",
+    languages: ["es", "ca", "en", "fr", "it"],
+    languageHintsStrict: false,
+  };
 
   // 2. Tools desde el registry.
   model.tools = buildVapiToolDefinitions();
@@ -60,11 +63,11 @@ async function main() {
   else messages.unshift(sysMsg);
   model.messages = messages;
 
-  // 4. PATCH: model (prompt + tools) + primer mensaje.
+  // 4. PATCH: model (prompt + tools), primer mensaje y STT con espanol primario.
   const patchRes = await fetch(`${API}/assistant/${ASSISTANT_ID}`, {
     method: "PATCH",
     headers,
-    body: JSON.stringify({ model, firstMessage: VOICE_FIRST_MESSAGE }),
+    body: JSON.stringify({ model, firstMessage: VOICE_FIRST_MESSAGE, transcriber }),
   });
   if (!patchRes.ok) {
     console.error(`PATCH assistant fallo (${patchRes.status}):`, await patchRes.text());
@@ -75,7 +78,8 @@ async function main() {
   console.log(`OK. Assistant ${ASSISTANT_ID} sincronizado:`);
   console.log(`  - ${tools.length} tools: ${tools.map((t) => t.function.name).join(", ")}`);
   console.log(`  - system prompt (${VOICE_SYSTEM_PROMPT.length} chars) con reserva habilitada`);
-  console.log(`  - primer mensaje actualizado`);
+  console.log("  - primer mensaje actualizado");
+  console.log("  - transcripcion con espanol primario y cambio multilingue habilitado");
 }
 
 main().catch((err) => {

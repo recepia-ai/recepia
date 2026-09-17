@@ -196,20 +196,26 @@ export async function vapiAssistantResponse(
   if (!assistantId) throw new Error("El canal telefónico no tiene assistant_id de Vapi");
   const { caller } = callParties(webhook);
 
-  const { data: clinic } = await supabaseAdmin
-    .from("clinics")
-    .select("name")
-    .eq("id", channel.clinic_id)
-    .single();
-  const { data: client } = caller
-    ? await supabaseAdmin
-        .from("clients")
-        .select("id, name, phone")
-        .eq("clinic_id", channel.clinic_id)
-        .eq("phone", caller)
-        .is("deleted_at", null)
-        .maybeSingle()
-    : { data: null };
+  const [{ data: clinic }, { data: services }, { data: client }] = await Promise.all([
+    supabaseAdmin.from("clinics").select("name").eq("id", channel.clinic_id).single(),
+    supabaseAdmin
+      .from("services")
+      .select(
+        "name, duration_minutes, price_min_cents, price_max_cents, is_surgery, requires_fasting",
+      )
+      .eq("clinic_id", channel.clinic_id)
+      .eq("active", true)
+      .order("name"),
+    caller
+      ? supabaseAdmin
+          .from("clients")
+          .select("id, name, phone")
+          .eq("clinic_id", channel.clinic_id)
+          .eq("phone", caller)
+          .is("deleted_at", null)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const [{ data: pets }, { data: appointments }] = client
     ? await Promise.all([
@@ -232,6 +238,18 @@ export async function vapiAssistantResponse(
         customerPhone: caller || "no disponible",
         customerName: client?.name ?? "cliente no identificado",
         customerContext: JSON.stringify({ pets: pets ?? [], appointments: appointments ?? [] }),
+        serviceCatalog: JSON.stringify(
+          (services ?? []).map((service) => ({
+            name: service.name,
+            duration_minutes: service.duration_minutes,
+            price_min_euros:
+              service.price_min_cents === null ? null : service.price_min_cents / 100,
+            price_max_euros:
+              service.price_max_cents === null ? null : service.price_max_cents / 100,
+            is_surgery: service.is_surgery,
+            requires_fasting: service.requires_fasting,
+          })),
+        ),
         humanTransferNumber:
           typeof config.transfer_number === "string" ? config.transfer_number : "",
       },
