@@ -30,6 +30,7 @@ type ConversationRow = {
   channel: Database["public"]["Enums"]["channel_type"];
   message_count: number;
   call_count: number;
+  call_session_id: string | null;
   last_call_duration_seconds: number | null;
   last_message_at: string | null;
   last_message_preview: string | null;
@@ -40,6 +41,7 @@ type ConversationRow = {
   call_status: string | null;
   call_from_number: string | null;
   call_transcript_status: string | null;
+  call_appointment_created: boolean;
 };
 
 function initials(name: string): string {
@@ -66,6 +68,15 @@ function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatCallDate(value: string): string {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export function ConversationsList({ conversations, clinicName, clinicId }: Props) {
@@ -322,12 +333,14 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
             const callSummary =
               conv.channel === "phone"
                 ? [
+                    formatCallDate(conv.started_at),
                     conv.call_from_number,
                     conv.last_call_duration_seconds !== null
                       ? formatDuration(conv.last_call_duration_seconds)
                       : null,
                     conv.call_status,
                     conv.call_transcript_status === "completed" ? "transcript" : null,
+                    conv.call_appointment_created ? "cita creada" : "sin cita",
                   ]
                     .filter(Boolean)
                     .join(" · ")
@@ -335,7 +348,7 @@ export function ConversationsList({ conversations, clinicName, clinicId }: Props
 
             return (
               <Link
-                key={conv.id}
+                key={conv.call_session_id ?? conv.id}
                 href={href}
                 prefetch={true}
                 className={cn(

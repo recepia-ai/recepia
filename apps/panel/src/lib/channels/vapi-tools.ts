@@ -7,6 +7,10 @@ import {
   vapiToolCallArguments,
   vapiToolCallName,
 } from "@/lib/channels/vapi-payload";
+import {
+  hasRelativeAvailabilityIntent,
+  resolveRelativeAvailabilityInput,
+} from "@/lib/channels/vapi-relative-availability";
 
 // ---------------------------------------------------------------------------
 // Vapi custom-function tools
@@ -65,6 +69,7 @@ export type VapiToolResult = { name: string; toolCallId: string; result: string 
 type VapiToolExecution = {
   callId: string;
   confirmation: AppointmentConfirmationAction | null;
+  recentUserMessages?: string[];
 };
 
 /**
@@ -88,12 +93,28 @@ export async function handleVapiToolCalls(
       ? execution.confirmation
       : null,
   );
+  const { data: clinic } = await ctx.supabaseAdmin
+    .from("clinics")
+    .select("timezone")
+    .eq("id", clinicId)
+    .maybeSingle();
+  const timezone = clinic?.timezone ?? "Europe/Madrid";
+  const currentUserMessage = execution.recentUserMessages?.at(-1) ?? null;
+  const relativeMessage =
+    currentUserMessage && hasRelativeAvailabilityIntent(currentUserMessage)
+      ? currentUserMessage
+      : null;
 
   const results = await Promise.all(
     toolCalls.map(async (call): Promise<VapiToolResult> => {
       const toolCallId = call.id ?? "";
       const name = vapiToolCallName(call);
-      const input = vapiToolCallArguments(call);
+      const providerInput = vapiToolCallArguments(call);
+      const relativeResolution =
+        name === "check_availability"
+          ? resolveRelativeAvailabilityInput(providerInput, relativeMessage ?? null, timezone)
+          : { input: providerInput, relativeExpression: null };
+      const input = relativeResolution.input;
       const tool = getTool(name);
 
       if (!toolCallId) {
@@ -123,6 +144,13 @@ export async function handleVapiToolCalls(
             tool_call_id: toolCallId,
             tool_name: name,
             input,
+            ...(relativeResolution.relativeExpression
+              ? {
+                  provider_input: providerInput,
+                  relative_date_corrected: true,
+                  timezone,
+                }
+              : {}),
           }),
         ),
         occurred_at: new Date().toISOString(),

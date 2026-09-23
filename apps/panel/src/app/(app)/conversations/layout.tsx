@@ -38,15 +38,25 @@ export default async function ConversationsLayout({ children }: { children: Reac
   }
 
   const callConversationIds = (callSessions ?? []).map((call) => call.conversation_id);
-  const { data: phoneConversations } =
+  const [{ data: phoneConversations }, { data: callAppointments }] =
     callConversationIds.length > 0
-      ? await supabase
-          .from("v_conversations_inbox")
-          .select("*")
-          .eq("clinic_id", clinicId)
-          .in("id", callConversationIds)
-      : { data: [] };
+      ? await Promise.all([
+          supabase
+            .from("v_conversations_inbox")
+            .select("*")
+            .eq("clinic_id", clinicId)
+            .in("id", callConversationIds),
+          supabase
+            .from("appointments")
+            .select("conversation_id")
+            .eq("clinic_id", clinicId)
+            .in("conversation_id", callConversationIds),
+        ])
+      : [{ data: [] }, { data: [] }];
   const phoneConversationById = new Map((phoneConversations ?? []).map((row) => [row.id, row]));
+  const appointmentConversationIds = new Set(
+    (callAppointments ?? []).flatMap((row) => (row.conversation_id ? [row.conversation_id] : [])),
+  );
   const inboxConversations = [
     ...(nonPhoneConversations ?? []),
     ...(callSessions ?? []).flatMap((call) => {
@@ -59,10 +69,12 @@ export default async function ConversationsLayout({ children }: { children: Reac
               last_message_at: conversation.last_message_at ?? call.ended_at ?? call.started_at,
               started_at: call.started_at,
               call_count: 1,
+              call_session_id: call.id,
               last_call_duration_seconds: call.duration_seconds,
               call_status: call.status,
               call_from_number: call.from_number,
               call_transcript_status: call.transcript_status,
+              call_appointment_created: appointmentConversationIds.has(call.conversation_id),
             },
           ]
         : [];
@@ -122,6 +134,10 @@ export default async function ConversationsLayout({ children }: { children: Reac
           channel: c.channel,
           message_count: c.message_count ?? 0,
           call_count: c.call_count ?? 0,
+          call_session_id:
+            "call_session_id" in c && typeof c.call_session_id === "string"
+              ? c.call_session_id
+              : null,
           last_call_duration_seconds: c.last_call_duration_seconds,
           last_message_at: c.last_message_at,
           last_message_preview: c.last_message_preview,
@@ -139,6 +155,10 @@ export default async function ConversationsLayout({ children }: { children: Reac
             "call_transcript_status" in c && typeof c.call_transcript_status === "string"
               ? c.call_transcript_status
               : null,
+          call_appointment_created:
+            "call_appointment_created" in c && typeof c.call_appointment_created === "boolean"
+              ? c.call_appointment_created
+              : false,
         }))}
         clinicName={clinicName}
         clinicId={clinicId}

@@ -1,6 +1,6 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { z } from "zod";
 import { startConversation } from "@/lib/agent/conversation-store";
 
@@ -274,14 +274,35 @@ export async function vapiAssistantResponse(
     : [{ data: [] }, { data: [] }];
   const timezone = clinic?.timezone ?? "Europe/Madrid";
   const now = new Date();
+  const currentLocalDate = formatInTimeZone(now, timezone, "yyyy-MM-dd");
+  const [year, month, day] = currentLocalDate.split("-").map(Number);
+  const tomorrowUtc = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, (day ?? 1) + 1));
+  const tomorrowLocalDate = [
+    tomorrowUtc.getUTCFullYear(),
+    String(tomorrowUtc.getUTCMonth() + 1).padStart(2, "0"),
+    String(tomorrowUtc.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+  const tomorrowMorningFrom = formatInTimeZone(
+    fromZonedTime(`${tomorrowLocalDate}T00:00:00`, timezone),
+    timezone,
+    "yyyy-MM-dd'T'HH:mm:ssXXX",
+  );
+  const tomorrowMorningTo = formatInTimeZone(
+    fromZonedTime(`${tomorrowLocalDate}T13:59:59`, timezone),
+    timezone,
+    "yyyy-MM-dd'T'HH:mm:ssXXX",
+  );
 
   return {
     assistantId,
     assistantOverrides: {
       variableValues: {
-        currentLocalDate: formatInTimeZone(now, timezone, "yyyy-MM-dd"),
+        currentLocalDate,
         currentLocalTime: formatInTimeZone(now, timezone, "HH:mm:ss"),
         currentLocalIso: formatInTimeZone(now, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX"),
+        tomorrowLocalDate,
+        tomorrowMorningFrom,
+        tomorrowMorningTo,
         timezone,
         clinicName: clinic?.name ?? "el hospital veterinario",
         customerPhone: caller || "no disponible",

@@ -140,6 +140,14 @@ export async function POST(request: Request) {
         await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls, {
           callId: parsed.data.message.call.id,
           confirmation,
+          recentUserMessages: [
+            ...confirmationContext.previousMessages.flatMap((turn) =>
+              turn.sender === "client" ? [turn.content] : [],
+            ),
+            ...(confirmationContext.currentUserMessage
+              ? [confirmationContext.currentUserMessage]
+              : []),
+          ].slice(-6),
         }),
       );
     } catch (error) {
