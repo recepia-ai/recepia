@@ -23,6 +23,38 @@ test("resolves mañana por la mañana from the clinic local date", () => {
   assert.equal(result.input.date_to, "2026-09-24T13:59:59+02:00");
 });
 
+test("resolves mañana and pasado mañana as complete local days", () => {
+  const tomorrow = resolveRelativeAvailabilityInput(
+    { service_id: "service" },
+    "Quiero cita mañana",
+    "Europe/Madrid",
+    now,
+  );
+  const dayAfterTomorrow = resolveRelativeAvailabilityInput(
+    { service_id: "service" },
+    "Quiero cita pasado mañana",
+    "Europe/Madrid",
+    now,
+  );
+
+  assert.equal(tomorrow.input.date_from, "2026-09-24T00:00:00+02:00");
+  assert.equal(tomorrow.input.date_to, "2026-09-24T23:59:59+02:00");
+  assert.equal(dayAfterTomorrow.input.date_from, "2026-09-25T00:00:00+02:00");
+  assert.equal(dayAfterTomorrow.input.date_to, "2026-09-25T23:59:59+02:00");
+});
+
+test("uses the Europe/Madrid offset on a winter date", () => {
+  const result = resolveRelativeAvailabilityInput(
+    { service_id: "service" },
+    "Mañana por la mañana",
+    "Europe/Madrid",
+    new Date("2026-12-10T09:00:00.000Z"),
+  );
+
+  assert.equal(result.input.date_from, "2026-12-11T00:00:00+01:00");
+  assert.equal(result.input.date_to, "2026-12-11T13:59:59+01:00");
+});
+
 test("resolves esta tarde without changing the local day", () => {
   const result = resolveRelativeAvailabilityInput(
     { service_id: "service" },

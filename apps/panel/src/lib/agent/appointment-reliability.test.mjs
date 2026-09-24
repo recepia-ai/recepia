@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   findMatchingConfirmedAppointment,
+  findReusableAppointmentMutationAttempt,
   isSameAppointmentMutationToolInput,
   isSameAppointmentToolInput,
   markAppointmentMutationResultReused,
@@ -95,6 +96,31 @@ test("marks a reused modification result as already applied", () => {
       success: true,
       data: { appointment_id: "appointment-1", modified: true, already_applied: true },
     },
+  );
+});
+
+test("retries failed appointment mutations but reuses a prior success", () => {
+  const input = { ...intent };
+  const failed = {
+    id: "tool-1",
+    name: "create_appointment",
+    input,
+    output: { success: false, error: "provider unavailable" },
+  };
+  const successful = {
+    id: "tool-2",
+    name: "create_appointment",
+    input,
+    output: { success: true, data: { appointment_id: "appointment-1" } },
+  };
+
+  assert.equal(
+    findReusableAppointmentMutationAttempt("create_appointment", input, [failed]),
+    undefined,
+  );
+  assert.equal(
+    findReusableAppointmentMutationAttempt("create_appointment", input, [failed, successful]),
+    successful,
   );
 });
 

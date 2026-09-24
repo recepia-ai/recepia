@@ -5,6 +5,7 @@ import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
 import { loadMessages, saveMessage, startConversation } from "@/lib/agent/conversation-store";
 import { runAgentLoop } from "@/lib/agent/loop";
 import { findClientByIdentity } from "@/lib/client-identity";
+import { operationalErrorCode, operationalLog } from "@/lib/operational-logger";
 
 type AdminClient = SupabaseClient<Database>;
 type ChannelEventRow = Database["public"]["Tables"]["channel_events"]["Row"];
@@ -84,6 +85,7 @@ export async function processInboundMessage(
   supabaseAdmin: AdminClient,
   event: InboundChannelEvent,
 ): Promise<ProcessInboundResult> {
+  const startedAt = Date.now();
   if (event.type !== "message.received") {
     throw new Error(`Evento no soportado por el procesador de mensajes: ${event.type}`);
   }
@@ -119,7 +121,19 @@ export async function processInboundMessage(
         .maybeSingle();
 
       if (duplicate?.status !== "failed") {
-        if (duplicate) return storedResult(duplicate);
+        if (duplicate) {
+          const result = storedResult(duplicate);
+          operationalLog("info", "webhook.duplicate", {
+            clinic_id: event.clinicId,
+            conversation_id: result.conversationId ?? undefined,
+            channel: event.channel,
+            provider: event.provider,
+            event_id: event.eventId,
+            duplicate: true,
+            duration_ms: Date.now() - startedAt,
+          });
+          return result;
+        }
       } else {
         const { data: reclaimed } = await supabaseAdmin
           .from("channel_events")
@@ -143,7 +157,19 @@ export async function processInboundMessage(
             .select("*")
             .eq("id", duplicate.id)
             .single();
-          if (claimedByAnotherRequest) return storedResult(claimedByAnotherRequest);
+          if (claimedByAnotherRequest) {
+            const result = storedResult(claimedByAnotherRequest);
+            operationalLog("info", "webhook.duplicate", {
+              clinic_id: event.clinicId,
+              conversation_id: result.conversationId ?? undefined,
+              channel: event.channel,
+              provider: event.provider,
+              event_id: event.eventId,
+              duplicate: true,
+              duration_ms: Date.now() - startedAt,
+            });
+            return result;
+          }
         }
       }
     }
@@ -242,6 +268,16 @@ export async function processInboundMessage(
         terminated: false,
       };
       await completeEvent(supabaseAdmin, eventRow.id, queuedResult);
+      operationalLog("info", "webhook.completed", {
+        clinic_id: event.clinicId,
+        conversation_id: conversation.id,
+        channel: event.channel,
+        provider: event.provider,
+        event_id: event.eventId,
+        status: "queued_for_human",
+        duplicate: false,
+        duration_ms: Date.now() - startedAt,
+      });
       return queuedResult;
     }
 
@@ -253,6 +289,7 @@ export async function processInboundMessage(
       previousMessages,
       clientPhone: event.contact.phone,
       inboundProviderMessageId: providerMessageId,
+      channel: event.channel,
       supabaseAdmin,
     });
 
@@ -264,6 +301,16 @@ export async function processInboundMessage(
       terminated: agentResult.terminated,
     };
     await completeEvent(supabaseAdmin, eventRow.id, result);
+    operationalLog("info", "webhook.completed", {
+      clinic_id: event.clinicId,
+      conversation_id: conversation.id,
+      channel: event.channel,
+      provider: event.provider,
+      event_id: event.eventId,
+      status: agentResult.terminated ? "terminated" : "completed",
+      duplicate: false,
+      duration_ms: Date.now() - startedAt,
+    });
     return result;
   } catch (error) {
     await supabaseAdmin
@@ -274,6 +321,15 @@ export async function processInboundMessage(
         processed_at: new Date().toISOString(),
       })
       .eq("id", eventRow.id);
+    operationalLog("error", "webhook.failed", {
+      clinic_id: event.clinicId,
+      conversation_id: eventRow.conversation_id ?? undefined,
+      channel: event.channel,
+      provider: event.provider,
+      event_id: event.eventId,
+      error_code: operationalErrorCode(error, "CHANNEL_PROCESSING_FAILED"),
+      duration_ms: Date.now() - startedAt,
+    });
     throw error;
   }
 }

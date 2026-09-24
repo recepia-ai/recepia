@@ -14,6 +14,7 @@ import {
   vapiOccurredAt,
 } from "@/lib/channels/vapi-payload";
 import { handleVapiToolCalls, type VapiFunctionCall } from "@/lib/channels/vapi-tools";
+import { operationalErrorCode, operationalLog } from "@/lib/operational-logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function secureEqual(actual: string | null, expected: string): boolean {
@@ -102,21 +103,58 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Payload inválido" }, { status: 400 });
 
   if (parsed.data.message.type === "assistant-request") {
+    const startedAt = Date.now();
+    let clinicId: string | undefined;
+    let conversationId: string | undefined;
+    let callSessionId: string | undefined;
     try {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
-      await ensureVapiCall(supabaseAdmin, channel, parsed.data);
+      const { conversation, callSession } = await ensureVapiCall(
+        supabaseAdmin,
+        channel,
+        parsed.data,
+      );
+      clinicId = channel.clinic_id;
+      conversationId = conversation.id;
+      callSessionId = callSession.id;
       const response = await vapiAssistantResponse(supabaseAdmin, channel, parsed.data);
+      operationalLog("info", "vapi.assistant_request.completed", {
+        clinic_id: clinicId,
+        conversation_id: conversationId,
+        call_session_id: callSessionId,
+        channel: "phone",
+        provider: "vapi",
+        event_id: parsed.data.message.call.id,
+        duration_ms: Date.now() - startedAt,
+      });
       after(async () => {
         try {
           await persistVapiEvent(payload);
         } catch (error) {
-          console.error("[vapi] assistant-request persistence failed", error);
+          operationalLog("error", "webhook.failed", {
+            clinic_id: clinicId,
+            conversation_id: conversationId,
+            call_session_id: callSessionId,
+            channel: "phone",
+            provider: "vapi",
+            event_id: parsed.data.message.call.id,
+            error_code: operationalErrorCode(error, "VAPI_EVENT_PERSISTENCE_FAILED"),
+          });
         }
       });
       return Response.json(response);
     } catch (error) {
-      console.error("[vapi] assistant request failed", error);
+      operationalLog("error", "vapi.assistant_request.failed", {
+        clinic_id: clinicId,
+        conversation_id: conversationId,
+        call_session_id: callSessionId,
+        channel: "phone",
+        provider: "vapi",
+        event_id: parsed.data.message.call.id,
+        error_code: operationalErrorCode(error, "VAPI_ASSISTANT_REQUEST_FAILED"),
+        duration_ms: Date.now() - startedAt,
+      });
       return Response.json({
         error: "No puedo iniciar la recepción. Voy a pasarte con el equipo.",
       });
@@ -125,10 +163,21 @@ export async function POST(request: Request) {
 
   if (parsed.data.message.type === "tool-calls") {
     const rawCalls: VapiFunctionCall[] = extractVapiToolCalls(payload);
+    const startedAt = Date.now();
+    let clinicId: string | undefined;
+    let conversationId: string | undefined;
+    let callSessionId: string | undefined;
     try {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
-      const { conversation, caller } = await ensureVapiCall(supabaseAdmin, channel, parsed.data);
+      const { conversation, callSession, caller } = await ensureVapiCall(
+        supabaseAdmin,
+        channel,
+        parsed.data,
+      );
+      clinicId = channel.clinic_id;
+      conversationId = conversation.id;
+      callSessionId = callSession.id;
       const confirmationContext = vapiConfirmationConversation(payload);
       const confirmation = confirmationContext.currentUserMessage
         ? getExplicitAppointmentConfirmation(
@@ -139,6 +188,7 @@ export async function POST(request: Request) {
       return Response.json(
         await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls, {
           callId: parsed.data.message.call.id,
+          callSessionId: callSession.id,
           callerPhone: caller || undefined,
           confirmation,
           recentUserMessages: [
@@ -152,7 +202,16 @@ export async function POST(request: Request) {
         }),
       );
     } catch (error) {
-      console.error("[vapi] tool-calls failed", error);
+      operationalLog("error", "webhook.failed", {
+        clinic_id: clinicId,
+        conversation_id: conversationId,
+        call_session_id: callSessionId,
+        channel: "phone",
+        provider: "vapi",
+        event_id: parsed.data.message.call.id,
+        error_code: operationalErrorCode(error, "VAPI_TOOL_CALLS_FAILED"),
+        duration_ms: Date.now() - startedAt,
+      });
       // Devolver un error por cada tool-call para que el LLM lo comunique
       // en vez de quedarse colgado.
       return Response.json({
@@ -162,6 +221,7 @@ export async function POST(request: Request) {
           result: JSON.stringify({
             success: false,
             error: "No he podido completar la acción. Ofrece pasar con el equipo.",
+            error_code: "VAPI_TOOL_CALLS_FAILED",
           }),
         })),
       });
@@ -172,7 +232,12 @@ export async function POST(request: Request) {
     try {
       await persistVapiEvent(payload);
     } catch (error) {
-      console.error("[vapi] event processing failed", error);
+      operationalLog("error", "webhook.failed", {
+        channel: "phone",
+        provider: "vapi",
+        event_id: parsed.data.message.call.id,
+        error_code: operationalErrorCode(error, "VAPI_EVENT_PERSISTENCE_FAILED"),
+      });
     }
   });
   return Response.json({ received: true });

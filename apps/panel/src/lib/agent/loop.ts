@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "./anthropic-client";
 import { getExplicitAppointmentConfirmation } from "./appointment-confirmation";
 import {
-  isSameAppointmentMutationToolInput,
+  findReusableAppointmentMutationAttempt,
   markAppointmentMutationResultReused,
   shouldBlockBookingErrorEscalation,
 } from "./appointment-reliability";
@@ -172,6 +172,7 @@ export async function runAgentLoop(params: {
   previousMessages: MessageRecord[];
   clientPhone?: string;
   inboundProviderMessageId?: string;
+  channel?: string;
   supabaseAdmin: SupabaseClient<Database>;
 }): Promise<LoopResult> {
   const {
@@ -181,6 +182,7 @@ export async function runAgentLoop(params: {
     previousMessages,
     clientPhone,
     inboundProviderMessageId,
+    channel,
     supabaseAdmin,
   } = params;
 
@@ -332,11 +334,7 @@ export async function runAgentLoop(params: {
             "cancel_appointment",
           ].includes(tu.name as string);
           const repeatedAppointmentCall = isAppointmentMutation
-            ? allToolCalls.find(
-                (call) =>
-                  call.name === tu.name &&
-                  isSameAppointmentMutationToolInput(tu.name as string, call.input, toolInput),
-              )
+            ? findReusableAppointmentMutationAttempt(tu.name as string, toolInput, allToolCalls)
             : undefined;
           let toolResult: ToolResult<unknown>;
 
@@ -373,6 +371,7 @@ export async function runAgentLoop(params: {
               appointmentConfirmation === "modify" || appointmentConfirmation === "cancel"
                 ? appointmentConfirmation
                 : null,
+              { channel },
             );
             toolResult = await invokeTool(tool, toolInput, ctx);
           }

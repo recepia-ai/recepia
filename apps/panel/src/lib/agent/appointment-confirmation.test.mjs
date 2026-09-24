@@ -15,6 +15,13 @@ test("accepts an affirmative reply after an explicit confirmation question", () 
   );
 });
 
+test("accepts the supported concise booking confirmation variants", () => {
+  const history = [{ sender: "agent", content: "¿Confirmas que reserve esta cita?" }];
+  for (const reply of ["Sí", "Sí, confirmo", "Confirme", "Confirmo esta cita"]) {
+    assert.equal(getExplicitAppointmentConfirmation(history, reply), "create", reply);
+  }
+});
+
 test("accepts an explicit booking confirmation in natural language", () => {
   assert.equal(
     hasExplicitAppointmentConfirmation(
@@ -70,6 +77,16 @@ test("rejects an affirmative prefix followed by changed appointment conditions",
     hasExplicitAppointmentConfirmation(
       [{ sender: "agent", content: "¿Confirmas que reserve esta cita el martes a las 10:00?" }],
       "Sí, pero mejor mañana",
+    ),
+    false,
+  );
+});
+
+test("rejects a confirmation that conditionally changes the time", () => {
+  assert.equal(
+    hasExplicitAppointmentConfirmation(
+      [{ sender: "agent", content: "¿Confirmas que reserve esta cita el martes a las 10:00?" }],
+      "Sí, aunque prefiero otra hora",
     ),
     false,
   );

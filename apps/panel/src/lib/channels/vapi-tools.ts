@@ -12,6 +12,7 @@ import {
   hasRelativeAvailabilityIntent,
   resolveRelativeAvailabilityInput,
 } from "@/lib/channels/vapi-relative-availability";
+import { operationalLog } from "@/lib/operational-logger";
 
 // ---------------------------------------------------------------------------
 // Vapi custom-function tools
@@ -69,6 +70,7 @@ export type VapiToolResult = { name: string; toolCallId: string; result: string 
 
 type VapiToolExecution = {
   callId: string;
+  callSessionId?: string;
   callerPhone?: string;
   confirmation: AppointmentConfirmationAction | null;
   recentUserMessages?: string[];
@@ -94,6 +96,7 @@ export async function handleVapiToolCalls(
     execution.confirmation === "modify" || execution.confirmation === "cancel"
       ? execution.confirmation
       : null,
+    { channel: "phone", callSessionId: execution.callSessionId },
   );
   const { data: clinic } = await ctx.supabaseAdmin
     .from("clinics")
@@ -172,6 +175,16 @@ export async function handleVapiToolCalls(
           .maybeSingle();
         const stored = existing?.result as { tool_result?: unknown } | null;
         if (typeof stored?.tool_result === "string") {
+          operationalLog("info", "tool.duplicate", {
+            clinic_id: clinicId,
+            conversation_id: conversationId ?? undefined,
+            call_session_id: execution.callSessionId,
+            channel: "phone",
+            provider: "vapi",
+            event_id: eventId,
+            tool: name,
+            duplicate: true,
+          });
           return { name, toolCallId, result: stored.tool_result };
         }
         return {

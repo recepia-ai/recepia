@@ -1,4 +1,5 @@
 import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
+import { operationalLog } from "@/lib/operational-logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Tool, ToolContext, ToolFailure, ToolResult, ToolSuccess } from "./types";
 
@@ -57,6 +58,32 @@ export async function invokeTool<TInput, TOutput>(
   }
 
   const durationMs = Date.now() - startedAt;
+  const resultData = result.success ? (result as ToolSuccess<TOutput>).data : null;
+  const appointmentId =
+    resultData &&
+    typeof resultData === "object" &&
+    "appointment_id" in resultData &&
+    typeof (resultData as { appointment_id?: unknown }).appointment_id === "string"
+      ? (resultData as { appointment_id: string }).appointment_id
+      : undefined;
+  const errorCode = result.success
+    ? undefined
+    : ((result as ToolFailure).error_code ?? "TOOL_FAILED");
+
+  operationalLog(
+    result.success ? "info" : "warn",
+    result.success ? "tool.completed" : "tool.failed",
+    {
+      clinic_id: ctx.clinicId,
+      conversation_id: ctx.conversationId ?? undefined,
+      call_session_id: ctx.callSessionId,
+      channel: ctx.channel,
+      tool: tool.name,
+      appointment_id: appointmentId,
+      error_code: errorCode,
+      duration_ms: durationMs,
+    },
+  );
 
   // ------------------------------------------------------------------
   // Record to tool_invocations.
@@ -110,12 +137,15 @@ export function buildToolContext(
   conversationId: string | null = null,
   appointmentConfirmed = false,
   appointmentMutationConfirmed: "modify" | "cancel" | null = null,
+  observability: { channel?: string; callSessionId?: string } = {},
 ): ToolContext {
   return {
     clinicId,
     conversationId,
     appointmentConfirmed,
     appointmentMutationConfirmed,
+    channel: observability.channel,
+    callSessionId: observability.callSessionId,
     supabaseAdmin: createAdminClient(),
     logger: (msg: string, data?: unknown) => {
       console.log(`[ToolContext] ${msg}`, data ?? "");

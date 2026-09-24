@@ -12,6 +12,9 @@ export type ToolContext = {
   /** The current conversation ID, or null if the tool is invoked outside a
    *  conversation (e.g. from a test page). */
   conversationId: string | null;
+  /** Channel and call correlation are optional for panel/test invocations. */
+  channel?: string;
+  callSessionId?: string;
   /** True only when the current client turn explicitly confirms a proposal
    *  made by the Agent in the immediately preceding conversational turn. */
   appointmentConfirmed: boolean;

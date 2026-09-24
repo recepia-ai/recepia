@@ -18,6 +18,10 @@ type ToolAttempt = {
   output: { success: boolean };
 };
 
+type AppointmentMutationAttempt = ToolAttempt & {
+  input: Record<string, unknown>;
+};
+
 const APPOINTMENT_IDENTITY_FIELDS = [
   "client_id",
   "pet_id",
@@ -87,6 +91,23 @@ export function isSameAppointmentMutationToolInput(
     return left.appointment_id === right.appointment_id && left.reason === right.reason;
   }
   return false;
+}
+
+/**
+ * Only successful mutations are reusable. A failed provider/tool attempt may
+ * be retried, while a successful one must never execute a second mutation.
+ */
+export function findReusableAppointmentMutationAttempt<T extends AppointmentMutationAttempt>(
+  toolName: string,
+  input: Record<string, unknown>,
+  attempts: T[],
+): T | undefined {
+  return attempts.find(
+    (attempt) =>
+      attempt.name === toolName &&
+      attempt.output.success &&
+      isSameAppointmentMutationToolInput(toolName, attempt.input, input),
+  );
 }
 
 export function markAppointmentResultReused<T extends { success: boolean }>(result: T): T {

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { uuidSchema } from "@/lib/uuid-schema";
 import { checkAvailabilityForClinic } from "@/lib/availability-core";
-import type { Tool, ToolResult, ToolContext } from "./types";
+import { uuidSchema } from "@/lib/uuid-schema";
+import type { Tool, ToolContext, ToolResult } from "./types";
 
 const inputSchema = z.object({
   service_id: uuidSchema,
@@ -20,15 +20,21 @@ type Slot = {
   calendar_id: string;
 };
 
-type Output =
-  | { slots: Slot[] }
-  | { error: string };
+type Output = { slots: Slot[] } | { error: string };
 
 async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Output>> {
   const result = await checkAvailabilityForClinic(ctx.clinicId, input);
 
   if ("error" in result) {
-    return { success: false, error: result.error };
+    const errorCode =
+      result.outcome === "degraded"
+        ? result.error.includes("expirado")
+          ? "GOOGLE_AUTH_REQUIRED"
+          : result.error.includes("no está disponible")
+            ? "GOOGLE_CALENDAR_UNAVAILABLE"
+            : "GOOGLE_READ_FAILED"
+        : "AVAILABILITY_CHECK_FAILED";
+    return { success: false, error: result.error, error_code: errorCode };
   }
 
   return { success: true, data: { slots: result.slots } };

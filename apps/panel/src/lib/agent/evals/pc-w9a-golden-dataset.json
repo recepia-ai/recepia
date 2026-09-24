@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "timezone": "Europe/Madrid",
+  "syntheticIdentity": {
+    "client": "TEST RECEPIA",
+    "pet": "Mascota Demo",
+    "service": "Consulta general"
+  },
+  "cases": [
+    {
+      "id": "web-create-tomorrow",
+      "channel": "web",
+      "capabilities": [
+        "client_identification",
+        "pet_identification",
+        "service_lookup",
+        "relative_date",
+        "availability",
+        "explicit_confirmation",
+        "create_appointment"
+      ],
+      "relativeDate": {
+        "now": "2026-09-24T08:00:00.000Z",
+        "message": "Quiero cita mañana",
+        "expectedFrom": "2026-09-25T00:00:00+02:00",
+        "expectedTo": "2026-09-25T23:59:59+02:00"
+      },
+      "confirmation": {
+        "prompt": "¿Confirmas que reserve esta cita mañana a las 10:00?",
+        "reply": "Sí",
+        "expectedAction": "create"
+      },
+      "expected": {
+        "tools": [
+          "lookup_client",
+          "lookup_pets_by_client",
+          "find_service_by_name",
+          "check_availability",
+          "create_appointment"
+        ],
+        "createAppointmentCalls": 1
+      }
+    },
+    {
+      "id": "web-conditional-confirmation",
+      "channel": "web",
+      "capabilities": ["conditional_confirmation"],
+      "confirmation": {
+        "prompt": "¿Confirmas que reserve esta cita mañana a las 10:00?",
+        "reply": "Sí, pero mejor mañana",
+        "expectedAction": null
+      },
+      "expected": { "tools": ["check_availability"], "createAppointmentCalls": 0 }
+    },
+    {
+      "id": "whatsapp-modify-absolute-date",
+      "channel": "whatsapp",
+      "capabilities": [
+        "absolute_date",
+        "availability",
+        "explicit_confirmation",
+        "modify_appointment"
+      ],
+      "absoluteDate": {
+        "message": "El 28 de septiembre de 2026 a las 17:00",
+        "dateFrom": "2026-09-28T17:00:00+02:00",
+        "dateTo": "2026-09-28T17:30:00+02:00"
+      },
+      "confirmation": {
+        "prompt": "¿Confirmas el cambio de la cita al 28 de septiembre a las 17:00?",
+        "reply": "Sí, confirmo",
+        "expectedAction": "modify"
+      },
+      "expected": {
+        "tools": ["lookup_appointments", "check_availability", "modify_appointment"],
+        "modifyAppointmentCalls": 1
+      }
+    },
+    {
+      "id": "whatsapp-cancel",
+      "channel": "whatsapp",
+      "capabilities": ["explicit_confirmation", "cancel_appointment"],
+      "confirmation": {
+        "prompt": "¿Confirmas la cancelación de la cita?",
+        "reply": "Confirme",
+        "expectedAction": "cancel"
+      },
+      "expected": {
+        "tools": ["lookup_appointments", "cancel_appointment"],
+        "cancelAppointmentCalls": 1
+      }
+    },
+    {
+      "id": "whatsapp-human-takeover",
+      "channel": "whatsapp",
+      "capabilities": ["human_takeover"],
+      "expected": { "tools": [], "agentResponses": 0, "persistInbound": true }
+    },
+    {
+      "id": "whatsapp-provider-event-replay",
+      "channel": "whatsapp",
+      "capabilities": ["idempotency", "duplicate_message_protection"],
+      "expected": { "tools": [], "persistedMessagesOnReplay": 0, "createAppointmentCalls": 0 }
+    },
+    {
+      "id": "voice-create-tomorrow-morning",
+      "channel": "phone",
+      "capabilities": [
+        "client_identification",
+        "pet_identification",
+        "service_lookup",
+        "relative_date",
+        "timezone",
+        "availability",
+        "explicit_confirmation",
+        "create_appointment"
+      ],
+      "relativeDate": {
+        "now": "2026-09-24T08:00:00.000Z",
+        "message": "¿Qué huecos tienes mañana por la mañana?",
+        "expectedFrom": "2026-09-25T00:00:00+02:00",
+        "expectedTo": "2026-09-25T13:59:59+02:00"
+      },
+      "confirmation": {
+        "prompt": "¿Confirmas que reserve esta cita para Mascota Demo?",
+        "reply": "Confirmo esta cita",
+        "expectedAction": "create"
+      },
+      "expected": {
+        "tools": [
+          "lookup_client",
+          "lookup_pets_by_client",
+          "find_service_by_name",
+          "check_availability",
+          "create_appointment"
+        ],
+        "createAppointmentCalls": 1
+      }
+    },
+    {
+      "id": "voice-past-tomorrow",
+      "channel": "phone",
+      "capabilities": ["relative_date", "timezone", "availability"],
+      "relativeDate": {
+        "now": "2026-09-24T08:00:00.000Z",
+        "message": "Necesito cita pasado mañana",
+        "expectedFrom": "2026-09-26T00:00:00+02:00",
+        "expectedTo": "2026-09-26T23:59:59+02:00"
+      },
+      "expected": { "tools": ["check_availability"], "createAppointmentCalls": 0 }
+    },
+    {
+      "id": "voice-conditional-time-change",
+      "channel": "phone",
+      "capabilities": ["conditional_confirmation"],
+      "confirmation": {
+        "prompt": "¿Confirmas que reserve esta cita mañana a las 10:00?",
+        "reply": "Sí, aunque prefiero otra hora",
+        "expectedAction": null
+      },
+      "expected": { "tools": ["check_availability"], "createAppointmentCalls": 0 }
+    },
+    {
+      "id": "voice-safe-tool-retry",
+      "channel": "phone",
+      "capabilities": ["tool_retry", "idempotency", "create_once"],
+      "expected": {
+        "failedMutationCanRetry": true,
+        "successfulMutationIsReused": true,
+        "createAppointmentCalls": 1
+      }
+    }
+  ]
+}
