@@ -11,6 +11,7 @@ import {
   resolveWhatsAppCloudChannel,
   type WhatsAppCloudWebhook,
 } from "@/lib/channels/whatsapp-cloud";
+import { shouldRetryWhatsAppHttpFailure } from "@/lib/channels/whatsapp-send-retry";
 
 export type WhatsAppWebhook = WhatsAppCloudWebhook;
 
@@ -43,24 +44,18 @@ export async function send360DialogText(
 ): Promise<SendResult> {
   const apiKey = await readWhatsAppCredential(supabaseAdmin, channel);
   for (let attempt = 1; attempt <= 3; attempt++) {
-    let response: Response;
-    try {
-      response = await fetch("https://waba-v2.360dialog.io/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "D360-API-KEY": apiKey },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: normalizePhone(recipient),
-          type: "text",
-          text: { body: text },
-        }),
-      });
-    } catch (error) {
-      if (attempt === 3) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
-      continue;
-    }
+    const response = await fetch("https://waba-v2.360dialog.io/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "D360-API-KEY": apiKey },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: normalizePhone(recipient),
+        type: "text",
+        text: { body: text },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
 
     const body = (await response.json().catch(() => ({}))) as {
       messages?: Array<{ id?: string }>;
@@ -69,7 +64,7 @@ export async function send360DialogText(
     if (response.ok && externalMessageId) {
       return { externalMessageId, acceptedAt: new Date().toISOString() };
     }
-    const retryable = response.status === 429 || response.status >= 500;
+    const retryable = shouldRetryWhatsAppHttpFailure(response.status, attempt);
     if (!retryable || attempt === 3) {
       throw new Error(`360dialog rechazó el mensaje (${response.status})`);
     }

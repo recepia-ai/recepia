@@ -71,6 +71,7 @@ export type VapiToolResult = { name: string; toolCallId: string; result: string 
 type VapiToolExecution = {
   callId: string;
   callSessionId?: string;
+  automationEnabled?: boolean;
   callerPhone?: string;
   confirmation: AppointmentConfirmationAction | null;
   recentUserMessages?: string[];
@@ -201,7 +202,14 @@ export async function handleVapiToolCalls(
 
       let result: string;
 
-      if (!tool) {
+      if (execution.automationEnabled === false) {
+        result = JSON.stringify({
+          success: false,
+          error:
+            "La automatización telefónica está desactivada. No ejecutes esta acción y deriva la llamada al equipo.",
+          error_code: "AUTOMATION_DISABLED",
+        });
+      } else if (!tool) {
         result = JSON.stringify({
           success: false,
           error: `Tool desconocida: ${name}`,

@@ -8,6 +8,13 @@ import {
   resolveEvolutionChannel,
 } from "@/lib/channels/whatsapp-evolution";
 import { sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
+import { shouldSendAutomatedWhatsAppReply } from "@/lib/channels/whatsapp-reply-policy";
+import { recordOperationalSignal } from "@/lib/operational-alert-transport";
+import {
+  createOperationalLogRecord,
+  operationalErrorCode,
+  operationalLog,
+} from "@/lib/operational-logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function processEvolutionWebhook(payload: EvolutionWebhook): Promise<void> {
@@ -17,7 +24,7 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
   if (!event) return;
 
   const result = await processInboundMessage(supabaseAdmin, event);
-  if (!result.response || result.duplicate || result.queuedForHuman) return;
+  if (!shouldSendAutomatedWhatsAppReply(result) || !result.response) return;
 
   const { data: outbound } = await supabaseAdmin
     .from("messages")
@@ -53,7 +60,18 @@ export async function processEvolutionWebhook(payload: EvolutionWebhook): Promis
         .eq("id", outbound.id);
     }
   } catch (error) {
-    console.error("[evolution] outbound delivery failed", error);
+    const logContext = {
+      clinic_id: channel.clinic_id,
+      conversation_id: result.conversationId ?? undefined,
+      channel: "whatsapp",
+      provider: "evolution",
+      error_code: operationalErrorCode(error, "WHATSAPP_OUTBOUND_FAILED"),
+    };
+    operationalLog("error", "whatsapp.outbound.failed", logContext);
+    await recordOperationalSignal(
+      supabaseAdmin,
+      createOperationalLogRecord("error", "whatsapp.outbound.failed", logContext),
+    );
     if (outbound) {
       await supabaseAdmin
         .from("messages")

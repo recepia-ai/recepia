@@ -6,7 +6,7 @@ PC-W9 endurece Preview para pilotos controlados sin convertir el producto en una
 plataforma de infraestructura. Production queda fuera del paquete.
 
 - **PC-W9A — Observabilidad + regresiones:** **GO**; suite y validaciones locales superadas.
-- **PC-W9B — Resiliencia operativa:** no iniciado.
+- **PC-W9B — Resiliencia operativa:** **GO**; controles, degradación, reintentos y alertas persistentes validados.
 - **PC-W9C — Higiene de datos e infraestructura:** no iniciado.
 - **PC-W9D — Grabaciones y privacidad:** no iniciado.
 
@@ -60,9 +60,17 @@ reglas sin cambiar el contrato:
 | Creación de cita fallida | 1 fallo no esperado | Confirmar que no existe cita/evento antes de reintentar; `CONFIRMATION_REQUIRED` y slot ya ocupado no alertan. |
 | Vapi `assistant-request` fallido | 1 | Verificar número dinámico, Server URL, secreto y respuesta del Preview antes de otra llamada. |
 
-El evaluador no envía notificaciones todavía: deja umbrales y agrupaciones
-deterministas, verificables y listos para conectar al mecanismo operativo que se
-decida. Esto evita introducir infraestructura pesada antes del piloto.
+PC-W9B conecta el evaluador a un transporte ligero y persistente. Cada señal de
+fallo se guarda como `operational.signal` y cada alerta deduplicada como
+`operational.alert` en `channel_events`, con destino visible en
+**Ajustes → Operaciones**. La identidad de alerta combina regla, clínica,
+proveedor y ventana temporal, de modo que un incidente repetido no inunda el
+panel. No se registran secretos, payloads clínicos ni textos de pacientes.
+
+WhatsApp añade una sexta regla: dos fallos de outbound por clínica/proveedor en
+cinco minutos generan aviso. Las alertas de creación de cita y bootstrap Vapi
+son críticas; el resto son avisos operativos. El transporte es deliberadamente
+interno al stack actual: no añade Sentry, colas ni servicios de notificación.
 
 ## Semántica de reintento cubierta
 
@@ -72,12 +80,59 @@ no se ejecuta dos veces. Una mutación fallida no se presenta como éxito y pued
 reintentarse; el backend vuelve a comprobar cita existente y disponibilidad.
 Esta protección complementa la deduplicación persistente de `channel_events`.
 
-## Riesgos que permanecen al terminar PC-W9A
+## PC-W9B — Control por clínica y canal
 
-- Las alertas están definidas y probadas, pero todavía no tienen transporte de
-  notificación; se decide al abordar operación del piloto.
+La configuración `clinic_config.config.operations.ai_channels` mantiene tres
+interruptores independientes: `web`, `whatsapp` y `phone`. La ausencia de una
+clave conserva el comportamiento anterior (`true`). Solo un administrador de
+la clínica puede modificarlos en **Ajustes → Operaciones**. Cada escritura
+incluye actor, instante y canal; el trigger existente de `clinic_config_history`
+conserva el valor anterior y `updated_by`.
+
+| Canal pausado | Recepción y evidencia | Automatización | Respuesta al usuario | Estado operador |
+|---|---|---|---|---|
+| Web | Persiste inbound, conversación y evento | Agent y tools no se ejecutan | Aviso determinista, sin prometer ninguna operación | `awaiting_human` |
+| WhatsApp | Persiste inbound, conversación, evento y evidencia de outbound | Agent y tools no se ejecutan | Mismo aviso; `accepted` o `failed` según el proveedor | `awaiting_human` |
+| Voz / Vapi | Persiste `call_session`, conversación y eventos | Assistant dinámico sin tools; tool tardía devuelve `AUTOMATION_DISABLED` | Saludo de pausa y revisión por el equipo | `awaiting_human` |
+
+El takeover manual existente sigue teniendo prioridad: cuando una conversación
+ya está bajo control humano, el inbound se persiste y no se genera otra
+respuesta automática. Reactivar un canal no borra ni reasigna conversaciones.
+
+## Comportamiento ante proveedores degradados
+
+- **Google Calendar:** refresh, `freeBusy`, creación, verificación y compensación
+  tienen timeout de 12 segundos. Un token no utilizable produce degradación, no
+  una confirmación. La cita externa se crea antes de la fila interna; si Google
+  falla no hay cita interna, y si falla el insert interno se intenta borrar el
+  evento externo. El ID determinista del evento y la búsqueda previa de una cita
+  idéntica permiten reutilizar un éxito al repetir confirmación/tool call.
+- **Vapi:** los eventos usan identidad persistente, los duplicados se reutilizan
+  y un evento tardío no puede regresar una llamada ya terminada. Un
+  `assistant-request` fallido queda correlacionado y genera alerta crítica. No se
+  añade un retry propio: Vapi conserva la responsabilidad del retry de webhook.
+- **WhatsApp:** los duplicados inbound no generan un segundo outbound. Los
+  mensajes conservan `sending → accepted/failed`; un fallo queda visible y lleva
+  la conversación a revisión humana. Solo rechazos HTTP explícitos 429/5xx de
+  Meta/360dialog tienen reintento acotado; una excepción/timeout con aceptación
+  desconocida no se reenvía a ciegas. Evolution conserva un único intento salvo
+  su fallback de compatibilidad de payload, para evitar duplicados sin una clave
+  de idempotencia del proveedor.
+
+## Estado operativo visible
+
+**Ajustes → Operaciones** resume Web, WhatsApp, Voz/Vapi y Google Calendar como
+`Operativo`, `Degradado` o `Desactivado`. La señal combina configuración activa,
+integraciones/canales presentes y alertas de los últimos 30 minutos. Es una
+vista operativa mínima, no un monitor de disponibilidad externo.
+
+## Riesgos que permanecen al terminar PC-W9B
+
+- Las alertas llegan al panel y persisten, pero todavía no envían correo, SMS o
+  push externo; durante el piloto el operador debe revisar Ajustes → Operaciones.
 - El dataset valida políticas deterministas y contratos, no sustituye un smoke
   conectado de proveedores.
-- Kill switch, degradación por canal y respuestas exactas ante caídas pertenecen
-  a PC-W9B y no se implementan en PC-W9A.
+- Sin una restricción única nueva en base de datos queda una ventana teórica de
+  carrera entre dos creaciones simultáneas idénticas; la deduplicación de tool,
+  conversación, evento Google y búsqueda previa cubre los reintentos normales.
 - Inventario/limpieza y privacidad de grabaciones siguen reservados a PC-W9C/D.

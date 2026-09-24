@@ -1,5 +1,6 @@
 import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
-import { operationalLog } from "@/lib/operational-logger";
+import { recordOperationalSignal } from "@/lib/operational-alert-transport";
+import { createOperationalLogRecord, operationalLog } from "@/lib/operational-logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Tool, ToolContext, ToolFailure, ToolResult, ToolSuccess } from "./types";
 
@@ -70,20 +71,19 @@ export async function invokeTool<TInput, TOutput>(
     ? undefined
     : ((result as ToolFailure).error_code ?? "TOOL_FAILED");
 
-  operationalLog(
-    result.success ? "info" : "warn",
-    result.success ? "tool.completed" : "tool.failed",
-    {
-      clinic_id: ctx.clinicId,
-      conversation_id: ctx.conversationId ?? undefined,
-      call_session_id: ctx.callSessionId,
-      channel: ctx.channel,
-      tool: tool.name,
-      appointment_id: appointmentId,
-      error_code: errorCode,
-      duration_ms: durationMs,
-    },
-  );
+  const logLevel = result.success ? "info" : "warn";
+  const logEvent = result.success ? "tool.completed" : "tool.failed";
+  const logContext = {
+    clinic_id: ctx.clinicId,
+    conversation_id: ctx.conversationId ?? undefined,
+    call_session_id: ctx.callSessionId,
+    channel: ctx.channel,
+    tool: tool.name,
+    appointment_id: appointmentId,
+    error_code: errorCode,
+    duration_ms: durationMs,
+  };
+  operationalLog(logLevel, logEvent, logContext);
 
   // ------------------------------------------------------------------
   // Record to tool_invocations.
@@ -121,6 +121,13 @@ export async function invokeTool<TInput, TOutput>(
     ctx.logger(
       `[${tool.name}] tool_invocations INSERT exception`,
       dbErr instanceof Error ? dbErr.message : dbErr,
+    );
+  }
+
+  if (!result.success) {
+    await recordOperationalSignal(
+      ctx.supabaseAdmin,
+      createOperationalLogRecord(logLevel, logEvent, logContext),
     );
   }
 

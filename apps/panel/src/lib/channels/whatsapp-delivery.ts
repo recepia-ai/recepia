@@ -5,7 +5,7 @@ export function failedWhatsAppDeliveryMetadata(
   return {
     ...current,
     delivery_status: "failed",
-    delivery_error: "El proveedor de WhatsApp no aceptó el mensaje.",
+    delivery_error: "El proveedor de WhatsApp no confirmó la aceptación del mensaje.",
     failed_at: occurredAt,
     delivery_updated_at: occurredAt,
   };

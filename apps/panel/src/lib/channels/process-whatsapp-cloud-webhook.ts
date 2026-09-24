@@ -1,11 +1,21 @@
+import type { Database } from "@recepia/db";
 import { processInboundMessage } from "@/lib/channels/process-inbound-message";
 import {
   applyWhatsAppCloudStatuses,
+  configObject,
   inboundEventsFromWhatsAppCloud,
   parseWhatsAppCloudWebhook,
   resolveWhatsAppCloudChannel,
 } from "@/lib/channels/whatsapp-cloud";
+import { failedWhatsAppDeliveryMetadata } from "@/lib/channels/whatsapp-delivery";
 import { sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
+import { shouldSendAutomatedWhatsAppReply } from "@/lib/channels/whatsapp-reply-policy";
+import { recordOperationalSignal } from "@/lib/operational-alert-transport";
+import {
+  createOperationalLogRecord,
+  operationalErrorCode,
+  operationalLog,
+} from "@/lib/operational-logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type WhatsAppCloudProvider = "360dialog" | "meta_cloud";
@@ -34,7 +44,19 @@ export async function processWhatsAppCloudWebhook(
 
       for (const event of inboundEventsFromWhatsAppCloud(scopedWebhook, channel, provider)) {
         const result = await processInboundMessage(supabaseAdmin, event);
-        if (!result.response || result.duplicate || result.queuedForHuman) continue;
+        if (!shouldSendAutomatedWhatsAppReply(result) || !result.response) continue;
+
+        const { data: outbound } = await supabaseAdmin
+          .from("messages")
+          .select("id, metadata")
+          .eq("clinic_id", channel.clinic_id)
+          .eq("conversation_id", result.conversationId ?? "")
+          .eq("direction", "outbound")
+          .eq("sender", "agent")
+          .is("provider_message_id", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
         try {
           const sent = await sendWhatsAppText(
@@ -43,16 +65,6 @@ export async function processWhatsAppCloudWebhook(
             event.externalThreadId,
             result.response,
           );
-          const { data: outbound } = await supabaseAdmin
-            .from("messages")
-            .select("id, metadata")
-            .eq("conversation_id", result.conversationId ?? "")
-            .eq("direction", "outbound")
-            .eq("sender", "agent")
-            .is("provider_message_id", null)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
           if (outbound) {
             await supabaseAdmin
               .from("messages")
@@ -63,7 +75,29 @@ export async function processWhatsAppCloudWebhook(
               .eq("id", outbound.id);
           }
         } catch (error) {
-          console.error(`[${provider}] outbound delivery failed`, error);
+          const logContext = {
+            clinic_id: channel.clinic_id,
+            conversation_id: result.conversationId ?? undefined,
+            channel: "whatsapp",
+            provider,
+            error_code: operationalErrorCode(error, "WHATSAPP_OUTBOUND_FAILED"),
+          };
+          operationalLog("error", "whatsapp.outbound.failed", logContext);
+          await recordOperationalSignal(
+            supabaseAdmin,
+            createOperationalLogRecord("error", "whatsapp.outbound.failed", logContext),
+          );
+          if (outbound) {
+            await supabaseAdmin
+              .from("messages")
+              .update({
+                metadata: failedWhatsAppDeliveryMetadata(
+                  configObject(outbound.metadata),
+                ) as Database["public"]["Tables"]["messages"]["Update"]["metadata"],
+              })
+              .eq("clinic_id", channel.clinic_id)
+              .eq("id", outbound.id);
+          }
           if (result.conversationId) {
             await supabaseAdmin
               .from("conversations")

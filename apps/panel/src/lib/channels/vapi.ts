@@ -2,6 +2,7 @@ import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { startConversation } from "@/lib/agent/conversation-store";
+import { monotonicCallStatus } from "@/lib/channels/vapi-resilience";
 import type { VapiWebhook } from "@/lib/channels/vapi-schema";
 
 export { vapiWebhookSchema } from "@/lib/channels/vapi-schema";
@@ -100,12 +101,13 @@ export async function ensureVapiCall(
     }
     const conversation = existingConversation as ConversationRow;
     if (!mappedStatus) return { conversation, callSession: existingCall, caller, called };
+    const nextStatus = monotonicCallStatus(existingCall.status, mappedStatus);
     const { data: updatedCall, error: updateError } = await supabaseAdmin
       .from("call_sessions")
       .update({
-        status: mappedStatus,
+        status: nextStatus,
         answered_at:
-          mappedStatus === "in_progress"
+          nextStatus === "in_progress"
             ? (existingCall.answered_at ?? new Date().toISOString())
             : existingCall.answered_at,
       })

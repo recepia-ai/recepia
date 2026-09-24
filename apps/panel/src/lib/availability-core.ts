@@ -62,6 +62,7 @@ async function getBusyIntervals(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ timeMin, timeMax, items: [{ id: calendarId }] }),
+      signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) {
       const errText = await res.text();

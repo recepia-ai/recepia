@@ -4,8 +4,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { linkConversationIdentity } from "@/lib/agent/conversation-identity";
 import { loadMessages, saveMessage, startConversation } from "@/lib/agent/conversation-store";
 import { runAgentLoop } from "@/lib/agent/loop";
+import { automationDisabledMessage, getClinicAutomationControl } from "@/lib/automation-control";
+import { channelEventClaimAction } from "@/lib/channels/channel-event-retry";
 import { findClientByIdentity } from "@/lib/client-identity";
-import { operationalErrorCode, operationalLog } from "@/lib/operational-logger";
+import { recordOperationalSignal } from "@/lib/operational-alert-transport";
+import {
+  createOperationalLogRecord,
+  operationalErrorCode,
+  operationalLog,
+} from "@/lib/operational-logger";
 
 type AdminClient = SupabaseClient<Database>;
 type ChannelEventRow = Database["public"]["Tables"]["channel_events"]["Row"];
@@ -18,6 +25,7 @@ export type ProcessInboundResult = {
   duplicate: boolean;
   queuedForHuman: boolean;
   terminated: boolean;
+  automationDisabled: boolean;
 };
 
 function jsonPayload(value: unknown): JsonValue {
@@ -41,6 +49,7 @@ function storedResult(row: ChannelEventRow): ProcessInboundResult {
     duplicate: true,
     queuedForHuman: result?.queuedForHuman ?? false,
     terminated: result?.terminated ?? false,
+    automationDisabled: result?.automationDisabled ?? false,
   };
 }
 
@@ -120,7 +129,7 @@ export async function processInboundMessage(
         .eq("event_id", event.eventId)
         .maybeSingle();
 
-      if (duplicate?.status !== "failed") {
+      if (duplicate && channelEventClaimAction(duplicate.status) === "reuse") {
         if (duplicate) {
           const result = storedResult(duplicate);
           operationalLog("info", "webhook.duplicate", {
@@ -134,7 +143,7 @@ export async function processInboundMessage(
           });
           return result;
         }
-      } else {
+      } else if (duplicate) {
         const { data: reclaimed } = await supabaseAdmin
           .from("channel_events")
           .update({
@@ -266,6 +275,7 @@ export async function processInboundMessage(
         duplicate: false,
         queuedForHuman: true,
         terminated: false,
+        automationDisabled: false,
       };
       await completeEvent(supabaseAdmin, eventRow.id, queuedResult);
       operationalLog("info", "webhook.completed", {
@@ -279,6 +289,52 @@ export async function processInboundMessage(
         duration_ms: Date.now() - startedAt,
       });
       return queuedResult;
+    }
+
+    const automation = await getClinicAutomationControl(supabaseAdmin, event.clinicId);
+    if (!automation[event.channel]) {
+      const fallback = automationDisabledMessage(event.channel);
+      await saveMessage(supabaseAdmin, {
+        conversationId: conversation.id,
+        clinicId: event.clinicId,
+        direction: "inbound",
+        sender: "client",
+        content: text,
+        providerMessageId,
+      });
+      await saveMessage(supabaseAdmin, {
+        conversationId: conversation.id,
+        clinicId: event.clinicId,
+        direction: "outbound",
+        sender: "agent",
+        content: fallback,
+        metadata: { source: "automation_control", automation_disabled: true },
+      });
+      await supabaseAdmin
+        .from("conversations")
+        .update({ status: "awaiting_human" })
+        .eq("id", conversation.id)
+        .eq("clinic_id", event.clinicId);
+
+      const disabledResult: ProcessInboundResult = {
+        conversationId: conversation.id,
+        response: fallback,
+        duplicate: false,
+        queuedForHuman: true,
+        terminated: false,
+        automationDisabled: true,
+      };
+      await completeEvent(supabaseAdmin, eventRow.id, disabledResult);
+      operationalLog("warn", "automation.disabled", {
+        clinic_id: event.clinicId,
+        conversation_id: conversation.id,
+        channel: event.channel,
+        provider: event.provider,
+        event_id: event.eventId,
+        status: "queued_for_human",
+        duration_ms: Date.now() - startedAt,
+      });
+      return disabledResult;
     }
 
     const previousMessages = await loadMessages(supabaseAdmin, conversation.id);
@@ -299,6 +355,7 @@ export async function processInboundMessage(
       duplicate: false,
       queuedForHuman: false,
       terminated: agentResult.terminated,
+      automationDisabled: false,
     };
     await completeEvent(supabaseAdmin, eventRow.id, result);
     operationalLog("info", "webhook.completed", {
@@ -321,7 +378,7 @@ export async function processInboundMessage(
         processed_at: new Date().toISOString(),
       })
       .eq("id", eventRow.id);
-    operationalLog("error", "webhook.failed", {
+    const logContext = {
       clinic_id: event.clinicId,
       conversation_id: eventRow.conversation_id ?? undefined,
       channel: event.channel,
@@ -329,7 +386,12 @@ export async function processInboundMessage(
       event_id: event.eventId,
       error_code: operationalErrorCode(error, "CHANNEL_PROCESSING_FAILED"),
       duration_ms: Date.now() - startedAt,
-    });
+    };
+    operationalLog("error", "webhook.failed", logContext);
+    await recordOperationalSignal(
+      supabaseAdmin,
+      createOperationalLogRecord("error", "webhook.failed", logContext),
+    );
     throw error;
   }
 }

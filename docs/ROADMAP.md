@@ -82,8 +82,8 @@ https://recepia-panel-git-codex-e09e91-marcsolerroldan85-4850s-projects.vercel.a
 (login por magic link de Supabase Auth). PC-W8 no se ha desplegado a Production.
 
 **Fase en curso:** PC-W8 / C4 está formalmente cerrado en **GO**. PC-W9 está
-autorizado y PC-W9A (observabilidad + regresiones) está en **GO**; PC-W9B-D no
-han comenzado y requieren el cierre aceptado de PC-W9A. C1 y C2 están construidas; C3
+autorizado; PC-W9A (observabilidad + regresiones) y PC-W9B (resiliencia
+operativa) están en **GO**. PC-W9C-D no han comenzado. C1 y C2 están construidas; C3
 tiene E2E real mediante Evolution; C5 conserva pendientes de cierre,
 clasificación y resúmenes. Samuel ejecutó los 6 casos de la antigua Fase F y los
 considera correctos.
@@ -124,9 +124,18 @@ PC-W9A queda en **GO** con un dataset dorado ejecutable para web, WhatsApp y
 voz; regresiones de fechas/confirmación/idempotencia; logs JSON correlacionables
 sin PII; y reglas mínimas de alerta versionadas. La evidencia, umbrales y riesgos
 restantes están en `docs/pilot-hardening-operations.md`. No se ha iniciado
-PC-W9B ni se ha modificado Production.
+PC-W9C ni se ha modificado Production.
 
-### 1.3 Mapa de épicas
+### 1.3 PC-W9B — Resiliencia operativa
+
+PC-W9B queda en **GO** con kill switches por clínica para Web, WhatsApp y Voz,
+fallback humano trazable, timeouts de Google, idempotencia reforzada de citas y
+webhooks, estados operativos visibles y transporte persistente de alertas en el
+panel. Los fallos de proveedor no pueden producir confirmaciones falsas y los
+reintentos con aceptación desconocida no se ejecutan a ciegas. No se ha
+desplegado Production ni se ha iniciado PC-W9C.
+
+### 1.4 Mapa de épicas
 
 | Épica | Estado | Detalle |
 |---|---|---|
@@ -334,7 +343,7 @@ Priorizada. No se resuelve por iniciativa propia de una IA: se resuelve en la fa
 | Deuda | Gravedad | Dónde se resuelve |
 |---|---|---|
 | Dataset golden inicial y regresiones deterministas disponibles; falta ampliar casos conectados | Media | PC-W9A y evolución del piloto |
-| Logger estructurado y reglas mínimas disponibles; falta transporte de alertas | Media | PC-W9A/PC-W9B |
+| Alertas persistentes visibles en panel; falta transporte externo opcional | Baja | Evolución del piloto |
 | `packages/core` vacío; lógica acoplada al panel | Media | Fase H |
 | `AGENT.md` §5 desactualizado (nombres de tools) | Media | Fase G |
 | Páginas `/settings/test-*` expuestas en el panel de producción | Media | Fase K (ocultar o proteger tras rol admin) |
@@ -426,3 +435,4 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-08-28 | 1.3 | Marc + Codex | Incidente de disponibilidad resuelto: la degradación de API Gateway y el rechazo temporal de JWT de Supabase provocaban timeouts de Vercel y errores del calendario. Se reinicia `recepia-prod`, se valida su vuelta a `ACTIVE_HEALTHY` y se desacoplan los webhooks públicos de WhatsApp de la autenticación del dashboard. El middleware limita la espera de Auth a 6 segundos y muestra una recuperación automática en lugar de colgar la aplicación. |
 | 2026-09-24 | 1.4 | Marc + Codex | PC-W8 se cierra formalmente en GO tras una llamada real con assistant dinámico, contexto, disponibilidad, confirmación, cita, Google Calendar, Agenda y confirmación verbal. Se documentan arquitectura, operación y deuda no bloqueante. |
 | 2026-09-24 | 1.5 | Marc + Codex | PC-W9A queda en GO: dataset dorado multicanal, regresiones deterministas, logger JSON correlacionable, alertas operativas mínimas y retry seguro de mutaciones fallidas sin duplicar éxitos. PC-W9B-D no se inician. |
+| 2026-09-24 | 1.6 | Marc + Codex | PC-W9B queda en GO: kill switches por clínica/canal, fallback humano, resiliencia Google/Vapi/WhatsApp, idempotencia reforzada, estado operativo y alertas persistentes en Preview. Production intacta; PC-W9C no iniciado. |

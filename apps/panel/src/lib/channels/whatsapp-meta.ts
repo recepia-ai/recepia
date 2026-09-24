@@ -13,6 +13,7 @@ import {
   resolveWhatsAppCloudChannel,
   type WhatsAppCloudWebhook,
 } from "@/lib/channels/whatsapp-cloud";
+import { shouldRetryWhatsAppHttpFailure } from "@/lib/channels/whatsapp-send-retry";
 
 export type MetaWhatsAppWebhook = WhatsAppCloudWebhook;
 
@@ -87,27 +88,21 @@ export async function sendMetaWhatsAppText(
   const endpoint = `https://graph.facebook.com/${graphApiVersion(channel)}/${phoneNumberId(channel)}/messages`;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: normalizePhone(recipient),
-          type: "text",
-          text: { body: text },
-        }),
-      });
-    } catch (error) {
-      if (attempt === 3) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
-      continue;
-    }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: normalizePhone(recipient),
+        type: "text",
+        text: { body: text },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
 
     const body = (await response.json().catch(() => ({}))) as {
       messages?: Array<{ id?: string }>;
@@ -118,7 +113,7 @@ export async function sendMetaWhatsAppText(
       return { externalMessageId, acceptedAt: new Date().toISOString() };
     }
 
-    const retryable = response.status === 429 || response.status >= 500;
+    const retryable = shouldRetryWhatsAppHttpFailure(response.status, attempt);
     if (!retryable || attempt === 3) {
       const detail = body.error?.message ? `: ${body.error.message}` : "";
       throw new Error(`Meta rechazó el mensaje (${response.status})${detail}`);

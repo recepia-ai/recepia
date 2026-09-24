@@ -10,6 +10,7 @@ const TABS = [
   { key: "schedules", label: "Horarios", href: "/settings/schedules" },
   { key: "team", label: "Equipo", href: "/settings/team" },
   { key: "integrations", label: "Integraciones", href: "/settings/integrations" },
+  { key: "operations", label: "Operaciones", href: "/settings/operations" },
   { key: "profile", label: "Perfil", href: "/settings/profile" },
 ] as const;
 

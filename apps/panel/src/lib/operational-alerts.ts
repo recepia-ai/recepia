@@ -71,6 +71,14 @@ export const OPERATIONAL_ALERT_DEFINITIONS: OperationalAlertDefinition[] = [
     windowMs: 5 * 60_000,
     groupBy: ["clinic_id", "provider"],
   },
+  {
+    id: "whatsapp_outbound_failed",
+    description: "WhatsApp outbound delivery failed twice in five minutes.",
+    event: "whatsapp.outbound.failed",
+    threshold: 2,
+    windowMs: 5 * 60_000,
+    groupBy: ["clinic_id", "provider"],
+  },
 ];
 
 export type TriggeredOperationalAlert = {

@@ -1,12 +1,13 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getValidAccessToken } from "@/lib/google-tokens";
-import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
-import { isOwnedByOrganization } from "@/lib/organization-context";
 import type {
   CreateAppointmentInput,
   CreateAppointmentState,
 } from "@/app/(app)/_actions/appointment-schemas";
 import { createAppointmentSchema } from "@/app/(app)/_actions/appointment-schemas";
+import { googleAppointmentEventId } from "@/lib/appointment-idempotency";
+import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
+import { getValidAccessToken } from "@/lib/google-tokens";
+import { isOwnedByOrganization } from "@/lib/organization-context";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type ServiceRow = {
   id: string;
@@ -21,6 +22,7 @@ type ClientRow = { id: string; clinic_id: string; name: string };
 type PetRow = { id: string; clinic_id: string; client_id: string; name: string };
 type VetRow = { id: string; clinic_id: string; display_name: string | null };
 type VetCalendarRow = { vet_user_id: string; google_calendar_id: string };
+type ExistingAppointmentRow = { id: string; google_event_id: string | null };
 
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
@@ -40,6 +42,7 @@ async function isSlotFree(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ timeMin: startsAt, timeMax: endsAt, items: [{ id: calendarId }] }),
+      signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -165,6 +168,39 @@ export async function createAppointmentForClinic(
     if (!conversation) return { error: "Conversación no encontrada en esta clínica." };
   }
 
+  // A repeated confirmation or provider retry must reuse the completed booking.
+  // This identity is deliberately narrower than a time-slot lookup: the same
+  // pet/service/vet/start combination is the same appointment intent.
+  const { data: existingAppointment, error: existingAppointmentError } = await supabaseAdmin
+    .from("appointments")
+    .select("id, google_event_id")
+    .eq("clinic_id", clinicId)
+    .eq("client_id", client_id)
+    .eq("pet_id", pet_id)
+    .eq("vet_user_id", vet_user_id)
+    .eq("service_id", service_id)
+    .eq("starts_at", starts_at)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingAppointmentError) {
+    console.error(
+      "[createAppointmentForClinic] idempotency lookup failed:",
+      existingAppointmentError,
+    );
+    return { error: "No se pudo verificar si la cita ya existía. No se creó otra cita." };
+  }
+  if (existingAppointment) {
+    const existing = existingAppointment as ExistingAppointmentRow;
+    return {
+      success: true,
+      outcome: "confirmed_external_booking",
+      appointment_id: existing.id,
+      google_event_id: existing.google_event_id ?? undefined,
+    };
+  }
+
   // Get access token
   const tokenResult = await getValidAccessToken(clinicId);
   if ("error" in tokenResult) {
@@ -204,6 +240,7 @@ export async function createAppointmentForClinic(
     .join("\n");
 
   let googleEventId: string | null = null;
+  const requestedGoogleEventId = googleAppointmentEventId(clinicId, parsed.data);
   try {
     const eventRes = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events`,
@@ -214,15 +251,32 @@ export async function createAppointmentForClinic(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          id: requestedGoogleEventId,
           summary: eventSummary,
           description: eventDescription,
           start: googleCalendarDateTime(starts_at),
           end: googleCalendarDateTime(ends_at),
         }),
+        signal: AbortSignal.timeout(12_000),
       },
     );
 
-    if (!eventRes.ok) {
+    if (eventRes.status === 409) {
+      const existingEvent = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events/${encodeURIComponent(requestedGoogleEventId)}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(12_000),
+        },
+      );
+      if (!existingEvent.ok) {
+        return {
+          outcome: "provider_failure",
+          error: "Google Calendar devolvió un conflicto que no se pudo verificar.",
+        };
+      }
+      googleEventId = requestedGoogleEventId;
+    } else if (!eventRes.ok) {
       const errText = await eventRes.text();
       console.error(
         "[createAppointmentForClinic] Google event creation failed:",
@@ -235,8 +289,8 @@ export async function createAppointmentForClinic(
       };
     }
 
-    const eventData = await eventRes.json();
-    googleEventId = eventData.id as string;
+    const eventData = eventRes.status === 409 ? null : await eventRes.json();
+    googleEventId = googleEventId ?? (eventData?.id as string | undefined) ?? null;
     if (!googleEventId) {
       return {
         outcome: "provider_failure",
@@ -279,7 +333,11 @@ export async function createAppointmentForClinic(
         try {
           await fetch(
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events/${encodeURIComponent(googleEventId)}`,
-            { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+            {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: AbortSignal.timeout(12_000),
+            },
           );
         } catch {
           /* best effort */
@@ -300,7 +358,11 @@ export async function createAppointmentForClinic(
       try {
         await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events/${encodeURIComponent(googleEventId)}`,
-          { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(12_000),
+          },
         );
       } catch {
         /* best effort */

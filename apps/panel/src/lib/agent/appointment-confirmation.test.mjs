@@ -161,3 +161,17 @@ test("rejects a conditional cancellation confirmation", () => {
     null,
   );
 });
+
+test("does not authorize a repeated confirmation after the appointment success message", () => {
+  assert.equal(
+    getExplicitAppointmentConfirmation(
+      [
+        { sender: "agent", content: "¿Confirmas que reserve esta cita?" },
+        { sender: "client", content: "Sí" },
+        { sender: "agent", content: "La cita se ha creado correctamente." },
+      ],
+      "Sí, confirmo",
+    ),
+    null,
+  );
+});

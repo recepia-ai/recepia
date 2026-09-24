@@ -4,6 +4,12 @@ import type { Database } from "@recepia/db";
 import { revalidatePath } from "next/cache";
 import { failedWhatsAppDeliveryMetadata } from "@/lib/channels/whatsapp-delivery";
 import { resolveClinicWhatsAppChannel, sendWhatsAppText } from "@/lib/channels/whatsapp-provider";
+import { recordOperationalSignal } from "@/lib/operational-alert-transport";
+import {
+  createOperationalLogRecord,
+  operationalErrorCode,
+  operationalLog,
+} from "@/lib/operational-logger";
 import { resolveOrganizationContext } from "@/lib/organization-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -270,6 +276,7 @@ export async function sendMessage(
     }
 
     const pendingMetadata = { delivery_status: "sending", source: "operator" };
+    const supabaseAdmin = createAdminClient();
     const { data: pendingMessage, error: insertError } = await supabase
       .from("messages")
       .insert({
@@ -291,7 +298,6 @@ export async function sendMessage(
     }
 
     try {
-      const supabaseAdmin = createAdminClient();
       const channel = await resolveClinicWhatsAppChannel(supabaseAdmin, clinicId);
       const sent = await sendWhatsAppText(
         supabaseAdmin,
@@ -320,7 +326,17 @@ export async function sendMessage(
         };
       }
     } catch (error) {
-      console.error("[sendMessage] WhatsApp delivery failed", error);
+      const logContext = {
+        clinic_id: clinicId,
+        conversation_id,
+        channel: "whatsapp",
+        error_code: operationalErrorCode(error, "WHATSAPP_OUTBOUND_FAILED"),
+      };
+      operationalLog("error", "whatsapp.outbound.failed", logContext);
+      await recordOperationalSignal(
+        supabaseAdmin,
+        createOperationalLogRecord("error", "whatsapp.outbound.failed", logContext),
+      );
       await supabase
         .from("messages")
         .update({
@@ -330,7 +346,10 @@ export async function sendMessage(
         })
         .eq("id", pendingMessage.id)
         .eq("clinic_id", clinicId);
-      return { error: "WhatsApp no ha aceptado el mensaje. No se ha marcado como enviado." };
+      return {
+        error:
+          "WhatsApp no ha confirmado la aceptación del mensaje. No se ha marcado como enviado; revisa antes de reintentar.",
+      };
     }
 
     revalidatePath(`/conversations/${conversation_id}`);

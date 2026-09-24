@@ -71,3 +71,23 @@ test("alerts immediately when assistant-request or appointment creation fails", 
   assert.ok(alerts.some((alert) => alert.id === "vapi_assistant_request_failed"));
   assert.ok(alerts.some((alert) => alert.id === "appointment_creation_failed"));
 });
+
+test("alerts after repeated WhatsApp outbound failures", () => {
+  const alerts = evaluateOperationalAlerts(
+    [
+      record("whatsapp.outbound.failed", {
+        clinic_id: "clinic-1",
+        provider: "evolution",
+        channel: "whatsapp",
+      }),
+      record("whatsapp.outbound.failed", {
+        clinic_id: "clinic-1",
+        provider: "evolution",
+        channel: "whatsapp",
+      }),
+    ],
+    now,
+  );
+
+  assert.ok(alerts.some((alert) => alert.id === "whatsapp_outbound_failed"));
+});

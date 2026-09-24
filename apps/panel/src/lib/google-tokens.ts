@@ -77,6 +77,7 @@ export async function getValidAccessToken(clinicId: string): Promise<TokenResult
         client_id: clientId,
         client_secret: clientSecret,
       }).toString(),
+      signal: AbortSignal.timeout(12_000),
     });
 
     if (!res.ok) {
