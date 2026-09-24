@@ -1,14 +1,102 @@
-# Telefonía con Vapi — Runbook de conexión (v1: atiende · informa · transfiere)
+# Telefonía con Vapi — Runbook operativo
 
-> Estado del backend: **listo**. Webhook en `POST https://app.recepia.iatope.com/api/channels/phone/vapi`
-> (verifica `VAPI_WEBHOOK_SECRET`, registra llamada, transcripción en vivo, grabación, transferencia).
-> En cada llamada Vapi hace `assistant-request` y el webhook devuelve `assistantId` + `assistantOverrides.variableValues`
-> con el contexto de la clínica y del cliente identificado por su teléfono.
->
-> Alcance **v1**: Recepia atiende 24/7, se identifica como IA, reconoce al que llama, informa
-> (horarios, servicios/precios, sus citas ya existentes), hace triaje y **transfiere en caliente** al equipo
-> o toma recado. **No reserva/cancela en vivo por voz** (eso es la iteración siguiente: exponer las tools
-> de `apps/panel/src/lib/agent/tools` como endpoint que Vapi pueda invocar).
+> **Estado vigente:** PC-W8 cerrado en **GO** el 24 de septiembre de 2026.
+> El flujo de reserva por voz fue validado de extremo a extremo en Preview. No se
+> ha desplegado este cierre a Production.
+
+## Arquitectura vigente
+
+El número español entra por Twilio/Vapi sin assistant estático. Vapi envía
+`assistant-request` a `POST /api/channels/phone/vapi`; Recepia autentica
+`x-vapi-secret`, resuelve el canal y la clínica, crea o recupera una única
+`call_session` y su `conversation`, y devuelve el `assistantId` configurado junto
+con `assistantOverrides.variableValues`.
+
+Las tool-calls llegan al mismo endpoint y se ejecutan contra el registry común de
+`apps/panel/src/lib/agent/tools`. Recepia aplica scoping, confirmación e
+idempotencia, persiste la evidencia y devuelve el resultado a Vapi. Vapi es el
+transporte/runtime de voz; Recepia es la autoridad de datos y acciones.
+
+### Configuración necesaria
+
+- Número Vapi/Twilio con **Assistant vacío** (`assistantId = null`).
+- Server URL `https://<host-recepia>/api/channels/phone/vapi`.
+- Header `x-vapi-secret` coincidente con `VAPI_WEBHOOK_SECRET` del entorno.
+- Vapi Phone Number ID coincidente con el canal telefónico activo de la clínica.
+- En Recepia: Assistant ID dinámico, número de transferencia y Vapi private API
+  key cifrada en Vault.
+- Prompt, primer mensaje y tools sincronizados desde
+  `apps/panel/scripts/sync-vapi-assistant.ts`; no mantener una copia divergente en
+  el dashboard de Vapi.
+
+### Contexto por llamada
+
+Recepia inyecta clínica, teléfono real del llamante, cliente, mascotas, próximas
+citas, catálogo activo de servicios, número de transferencia, fecha/hora local,
+timezone y rangos relativos como “mañana por la mañana”. Para el piloto la zona
+es `Europe/Madrid`. El teléfono autenticado de la llamada prevalece sobre el que
+el modelo pudiera generar en `lookup_client`.
+
+### Disponibilidad y Google Calendar
+
+- `find_service_by_name` usa servicios activos reales, no texto hardcodeado.
+- `check_availability` recibe ISO con offset y resuelve expresiones relativas con
+  el reloj/timezone de Recepia.
+- Los slots respetan servicios/veterinarios activos,
+  `service_vet_assignments`, `vet_consultation_hours`, `vet_calendars`, citas y
+  `freeBusy` de Google.
+- El modelo verbaliza exactamente la fecha/hora devuelta por la tool y ofrece
+  alternativas reales si no hay hueco.
+- Google requiere OAuth conectado, tokens válidos en Vault y calendario asignado
+  al veterinario.
+
+### Confirmación y persistencia
+
+Antes de `create_appointment`, el agente resume fecha, hora, servicio y mascota.
+Solo una afirmación pura en el turno inmediatamente siguiente autoriza la
+escritura; una frase que cambia condiciones invalida la propuesta. El agente no
+puede anunciar una reserva hasta recibir `success=true` y `appointment_id`.
+Intentos idénticos dentro de la conversación son idempotentes.
+
+Persistencia: `call_sessions` conserva una sesión canónica por llamada;
+`conversations` y `messages`, el transcript; `channel_events`, los webhooks y
+tool-calls idempotentes; `tool_invocations`, entradas/resultados; y
+`appointments`, la cita vinculada. El `end-of-call-report` completa duración y
+transcript. Si Vapi entrega una grabación, su URL puede quedar en metadata, pero
+no existe aún política definitiva de descarga, acceso o retención de audio.
+
+### E2E validado — PC-W8
+
+Teléfono español → Vapi → `assistant-request` dinámico → Recepia → contexto →
+servicio → `check_availability` → Google Calendar → confirmación explícita →
+`create_appointment` → Agenda → confirmación verbal.
+
+- 25/09/2026, 08:30–08:55, Consulta general.
+- Appointment `44b39517-6d04-49c2-a131-9a7918059b55`, `confirmed`.
+- Evento Google creado y cita visible en Agenda.
+- Una `call_session`, una conversación y transcript completo, sin duplicados.
+- Commit de cierre: `a090b27 fix(panel): accept polite voice confirmations`.
+
+### Deuda no bloqueante
+
+- 717 conversaciones telefónicas históricas duplicadas; no son llamadas reales
+  canónicas y no se borran en PC-W8.
+- Clientes/mascotas sintéticos de pruebas pendientes de limpieza selectiva con
+  trazabilidad inequívoca.
+- Posibles deployments/proyectos Vercel accidentales pendientes de auditoría.
+- Tratamiento de artifacts de grabación Vapi pendiente.
+- Consentimiento, acceso, cifrado y retención/privacidad del audio pendientes
+  antes de grabación permanente.
+- Ampliación futura, guiada por datos, de expresiones de confirmación por voz sin
+  debilitar el rechazo de confirmaciones condicionales.
+
+---
+
+## Apéndice histórico v1 — sustituido por la arquitectura vigente
+
+El contenido siguiente documenta la primera versión informativa/transferencia y
+se conserva solo como referencia histórica. No describe el comportamiento
+operativo actual y no debe copiarse al assistant.
 
 ---
 

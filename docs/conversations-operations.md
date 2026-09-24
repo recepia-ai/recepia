@@ -1,6 +1,8 @@
 # Operación de Conversaciones
 
-Estado: implementación técnica compilada; webhook directo de Meta verificado y suscrito. Número de prueba, canal activo y E2E real pendientes.
+Estado: web, WhatsApp Evolution y telefonía Vapi disponen de E2E real validado en
+Preview. PC-W8 (reserva por voz) quedó cerrado en GO el 24/09/2026. Production no
+incluye automáticamente este cierre.
 
 ## Puntos de entrada
 
@@ -79,12 +81,22 @@ variables verificadas del cliente:
 - `customerPhone`
 - `customerName`
 - `customerContext` (mascotas y próximas citas)
+- `serviceCatalog` (catálogo operativo activo)
 - `humanTransferNumber`
+- fecha/hora local, timezone y rangos relativos calculados por Recepia
 
-El prompt del asistente de Vapi debe presentarse en su primera intervención como
-agente de IA del equipo del hospital y usar `humanTransferNumber` en una tool
-`transferCall` con transferencia en caliente. Vapi envía estados, transcripción y
-el informe final al mismo endpoint; Recepia los incorpora a la conversación.
+El prompt y las tools se sincronizan desde código mediante
+`apps/panel/scripts/sync-vapi-assistant.ts`. Las tool-calls llegan al mismo Server
+URL autenticado y usan el registry común del agente. Vapi envía estados,
+transcripción y el informe final al mismo endpoint; Recepia los incorpora a
+`call_sessions`, `conversations`, `messages`, `channel_events` y
+`tool_invocations`.
+
+La reserva exige confirmación afirmativa pura en el turno inmediatamente
+posterior a la propuesta. No se anuncia una reserva hasta que
+`create_appointment` devuelve `success=true` y `appointment_id`. Disponibilidad y
+fechas proceden de Recepia y Google Calendar, nunca del conocimiento temporal del
+modelo. El runbook detallado vive en `vapi-phone-assistant.md`.
 
 ## Prueba E2E mínima antes de tráfico real
 
@@ -92,9 +104,10 @@ el informe final al mismo endpoint; Recepia los incorpora a la conversación.
    panel y comprobar que la respuesta humana aparece en el chat.
 2. WhatsApp: enviar un texto real, comprobar respuesta de IA, estados
    enviado/entregado/leído y respuesta manual después de tomar control.
-3. Teléfono: llamar desde un cliente conocido, comprobar presentación como IA,
-   contexto correcto, transcripción, grabación y transferencia atendida por una
-   persona real.
+3. Teléfono: llamar desde un cliente conocido, comprobar `assistant-request`
+   dinámico, contexto correcto, transcripción, servicio, disponibilidad real,
+   confirmación explícita, `appointment_id`, Google Calendar, Agenda y respuesta
+   verbal. La grabación y su retención se validan en un paquete separado.
 4. Repetir un webhook de cada proveedor y confirmar que no duplica mensajes ni
    acciones.
 5. Confirmar que una clínica no puede leer ni operar datos de otra.

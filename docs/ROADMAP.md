@@ -1,6 +1,6 @@
 # RECEPIA — ROADMAP.md
 
-> **Hoja de ruta viva.** Versión 0.4 — 21 de agosto de 2026.
+> **Hoja de ruta viva.** Versión 1.4 — 24 de septiembre de 2026.
 > Sustituye a la v0.1 (plan de 6 semanas naturales, junio 2026), que quedó obsoleta: el trabajo real se organizó por **épicas y fases**, no por semanas de calendario.
 >
 > **Para cualquier IA que empiece a trabajar en Recepia: lee este documento entero antes de tocar nada.** Después, según la tarea, lee `PROJECT.md` (visión y decisiones), `AGENT.md` (diseño del agente y config del Dr. Patiño), `SCHEMA.md` (modelo de datos), `SETUP.md` (entorno) y `LEGAL.md`.
@@ -46,7 +46,7 @@ El objetivo operativo es una única zona de conversaciones del hospital con vist
 1. **C1 — Centro de Conversaciones:** histórico, búsqueda, filtros, tiempo real, toma de control auditada y timeline preparado para texto, audio y llamadas.
 2. **C2 — Núcleo omnicanal:** contrato independiente del proveedor y extracción de la lógica compartida a `packages/core`.
 3. **C3 — WhatsApp:** demostración con Meta Cloud API y número de prueba; después onboarding 360dialog/Meta para el número real, adjuntos, reintentos e idempotencia.
-4. **C4 — Telefonía real:** Vapi + Twilio como referencia inicial, transcripción, grabación, transferencia en caliente a una persona real y registro en la misma zona de conversaciones. El agente carga únicamente el contexto de la clínica y del cliente identificado para responder sobre citas, operaciones, cirugías, tareas pendientes y consultas sencillas. Los casos reservados a veterinario o secretaría disparan transferencia determinística. Proveedores y gasto se confirman antes de contratar.
+4. **C4 — Telefonía real (PC-W8 ✅ GO):** Vapi + Twilio con `assistant-request` dinámico, transcript, tools compartidas, reserva en Google Calendar, confirmación explícita y registro en la misma zona de conversaciones. Los casos no recuperables o reservados a personal humano disparan transferencia determinística. La grabación permanente y su retención quedan fuera de PC-W8.
 5. **C5 — Agente operativo:** conectar el agente común con citas, clientes, mascotas, tareas del hospital, cierre, clasificación y resúmenes.
 
 **Hecho cuando C1:** el panel muestra conversaciones activas y cerradas de web, WhatsApp y teléfono; permite buscar y filtrar; recibe cambios sin recargar; registra quién toma control; y representa una llamada simulada con sus mensajes/transcripción en el timeline.
@@ -65,17 +65,59 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 
 ---
 
-## 1. Estado real a 27 de agosto de 2026
+## 1. Estado real a 24 de septiembre de 2026
 
-**Último commit:** 29–30 de julio de 2026 (`fix(agent): end-to-end error handling`). El proyecto lleva ~3 semanas sin actividad en el repo.
+**Último commit de producto:** `a090b27 fix(panel): accept polite voice confirmations`.
 
-**Dónde está el producto:** el agente funciona end-to-end en el chat web y en un WhatsApp real de pruebas transportado por Evolution API/Baileys mediante el túnel estable `evolution.iatope.com`. El mensaje entrante se persiste, el agente se presenta como IA del equipo del hospital, consulta disponibilidad real, crea la cita y su evento de Google Calendar, responde por WhatsApp y respeta la toma de control manual. El panel recibe mensajes nuevos sin recarga manual mediante comprobación autenticada cada 3 segundos. El transporte directo de Meta conserva app, secretos, callback y canal pausado, pero su E2E sigue bloqueado por el aprovisionamiento de Meta.
+**Dónde está el producto:** el agente funciona end-to-end en chat web, WhatsApp
+Evolution y telefonía Vapi. En voz se ha validado una llamada real con
+`assistant-request` dinámico, contexto de clínica/cliente/mascota, servicio,
+disponibilidad real, Google Calendar, confirmación explícita, creación de cita,
+Agenda y confirmación verbal. El transporte directo de Meta conserva app,
+secretos, callback y canal pausado, pero su E2E sigue bloqueado por el
+aprovisionamiento de Meta.
 
-**Panel desplegado:** https://recepia-panel.vercel.app (login por magic link de Supabase Auth).
+**Preview estable de construcción:**
+https://recepia-panel-git-codex-e09e91-marcsolerroldan85-4850s-projects.vercel.app
+(login por magic link de Supabase Auth). PC-W8 no se ha desplegado a Production.
 
-**Fase en curso:** **C3 — WhatsApp real**, con C4 preparado en paralelo. C1 y C2 ya están construidas y compiladas. Samuel ejecutó los 6 casos de la antigua Fase F y los considera correctos. Marc hará la validación definitiva al cierre del proyecto.
+**Fase en curso:** PC-W8 / C4 está formalmente cerrado en **GO**. PC-W9 no ha
+comenzado y requiere autorización expresa de Marc. C1 y C2 están construidas; C3
+tiene E2E real mediante Evolution; C5 conserva pendientes de cierre,
+clasificación y resúmenes. Samuel ejecutó los 6 casos de la antigua Fase F y los
+considera correctos.
 
-### 1.1 Mapa de épicas
+### 1.1 Cierre técnico PC-W8 — Voice / Vapi E2E
+
+Arquitectura validada: teléfono español → Vapi/Twilio → `assistant-request`
+dinámico → webhook autenticado de Recepia → canal/clínica → contexto operativo →
+tools comunes → Google Calendar → persistencia y Agenda. El número Vapi no tiene
+assistant estático; Recepia devuelve el assistant y variables verificadas por
+llamada. Servicios y horarios proceden de datos activos; las fechas relativas se
+resuelven en `Europe/Madrid`; los slots respetan asignaciones, horarios,
+calendarios y ocupación real.
+
+La cita solo se crea después de una confirmación afirmativa pura inmediatamente
+posterior al resumen. `create_appointment` es la única autoridad para anunciar la
+reserva y exige `success=true` más `appointment_id`; además evita duplicar una
+cita idéntica dentro de la conversación.
+
+Persistencia validada: una fila canónica en `call_sessions`, una `conversation`,
+turnos finales en `messages`, webhooks/tools idempotentes en `channel_events` y
+evidencia de ejecución en `tool_invocations`. El `end-of-call-report` completa
+duración y transcript.
+
+E2E real de cierre:
+
+- 25/09/2026, 08:30–08:55, Consulta general;
+- appointment `44b39517-6d04-49c2-a131-9a7918059b55` en estado `confirmed`;
+- evento Google creado y cita visible en Agenda;
+- confirmación verbal posterior al éxito real de la tool;
+- sin duplicar `call_session` ni conversación.
+
+El detalle operativo se mantiene en `docs/vapi-phone-assistant.md`.
+
+### 1.2 Mapa de épicas
 
 | Épica | Estado | Detalle |
 |---|---|---|
@@ -84,6 +126,7 @@ Las antiguas fases F–K quedan como referencia e inventario. Ya no determinan e
 | **E3 — Pipeline WhatsApp** | 🟡 **E2E de cita validado** | Evolution API 2.3.7 está conectado al número personal de pruebas de Marc mediante `evolution.iatope.com`; inbound, respuesta automática, persistencia, cita real, evento de Google Calendar, outbound manual, toma y devolución de control y actualización del panel sin recarga están validados. Meta/360dialog se conservan pausados. Faltan derivación clínica y recuperación de sesión tras reiniciar Evolution; el Mac sigue siendo infraestructura de demostración, no producción. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
 | **E5 — Google Calendar** | ✅ Hecho | OAuth con tokens en Vault, refresh, autodescubrimiento y CRUD de eventos. Cada veterinario activo dispone de un calendario secundario dedicado creado automáticamente; los cinco calendarios actuales se han provisionado y `freeBusy` responde sin errores. |
+| **C4 / PC-W8 — Telefonía Vapi** | ✅ **GO E2E real** | Assistant dinámico, transcript, contexto, servicio, disponibilidad, confirmación, cita, evento Google, Agenda y confirmación verbal validados con una llamada real. |
 | **E6 — Resúmenes y clasificación** | ❌ No empezado | Sin Edge Function de resumen, sin integración DeepSeek, sin dataset golden formalizado. |
 | **E7 — Panel: lecturas** | ✅ Hecho (con hueco) | Conversaciones (lista + detalle + timeline con actualización automática autenticada), calendario día/semana/mes, clientes con ficha y mascotas. **Falta:** búsqueda global full-text y vista de auditoría `/events`. |
 | **E8 — Panel: escrituras** | ✅ Hecho | Tomar control / devolver al agente, ajustes de clínica, perfil, equipo (invitaciones, roles, expulsión), integraciones. **Falta:** editor de `clinic_config` como formulario y CRUD de servicios. |
@@ -281,7 +324,7 @@ Priorizada. No se resuelve por iniciativa propia de una IA: se resuelve en la fa
 
 | Deuda | Gravedad | Dónde se resuelve |
 |---|---|---|
-| Sin tests automatizados de ningún tipo | Alta | Fase J |
+| Sin dataset golden ni suite integral de regresión; existen tests focalizados | Alta | Fase J |
 | Sin observabilidad (Sentry / PostHog / logger) | Alta | Fase J |
 | `packages/core` vacío; lógica acoplada al panel | Media | Fase H |
 | `AGENT.md` §5 desactualizado (nombres de tools) | Media | Fase G |
@@ -289,6 +332,12 @@ Priorizada. No se resuelve por iniciativa propia de una IA: se resuelve en la fa
 | `clinic_config` solo editable por SQL | Media | Fase K |
 | Sin gestión de secretos (Doppler) | Baja | Antes de comercializar |
 | Sin CI (lint + build en cada push) | Baja | Fase J |
+| 717 conversaciones telefónicas históricas duplicadas; no son `call_sessions` reales | Media | Paquete de saneamiento de datos auditado; no borrar en PC-W8 |
+| Clientes y mascotas sintéticos creados durante pruebas | Baja | Limpieza selectiva solo con trazabilidad inequívoca |
+| Posibles deployments/proyectos Vercel accidentales | Baja | Auditoría de infraestructura Preview; no tocar Production |
+| Grabaciones Vapi sin tratamiento de producto definitivo | Media | Definir artifacts y UI en un paquete posterior |
+| Retención, consentimiento y privacidad del audio pendientes | Alta antes de tráfico real | Fase K / revisión legal antes de grabación permanente |
+| Cobertura limitada de expresiones de confirmación por voz | Baja | Dataset golden de voz y ampliación conservadora en Fase J |
 
 ---
 
@@ -328,7 +377,7 @@ Cualquier modelo o agente que trabaje aquí se atiene a esto:
 No se planifica en detalle nada de esto hasta que el piloto lleve ≥ 2 semanas con tráfico real.
 
 1. **Iteración 1.5 — Estabilización (2 semanas):** bugs del piloto, mejora de prompt con conversaciones reales, estadísticas básicas.
-2. **Iteración 2 — Telefonía (4–6 semanas):** Vapi + Cartesia + Deepgram, grabaciones con consentimiento, transcripciones. El mismo bucle del agente, otro transporte. Detalle en un futuro `ROADMAP-IT2.md`.
+2. **Iteración 2 — Telefonía:** baseline funcional completado con PC-W8 (Vapi + Twilio, transcript y reserva E2E). Quedan endurecimiento, tratamiento de grabaciones, consentimiento y retención antes de tráfico real.
 3. **Iteración 3 — SaaS comercial (4–8 semanas):** onboarding self-service, Stripe, panel admin de Recepia, segundo y tercer cliente de pago.
 4. **Iteración 4 — Integraciones con software veterinario:** QVet, Vetesoft, ClinicCloud, Geclisa.
 
@@ -366,3 +415,4 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-08-27 | 1.1 | Marc + Codex | E2E de cita cerrado con Laura y Thor: disponibilidad real, confirmación, cita en Recepia, evento de Google Calendar y respuestas entregadas por WhatsApp. Evolution abandona el Quick Tunnel efímero y queda publicado en `evolution.iatope.com` mediante un túnel nombrado que se inicia como servicio de usuario. |
 | 2026-08-27 | 1.2 | Marc + Codex | Los eventos de Google Calendar se normalizan a hora local con offset explícito de `Europe/Madrid` y sus títulos/descripciones pasan a español. Se corrige también el evento de Thor existente sin duplicarlo. |
 | 2026-08-28 | 1.3 | Marc + Codex | Incidente de disponibilidad resuelto: la degradación de API Gateway y el rechazo temporal de JWT de Supabase provocaban timeouts de Vercel y errores del calendario. Se reinicia `recepia-prod`, se valida su vuelta a `ACTIVE_HEALTHY` y se desacoplan los webhooks públicos de WhatsApp de la autenticación del dashboard. El middleware limita la espera de Auth a 6 segundos y muestra una recuperación automática en lugar de colgar la aplicación. |
+| 2026-09-24 | 1.4 | Marc + Codex | PC-W8 se cierra formalmente en GO tras una llamada real con assistant dinámico, contexto, disponibilidad, confirmación, cita, Google Calendar, Agenda y confirmación verbal. Se documentan arquitectura, operación y deuda no bloqueante. |
