@@ -6,6 +6,7 @@ import {
   type VapiFunctionCall,
   vapiToolCallArguments,
   vapiToolCallName,
+  withVapiCallerIdentity,
 } from "@/lib/channels/vapi-payload";
 import {
   hasRelativeAvailabilityIntent,
@@ -68,6 +69,7 @@ export type VapiToolResult = { name: string; toolCallId: string; result: string 
 
 type VapiToolExecution = {
   callId: string;
+  callerPhone?: string;
   confirmation: AppointmentConfirmationAction | null;
   recentUserMessages?: string[];
 };
@@ -109,7 +111,11 @@ export async function handleVapiToolCalls(
     toolCalls.map(async (call): Promise<VapiToolResult> => {
       const toolCallId = call.id ?? "";
       const name = vapiToolCallName(call);
-      const providerInput = vapiToolCallArguments(call);
+      const providerInput = withVapiCallerIdentity(
+        name,
+        vapiToolCallArguments(call),
+        execution.callerPhone,
+      );
       const relativeResolution =
         name === "check_availability"
           ? resolveRelativeAvailabilityInput(providerInput, relativeMessage ?? null, timezone)

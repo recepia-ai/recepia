@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     try {
       const supabaseAdmin = createAdminClient();
       const channel = await resolveVapiChannel(supabaseAdmin, parsed.data);
-      const { conversation } = await ensureVapiCall(supabaseAdmin, channel, parsed.data);
+      const { conversation, caller } = await ensureVapiCall(supabaseAdmin, channel, parsed.data);
       const confirmationContext = vapiConfirmationConversation(payload);
       const confirmation = confirmationContext.currentUserMessage
         ? getExplicitAppointmentConfirmation(
@@ -139,6 +139,7 @@ export async function POST(request: Request) {
       return Response.json(
         await handleVapiToolCalls(channel.clinic_id, conversation.id, rawCalls, {
           callId: parsed.data.message.call.id,
+          callerPhone: caller || undefined,
           confirmation,
           recentUserMessages: [
             ...confirmationContext.previousMessages.flatMap((turn) =>

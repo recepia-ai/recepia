@@ -83,6 +83,15 @@ export function vapiToolCallArguments(call: VapiFunctionCall): Record<string, un
   return record(raw) ?? {};
 }
 
+export function withVapiCallerIdentity(
+  toolName: string,
+  input: Record<string, unknown>,
+  callerPhone?: string,
+): Record<string, unknown> {
+  if (toolName !== "lookup_client" || !callerPhone) return input;
+  return { ...input, phone: callerPhone };
+}
+
 function messageText(message: VapiArtifactMessage): string | null {
   if (typeof message.message === "string") return message.message.trim() || null;
   if (typeof message.content === "string") return message.content.trim() || null;

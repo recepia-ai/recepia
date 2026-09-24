@@ -7,6 +7,7 @@ import {
   vapiConfirmationConversation,
   vapiOccurredAt,
   vapiToolCallArguments,
+  withVapiCallerIdentity,
 } from "./vapi-payload.ts";
 
 test("accepts current Vapi parameters and legacy arguments payloads", () => {
@@ -41,6 +42,17 @@ test("normalizes wrapped Vapi function parameters", () => {
   });
   assert.equal(call.name, "check_availability");
   assert.deepEqual(vapiToolCallArguments(call), { service_id: "service" });
+});
+
+test("uses the authenticated Vapi caller for client lookup", () => {
+  assert.deepEqual(
+    withVapiCallerIdentity("lookup_client", { phone: "+34999999999" }, "+34111111111"),
+    { phone: "+34111111111" },
+  );
+  assert.deepEqual(
+    withVapiCallerIdentity("register_new_client", { phone: "+34999999999" }, "+34111111111"),
+    { phone: "+34999999999" },
+  );
 });
 
 test("extracts the user confirmation turn and only the preceding conversation", () => {
