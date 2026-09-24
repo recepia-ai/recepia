@@ -1,54 +1,14 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { z } from "zod";
 import { startConversation } from "@/lib/agent/conversation-store";
+import type { VapiWebhook } from "@/lib/channels/vapi-schema";
+
+export { vapiWebhookSchema } from "@/lib/channels/vapi-schema";
 
 type AdminClient = SupabaseClient<Database>;
 type ChannelRow = Database["public"]["Tables"]["clinic_channels"]["Row"];
 type ConversationRow = Database["public"]["Tables"]["conversations"]["Row"];
-
-const partySchema = z
-  .object({ number: z.string().optional(), phoneNumber: z.string().optional() })
-  .passthrough();
-
-export const vapiWebhookSchema = z.object({
-  message: z
-    .object({
-      type: z.string().min(1),
-      timestamp: z.union([z.string(), z.number()]).optional(),
-      status: z.string().optional(),
-      endedReason: z.string().optional(),
-      transcript: z.string().optional(),
-      transcriptType: z.string().optional(),
-      role: z.string().optional(),
-      call: z
-        .object({
-          id: z.string().min(1),
-          startedAt: z.string().optional(),
-          endedAt: z.string().optional(),
-          phoneNumberId: z.string().optional(),
-          customer: partySchema.optional(),
-          phoneNumber: partySchema.optional(),
-        })
-        .passthrough(),
-      customer: partySchema.optional(),
-      phoneNumber: partySchema.optional(),
-      artifact: z
-        .object({
-          transcript: z.string().optional(),
-          recording: z
-            .object({ url: z.string().url().optional(), stereoUrl: z.string().url().optional() })
-            .passthrough()
-            .optional(),
-        })
-        .passthrough()
-        .optional(),
-    })
-    .passthrough(),
-});
-
-export type VapiWebhook = z.infer<typeof vapiWebhookSchema>;
 
 function objectConfig(value: ChannelRow["provider_config"]): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
