@@ -113,7 +113,7 @@ export function vapiConfirmationConversation(payload: unknown): {
     const item = record(raw) as VapiArtifactMessage | null;
     const role = item?.role;
     const content = item ? messageText(item) : null;
-    if ((role !== "user" && role !== "assistant") || !content) return [];
+    if ((role !== "user" && role !== "assistant" && role !== "bot") || !content) return [];
     return [{ sender: role === "user" ? ("client" as const) : ("agent" as const), content }];
   });
 

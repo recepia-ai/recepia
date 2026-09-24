@@ -65,6 +65,39 @@ test("extracts the user confirmation turn and only the preceding conversation", 
   );
 });
 
+test("accepts Vapi bot turns when authorizing an appointment confirmation", () => {
+  const context = vapiConfirmationConversation({
+    message: {
+      artifact: {
+        messages: [
+          {
+            role: "bot",
+            message:
+              "Mañana, 25 de septiembre, a las ocho y media, para consulta general. ¿Confirmas que reserve esta cita?",
+          },
+          { role: "user", message: "Sí, confirmo esa cita." },
+          { role: "tool_calls", message: "" },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(context, {
+    previousMessages: [
+      {
+        sender: "agent",
+        content:
+          "Mañana, 25 de septiembre, a las ocho y media, para consulta general. ¿Confirmas que reserve esta cita?",
+      },
+    ],
+    currentUserMessage: "Sí, confirmo esa cita.",
+  });
+  assert.equal(
+    getExplicitAppointmentConfirmation(context.previousMessages, context.currentUserMessage),
+    "create",
+  );
+});
+
 test("does not authorize a conditional voice confirmation", () => {
   const context = vapiConfirmationConversation({
     message: {
