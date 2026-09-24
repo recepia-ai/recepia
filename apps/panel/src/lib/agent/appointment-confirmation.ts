@@ -4,7 +4,7 @@ type ConfirmationMessage = {
 };
 
 const AFFIRMATIVE_REPLY =
-  /^(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok)(?:[\s,.!¡;:]+(?:sí|si|confirmo|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok|gracias|por favor|(?:la|el|esta|este|esa|ese)?\s*(?:cita|reserva|cancelación|cancelacion|modificación|modificacion|cambio)))*[\s.!¡]*$/i;
+  /^(?:sí|si|confirmo|confirme|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok)(?:[\s,.!¡;:]+(?:sí|si|confirmo|confirme|confirmado|de acuerdo|adelante|correcto|correcta|vale|ok|gracias|por favor|(?:la|el|esta|este|esa|ese)?\s*(?:cita|reserva|cancelación|cancelacion|modificación|modificacion|cambio)))*[\s.!¡]*$/i;
 
 export type AppointmentConfirmationAction = "create" | "modify" | "cancel";
 

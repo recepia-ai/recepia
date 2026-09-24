@@ -25,6 +25,16 @@ test("accepts an explicit booking confirmation in natural language", () => {
   );
 });
 
+test("accepts a polite imperative booking confirmation from speech", () => {
+  assert.equal(
+    hasExplicitAppointmentConfirmation(
+      [{ sender: "agent", content: "¿Confirmas que reserve esta cita?" }],
+      "Sí, confirme esa cita.",
+    ),
+    true,
+  );
+});
+
 test("rejects an affirmative reply without a preceding confirmation question", () => {
   assert.equal(
     hasExplicitAppointmentConfirmation(
