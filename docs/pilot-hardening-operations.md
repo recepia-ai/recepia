@@ -7,8 +7,45 @@ plataforma de infraestructura. Production queda fuera del paquete.
 
 - **PC-W9A — Observabilidad + regresiones:** **GO**; suite y validaciones locales superadas.
 - **PC-W9B — Resiliencia operativa:** **GO**; controles, degradación, reintentos y alertas persistentes validados.
-- **PC-W9C — Higiene de datos e infraestructura:** no iniciado.
+- **PC-W9C — Higiene de datos e infraestructura:** Fase 1 auditada; PC-W9C.2
+  separa Preview de Production y está pendiente de reconectar proveedores.
 - **PC-W9D — Grabaciones y privacidad:** no iniciado.
+
+## PC-W9C.2 — Supabase aislado para Preview
+
+La rama `codex/product-construction-w1` usa el proyecto Supabase exclusivo
+`recepia-preview` (`mnaaqqczygictolvplrp`). El proyecto histórico
+`recepia-rodaction` (`vsnrlpfsgwwdmiyndwnl`) permanece como Production y no se
+ha modificado durante la separación.
+
+La Preview estable tiene overrides de rama para
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y
+`SUPABASE_SERVICE_ROLE_KEY`. Los valores no se documentan. Production conserva
+sus variables y no se ha desplegado.
+
+El nuevo proyecto recibió las 20 migraciones canónicas, RLS, funciones, vistas,
+triggers y un dataset piloto controlado:
+
+- 1 clínica `dr-patino`, 14 miembros (13 perfiles operativos y 1 usuario Auth
+  administrador), 37 servicios, 35 tramos horarios y 22 asignaciones
+  servicio-veterinario;
+- 0 clientes, mascotas, citas, conversaciones, mensajes, eventos de canal,
+  invocaciones de tools, sesiones de llamada, calendarios de veterinario,
+  integraciones y canales externos al terminar el bootstrap;
+- IA Web, WhatsApp y Voz desactivada hasta reconectar y validar cada proveedor.
+
+No se copiaron filas de Production. Google Calendar/Vault, Evolution y Vapi
+requieren configuración explícita en Preview. Auth usa la URL estable como
+`site_url` y admite callbacks de esa URL y de localhost. En el plan Free se
+conservan las plantillas de correo por defecto. La CLI confirmó la configuración
+de Auth y después falló al leer una opción de Storage no soportada por esa
+versión; no afecta al runtime ni a las migraciones.
+
+El bootstrap reproducible está en
+`supabase/bootstrap/preview_pilot_foundation.sql`. Además, dos migraciones
+históricas se hicieron portables: `gen_random_bytes` se resuelve en el esquema
+`extensions` y las asignaciones de veterinarios resuelven servicios por slug en
+lugar de UUIDs generados en Production.
 
 ## Dataset dorado de PC-W9A
 

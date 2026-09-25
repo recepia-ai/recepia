@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS clinic_invitations (
   email        TEXT NOT NULL,
   role         clinic_user_role NOT NULL DEFAULT 'recepcion',
   display_name TEXT,
-  token        TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
+  token        TEXT NOT NULL UNIQUE DEFAULT encode(extensions.gen_random_bytes(32), 'hex'),
   status       TEXT NOT NULL DEFAULT 'pending'
                  CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
   expires_at   TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '7 days'),

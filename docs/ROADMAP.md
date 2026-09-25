@@ -83,7 +83,8 @@ https://recepia-panel-git-codex-e09e91-marcsolerroldan85-4850s-projects.vercel.a
 
 **Fase en curso:** PC-W8 / C4 está formalmente cerrado en **GO**. PC-W9 está
 autorizado; PC-W9A (observabilidad + regresiones) y PC-W9B (resiliencia
-operativa) están en **GO**. PC-W9C-D no han comenzado. C1 y C2 están construidas; C3
+operativa) están en **GO**. PC-W9C.2 está separando Preview de Production y
+queda pendiente reconectar proveedores; PC-W9D no ha comenzado. C1 y C2 están construidas; C3
 tiene E2E real mediante Evolution; C5 conserva pendientes de cierre,
 clasificación y resúmenes. Samuel ejecutó los 6 casos de la antigua Fase F y los
 considera correctos.
@@ -139,7 +140,7 @@ desplegado Production ni se ha iniciado PC-W9C.
 
 | Épica | Estado | Detalle |
 |---|---|---|
-| **E1 — Infra y deploy** | ✅ Hecho | Monorepo pnpm + Turborepo, Biome, Supabase (proyecto `vsnrlpfsgwwdmiyndwnl`) linkado, panel en Vercel, tipos generados con `pnpm db:gen-types`. |
+| **E1 — Infra y deploy** | 🟡 Separación Preview en validación | Monorepo pnpm + Turborepo, Biome y panel en Vercel. Production permanece en `vsnrlpfsgwwdmiyndwnl`; la rama de construcción usa el Supabase Preview aislado `mnaaqqczygictolvplrp`, con schema y dataset piloto aplicados y proveedores pendientes de reconexión. |
 | **E2 — Schema y datos** | ✅ Hecho | 12 migraciones aplicadas: schema inicial, settings y equipo, RLS, integración Google Calendar, seed real Dr. Patiño, wrappers de Vault, schema de citas, `service_vet_assignments` (N:M servicio↔veterinario). |
 | **E3 — Pipeline WhatsApp** | 🟡 **E2E de cita validado** | Evolution API 2.3.7 está conectado al número personal de pruebas de Marc mediante `evolution.iatope.com`; inbound, respuesta automática, persistencia, cita real, evento de Google Calendar, outbound manual, toma y devolución de control y actualización del panel sin recarga están validados. Meta/360dialog se conservan pausados. Faltan derivación clínica y recuperación de sesión tras reiniciar Evolution; el Mac sigue siendo infraestructura de demostración, no producción. |
 | **E4 — Agente y tools** | 🟡 Fases 1–4 hechas, en Fase F | System prompt, bucle conversacional, persistencia, chat UI de prueba, manejo de errores end-to-end. 11 tools operativas. |
@@ -352,7 +353,7 @@ Priorizada. No se resuelve por iniciativa propia de una IA: se resuelve en la fa
 | Sin CI (lint + build en cada push) | Baja | Fase J |
 | 717 conversaciones telefónicas históricas duplicadas; no son `call_sessions` reales | Media | Paquete de saneamiento de datos auditado; no borrar en PC-W8 |
 | Clientes y mascotas sintéticos creados durante pruebas | Baja | Limpieza selectiva solo con trazabilidad inequívoca |
-| Posibles deployments/proyectos Vercel accidentales | Baja | Auditoría de infraestructura Preview; no tocar Production |
+| Posibles deployments/proyectos Vercel accidentales | Baja | Inventariados en PC-W9C; no eliminar hasta completar la separación ni tocar Production |
 | Grabaciones Vapi sin tratamiento de producto definitivo | Media | Definir artifacts y UI en un paquete posterior |
 | Retención, consentimiento y privacidad del audio pendientes | Alta antes de tráfico real | Fase K / revisión legal antes de grabación permanente |
 | Cobertura limitada de expresiones de confirmación por voz | Baja | Dataset golden de voz y ampliación conservadora en Fase J |
@@ -436,3 +437,4 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-09-24 | 1.4 | Marc + Codex | PC-W8 se cierra formalmente en GO tras una llamada real con assistant dinámico, contexto, disponibilidad, confirmación, cita, Google Calendar, Agenda y confirmación verbal. Se documentan arquitectura, operación y deuda no bloqueante. |
 | 2026-09-24 | 1.5 | Marc + Codex | PC-W9A queda en GO: dataset dorado multicanal, regresiones deterministas, logger JSON correlacionable, alertas operativas mínimas y retry seguro de mutaciones fallidas sin duplicar éxitos. PC-W9B-D no se inician. |
 | 2026-09-24 | 1.6 | Marc + Codex | PC-W9B queda en GO: kill switches por clínica/canal, fallback humano, resiliencia Google/Vapi/WhatsApp, idempotencia reforzada, estado operativo y alertas persistentes en Preview. Production intacta; PC-W9C no iniciado. |
+| 2026-09-25 | 1.7 | Marc + Codex | PC-W9C.2 crea y migra `recepia-preview`, configura Auth y overrides Vercel exclusivos de la rama, y despliega la Preview estable contra el nuevo Supabase. No se copian datos ni secretos de Production; Google, WhatsApp y Vapi quedan desactivados hasta su reconexión explícita. |
