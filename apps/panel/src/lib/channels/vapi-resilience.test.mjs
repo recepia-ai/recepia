@@ -21,6 +21,8 @@ test("repeated Vapi events have the same persistent identity", () => {
 test("disabled voice response removes tools and forbids confirmations", () => {
   const response = vapiDisabledAssistantResponse("assistant-1", "Atención pausada");
   assert.equal(response.assistantId, "assistant-1");
+  assert.equal(response.assistantOverrides.artifactPlan.recordingEnabled, false);
+  assert.equal(response.assistantOverrides.artifactPlan.transcriptPlan.enabled, true);
   assert.deepEqual(response.assistantOverrides.model.tools, []);
   assert.match(response.assistantOverrides.model.messages[0].content, /No ejecutes tools/);
 });

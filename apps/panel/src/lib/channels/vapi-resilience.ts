@@ -1,3 +1,16 @@
+/** Pilot default applied to every dynamic Vapi call. */
+export const VAPI_PILOT_ARTIFACT_PLAN = {
+  recordingEnabled: false,
+  videoRecordingEnabled: false,
+  pcapEnabled: false,
+  loggingEnabled: true,
+  transcriptPlan: {
+    enabled: true,
+    assistantName: "Recepia",
+    userName: "Cliente",
+  },
+} as const;
+
 const CALL_STATUS_ORDER: Record<string, number> = {
   queued: 0,
   ringing: 1,
@@ -29,6 +42,7 @@ export function vapiDisabledAssistantResponse(
   return {
     assistantId,
     assistantOverrides: {
+      artifactPlan: VAPI_PILOT_ARTIFACT_PLAN,
       firstMessage,
       model: {
         tools: [],

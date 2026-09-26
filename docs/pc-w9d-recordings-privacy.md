@@ -1,7 +1,8 @@
 # PC-W9D — Grabaciones, privacidad y retención de audio
 
-Estado: auditoría y diseño completados el 26 de septiembre de 2026. La política
-propuesta requiere validación legal antes de habilitar grabación en pilotos.
+Estado: **GO técnico condicionado** el 26 de septiembre de 2026. La grabación se
+impone en OFF para cada llamada dinámica; habilitarla en pilotos requiere
+validación legal y una decisión explícita por clínica.
 
 ## 1. Estado comprobado
 
@@ -92,6 +93,20 @@ Fuentes oficiales:
 validar base jurídica, texto, finalidad, roles y plazo. El transcript operativo
 puede mantenerse separado de la grabación, sujeto a su propia política.
 
+El control efectivo actual es
+`assistantOverrides.artifactPlan.recordingEnabled=false`, incluido por Recepia en
+cada respuesta dinámica a `assistant-request`. También se desactivan vídeo y
+PCAP; permanecen activos `loggingEnabled` y `transcriptPlan.enabled`. Así el
+assistant puede conversar, ejecutar tools y persistir transcript/metadata sin
+crear audio grabado.
+
+No existe hoy un interruptor de clínica que permita activar audio. Si se autoriza
+en el futuro, el campo persistido será
+`clinic_config.config.voice.recording_enabled`, con ausencia/`false` como valor
+seguro. Solo un administrador podrá cambiarlo y el backend lo aceptará únicamente
+si la clínica también tiene finalidad, plazo, roles y texto legal validados. No
+se implementa todavía esa lectura ni su UI.
+
 Cuando una clínica active audio, se usará el patrón de la opción B: Recepia guarda
 solo `provider_call_id` y `recording_available`, nunca una URL. El audio se obtiene
 server-side desde Vapi mediante una URL autenticada y efímera.
@@ -179,10 +194,15 @@ No se implementa todavía el reproductor ni Storage propio.
 ## 9. Criterio previo a pilotos
 
 - Confirmar el paquete/retención real de Vapi.
-- Desactivar grabación por defecto en el assistant activo.
 - Validar jurídicamente el aviso y la base de licitud.
 - Decidir si el piloto necesita audio; si sí, habilitarlo por clínica con plazo y
   roles explícitos.
 - Aplicar en Production la migración de redacción solo con autorización.
 - Implementar el job de retención y borrado coordinado antes de conservar audio
   de forma sistemática.
+
+Con audio OFF se conservan transcript, mensajes, metadata de llamada, duración,
+estado, eventos y tool invocations; `recording_available=false` y no se conserva
+URL ni fichero de audio. Con audio ON en el futuro se conservarán los mismos datos
+más `recording_available=true` y `provider_call_id`; el audio seguirá en Vapi y no
+se guardará ninguna URL ni copia en Supabase Storage.

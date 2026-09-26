@@ -2,7 +2,7 @@ import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { startConversation } from "@/lib/agent/conversation-store";
-import { monotonicCallStatus } from "@/lib/channels/vapi-resilience";
+import { monotonicCallStatus, VAPI_PILOT_ARTIFACT_PLAN } from "@/lib/channels/vapi-resilience";
 import type { VapiWebhook } from "@/lib/channels/vapi-schema";
 
 export { vapiWebhookSchema } from "@/lib/channels/vapi-schema";
@@ -258,6 +258,7 @@ export async function vapiAssistantResponse(
   return {
     assistantId,
     assistantOverrides: {
+      artifactPlan: VAPI_PILOT_ARTIFACT_PLAN,
       variableValues: {
         currentLocalDate,
         currentLocalTime: formatInTimeZone(now, timezone, "HH:mm:ss"),

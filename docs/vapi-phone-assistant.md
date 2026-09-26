@@ -28,6 +28,10 @@ transporte/runtime de voz; Recepia es la autoridad de datos y acciones.
 - Prompt, primer mensaje y tools sincronizados desde
   `apps/panel/scripts/sync-vapi-assistant.ts`; no mantener una copia divergente en
   el dashboard de Vapi.
+- Recepia impone por llamada dinámica
+  `assistantOverrides.artifactPlan.recordingEnabled=false`. Transcript y logs
+  permanecen activos; vídeo y PCAP están desactivados. No existe todavía un
+  interruptor para habilitar audio desde el panel.
 
 ### Contexto por llamada
 
