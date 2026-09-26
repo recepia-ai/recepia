@@ -1,8 +1,8 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  clinicSchema,
-  type ClinicFormValues,
-} from "./clinic-schema";
 import { updateClinic } from "./clinic-actions";
+import { type ClinicFormValues, clinicSchema } from "./clinic-schema";
 
 // ---------------------------------------------------------------------------
 // Options for selects
@@ -119,11 +116,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               disabled={readOnly}
               aria-invalid={errors.name ? true : undefined}
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">
-                {errors.name.message}
-              </p>
-            )}
+            {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -143,9 +136,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
             <p className="text-xs text-amber-700">
               Cambiarlo modifica el enlace público que usan los clientes.
             </p>
-            {errors.slug && (
-              <p className="text-xs text-destructive">{errors.slug.message}</p>
-            )}
+            {errors.slug && <p className="text-xs text-destructive">{errors.slug.message}</p>}
           </div>
 
           {/* legal_name */}
@@ -160,9 +151,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               disabled={readOnly}
             />
             {errors.legal_name && (
-              <p className="text-xs text-destructive">
-                {errors.legal_name.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.legal_name.message}</p>
             )}
           </div>
 
@@ -177,11 +166,72 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               placeholder="B12345678"
               disabled={readOnly}
             />
-            {errors.tax_id && (
-              <p className="text-xs text-destructive">
-                {errors.tax_id.message}
-              </p>
-            )}
+            {errors.tax_id && <p className="text-xs text-destructive">{errors.tax_id.message}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
+        <div className="mb-5">
+          <h3 className="text-sm font-semibold text-stone-900">Agente y atención</h3>
+          <p className="mt-0.5 text-xs text-stone-500">
+            Mensajes de la clínica. Las reglas de seguridad y confirmación no son editables.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="public_name">Nombre público</Label>
+            <Input id="public_name" {...register("public_name")} disabled={readOnly} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="agent_name">Nombre del asistente</Label>
+            <Input id="agent_name" {...register("agent_name")} disabled={readOnly} />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>Idioma principal del agente</Label>
+            <Controller
+              name="primary_language"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOCALE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          {(
+            [
+              ["web_greeting", "Saludo Web"],
+              ["whatsapp_greeting", "Saludo WhatsApp"],
+              ["voice_greeting", "Saludo Voz"],
+              ["after_hours_message", "Fuera de horario"],
+              ["human_fallback_message", "Fallback humano"],
+              ["escalation_rules", "Reglas adicionales de escalado (una por línea)"],
+            ] as const
+          ).map(([name, label]) => (
+            <div key={name} className="space-y-1.5 md:col-span-2">
+              <Label htmlFor={name}>{label}</Label>
+              <textarea
+                id={name}
+                {...register(name)}
+                disabled={readOnly}
+                rows={name === "escalation_rules" ? 4 : 3}
+                className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm disabled:bg-stone-50"
+              />
+            </div>
+          ))}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 md:col-span-2">
+            Grabación de voz: <strong>desactivada</strong>. El transcript y la metadata operativa
+            permanecen activos. La activación de audio no está disponible desde el panel.
           </div>
         </div>
       </div>
@@ -192,9 +242,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
       <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
         <div className="mb-5">
           <h3 className="text-sm font-semibold text-stone-900">Contacto</h3>
-          <p className="mt-0.5 text-xs text-stone-500">
-            Email y teléfono públicos de la clínica.
-          </p>
+          <p className="mt-0.5 text-xs text-stone-500">Email y teléfono públicos de la clínica.</p>
         </div>
 
         <div className="space-y-4">
@@ -211,11 +259,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               disabled={readOnly}
               aria-invalid={errors.email ? true : undefined}
             />
-            {errors.email && (
-              <p className="text-xs text-destructive">
-                {errors.email.message}
-              </p>
-            )}
+            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
 
           {/* phone */}
@@ -230,11 +274,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               disabled={readOnly}
               aria-invalid={errors.phone ? true : undefined}
             />
-            {errors.phone && (
-              <p className="text-xs text-destructive">
-                {errors.phone.message}
-              </p>
-            )}
+            {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
           </div>
         </div>
       </div>
@@ -245,9 +285,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
       <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
         <div className="mb-5">
           <h3 className="text-sm font-semibold text-stone-900">Dirección</h3>
-          <p className="mt-0.5 text-xs text-stone-500">
-            Dirección postal de la clínica.
-          </p>
+          <p className="mt-0.5 text-xs text-stone-500">Dirección postal de la clínica.</p>
         </div>
 
         <div className="space-y-4">
@@ -256,11 +294,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
             <Label htmlFor="address_street" className="text-sm text-stone-700">
               Calle / Vía
             </Label>
-            <Input
-              id="address_street"
-              {...register("address_street")}
-              disabled={readOnly}
-            />
+            <Input id="address_street" {...register("address_street")} disabled={readOnly} />
           </div>
 
           {/* address_city + address_postal_code (2 cols) */}
@@ -269,17 +303,10 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               <Label htmlFor="address_city" className="text-sm text-stone-700">
                 Ciudad
               </Label>
-              <Input
-                id="address_city"
-                {...register("address_city")}
-                disabled={readOnly}
-              />
+              <Input id="address_city" {...register("address_city")} disabled={readOnly} />
             </div>
             <div className="space-y-1.5">
-              <Label
-                htmlFor="address_postal_code"
-                className="text-sm text-stone-700"
-              >
+              <Label htmlFor="address_postal_code" className="text-sm text-stone-700">
                 Código postal
               </Label>
               <Input
@@ -299,11 +326,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               name="address_country"
               control={control}
               render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={readOnly}
-                >
+                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona un país" />
                   </SelectTrigger>
@@ -318,9 +341,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               )}
             />
             {errors.address_country && (
-              <p className="text-xs text-destructive">
-                {errors.address_country.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.address_country.message}</p>
             )}
           </div>
         </div>
@@ -331,12 +352,8 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
       {/* ============================================================= */}
       <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
         <div className="mb-5">
-          <h3 className="text-sm font-semibold text-stone-900">
-            Configuración regional
-          </h3>
-          <p className="mt-0.5 text-xs text-stone-500">
-            Idioma y zona horaria de la clínica.
-          </p>
+          <h3 className="text-sm font-semibold text-stone-900">Configuración regional</h3>
+          <p className="mt-0.5 text-xs text-stone-500">Idioma y zona horaria de la clínica.</p>
         </div>
 
         <div className="space-y-4">
@@ -349,11 +366,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               name="locale"
               control={control}
               render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={readOnly}
-                >
+                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona un idioma" />
                   </SelectTrigger>
@@ -367,11 +380,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
                 </Select>
               )}
             />
-            {errors.locale && (
-              <p className="text-xs text-destructive">
-                {errors.locale.message}
-              </p>
-            )}
+            {errors.locale && <p className="text-xs text-destructive">{errors.locale.message}</p>}
           </div>
 
           {/* timezone (select) */}
@@ -383,11 +392,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               name="timezone"
               control={control}
               render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={readOnly}
-                >
+                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona zona horaria" />
                   </SelectTrigger>
@@ -402,9 +407,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
               )}
             />
             {errors.timezone && (
-              <p className="text-xs text-destructive">
-                {errors.timezone.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.timezone.message}</p>
             )}
           </div>
         </div>
@@ -416,12 +419,7 @@ export function ClinicForm({ defaultValues, readOnly = false }: Props) {
       {!readOnly && (
         <div className="flex items-center justify-end gap-2 pt-2">
           {isDirty && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => reset()}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={() => reset()}>
               Cancelar
             </Button>
           )}

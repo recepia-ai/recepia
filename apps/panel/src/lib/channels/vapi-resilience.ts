@@ -1,15 +1,19 @@
 /** Pilot default applied to every dynamic Vapi call. */
-export const VAPI_PILOT_ARTIFACT_PLAN = {
-  recordingEnabled: false,
-  videoRecordingEnabled: false,
-  pcapEnabled: false,
-  loggingEnabled: true,
-  transcriptPlan: {
-    enabled: true,
-    assistantName: "Recepia",
-    userName: "Cliente",
-  },
-} as const;
+export function vapiArtifactPlan(recordingEnabled = false) {
+  return {
+    recordingEnabled,
+    videoRecordingEnabled: false,
+    pcapEnabled: false,
+    loggingEnabled: true,
+    transcriptPlan: {
+      enabled: true,
+      assistantName: "Recepia",
+      userName: "Cliente",
+    },
+  } as const;
+}
+
+export const VAPI_PILOT_ARTIFACT_PLAN = vapiArtifactPlan(false);
 
 const CALL_STATUS_ORDER: Record<string, number> = {
   queued: 0,

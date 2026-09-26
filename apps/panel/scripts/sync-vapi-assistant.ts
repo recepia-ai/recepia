@@ -1,5 +1,5 @@
 /**
- * Sincroniza el assistant de Vapi (Hospital Dr. Patino) desde codigo:
+ * Sincroniza un assistant de Vapi desde código:
  * prompt de voz, primer mensaje y tools del agente. Asi el "cerebro" vive en
  * el backend y no dependemos del editor del dashboard (que se atraganta con
  * textos largos).
@@ -12,17 +12,17 @@
  *   cd apps/panel
  *   VAPI_PRIVATE_KEY=<tu_private_key> npx tsx scripts/sync-vapi-assistant.ts
  *
- * Opcional: VAPI_ASSISTANT_ID=<id> (por defecto el de Hospital Dr. Patino).
+ * Requerido: VAPI_ASSISTANT_ID=<id>.
  */
 import { buildVapiToolDefinitions } from "../src/lib/channels/vapi-tools";
 import { VOICE_FIRST_MESSAGE, VOICE_SYSTEM_PROMPT } from "../src/lib/channels/vapi-voice-prompt";
 
 const KEY = process.env.VAPI_PRIVATE_KEY;
-const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID ?? "e2bb61c0-269c-4736-883a-da0d64005d42";
+const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
 const API = "https://api.vapi.ai";
 
-if (!KEY) {
-  console.error("Falta VAPI_PRIVATE_KEY en el entorno.");
+if (!KEY || !ASSISTANT_ID) {
+  console.error("Faltan VAPI_PRIVATE_KEY o VAPI_ASSISTANT_ID en el entorno.");
   process.exit(1);
 }
 

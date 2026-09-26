@@ -2,9 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   monotonicCallStatus,
+  vapiArtifactPlan,
   vapiDisabledAssistantResponse,
   vapiEventIdentity,
 } from "./vapi-resilience.ts";
+
+test("recording is off by default and only enabled explicitly", () => {
+  assert.equal(vapiArtifactPlan().recordingEnabled, false);
+  assert.equal(vapiArtifactPlan(false).recordingEnabled, false);
+  assert.equal(vapiArtifactPlan(true).recordingEnabled, true);
+  assert.equal(vapiArtifactPlan(true).transcriptPlan.enabled, true);
+});
 
 test("late Vapi events cannot regress a completed call", () => {
   assert.equal(monotonicCallStatus("completed", "ringing"), "completed");

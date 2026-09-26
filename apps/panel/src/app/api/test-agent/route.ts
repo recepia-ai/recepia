@@ -1,9 +1,7 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { startConversation, loadMessages } from "@/lib/agent/conversation-store";
+import { loadMessages, startConversation } from "@/lib/agent/conversation-store";
 import { runAgentLoop } from "@/lib/agent/loop";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isLegacyTestAgentApiEnabled } from "@/lib/test-routes";
-
-const CLINIC_ID = "00000000-0000-0000-0000-000000000001";
 
 export async function POST(request: Request) {
   if (!isLegacyTestAgentApiEnabled()) {
@@ -11,22 +9,35 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { phone, message, conversationId } = await request.json();
+    const { phone, message, conversationId, clinicSlug } = await request.json();
     if (!message) {
       return Response.json({ error: "message is required" }, { status: 400 });
     }
+    if (!clinicSlug) {
+      return Response.json({ error: "clinicSlug is required" }, { status: 400 });
+    }
 
     const supabaseAdmin = createAdminClient();
+    const { data: clinic, error: clinicError } = await supabaseAdmin
+      .from("clinics")
+      .select("id")
+      .eq("slug", clinicSlug)
+      .eq("status", "active")
+      .single();
+    if (clinicError || !clinic) {
+      return Response.json({ error: "clinic not found" }, { status: 404 });
+    }
+    const clinicId = clinic.id;
     let convId = conversationId;
     if (!convId) {
-      const conv = await startConversation(supabaseAdmin, CLINIC_ID, "web", phone ?? undefined);
+      const conv = await startConversation(supabaseAdmin, clinicId, "web", phone ?? undefined);
       convId = conv.id;
     }
 
     const previousMessages = await loadMessages(supabaseAdmin, convId);
     const result = await runAgentLoop({
       conversationId: convId,
-      clinicId: CLINIC_ID,
+      clinicId,
       userMessage: message,
       previousMessages,
       clientPhone: phone,

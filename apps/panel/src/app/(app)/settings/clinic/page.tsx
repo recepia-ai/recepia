@@ -1,3 +1,4 @@
+import { clinicAgentConfigFromData } from "@/lib/clinic-agent-config";
 import { createClient } from "@/lib/supabase/server";
 import { ClinicForm } from "./clinic-form";
 import type { ClinicFormValues } from "./clinic-schema";
@@ -38,9 +39,7 @@ export default async function SettingsClinicPage() {
   if (!cu)
     return (
       <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-card">
-        <p className="text-sm text-stone-500">
-          No estás asignado a ninguna clínica.
-        </p>
+        <p className="text-sm text-stone-500">No estás asignado a ninguna clínica.</p>
       </div>
     );
 
@@ -59,6 +58,13 @@ export default async function SettingsClinicPage() {
       </div>
     );
 
+  const { data: configRow } = await supabase
+    .from("clinic_config")
+    .select("config")
+    .eq("clinic_id", cu.clinic_id)
+    .maybeSingle();
+  const agent = clinicAgentConfigFromData(cl, configRow?.config);
+
   const isAdmin = cu.role === "admin";
   const defaults: ClinicFormValues = {
     name: cl.name ?? "",
@@ -73,6 +79,15 @@ export default async function SettingsClinicPage() {
     address_country: cl.address_country ?? "ES",
     locale: cl.locale ?? "es-ES",
     timezone: cl.timezone ?? "Europe/Madrid",
+    public_name: agent.publicName,
+    agent_name: agent.agentName,
+    primary_language: agent.primaryLanguage as "es-ES" | "ca-ES" | "en-GB",
+    web_greeting: agent.greetings.web,
+    whatsapp_greeting: agent.greetings.whatsapp,
+    voice_greeting: agent.greetings.voice,
+    after_hours_message: agent.afterHoursMessage,
+    human_fallback_message: agent.humanFallbackMessage,
+    escalation_rules: agent.escalationRules.join("\n"),
   };
 
   return <ClinicForm defaultValues={defaults} readOnly={!isAdmin} />;

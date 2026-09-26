@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import { Loader2, Play } from "lucide-react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DirectTestLog } from "./_action";
@@ -26,23 +26,21 @@ export function DirectTestClient() {
     <div className="space-y-4">
       <div>
         <p className="text-sm text-stone-700">
-          Llama a <code className="rounded bg-stone-100 px-1 py-0.5 text-xs">createAppointment</code>{" "}
-          directamente con datos hardcodeados. El resultado crudo se muestra debajo.
+          Llama a{" "}
+          <code className="rounded bg-stone-100 px-1 py-0.5 text-xs">createAppointment</code>{" "}
+          directamente con datos sintéticos y recursos activos de la clínica actual. El resultado
+          crudo se muestra debajo.
         </p>
         <ul className="mt-2 list-inside list-disc text-xs text-stone-500 space-y-0.5">
           <li>Cliente: Marc TestDirect (+34600000200) — upsert por teléfono</li>
           <li>Mascota: Firulais (perro) — upsert por nombre</li>
-          <li>Servicio: 8e683cf8-2ca2-4687-8c6f-c05b495eba18</li>
-          <li>Veterinario: 00000000-0000-0000-0000-000000000011 (Samuel)</li>
-          <li>Fecha: 2026-07-08 14:30 UTC</li>
+          <li>Servicio: primer servicio activo de la clínica</li>
+          <li>Veterinario: primera asignación válida del servicio</li>
+          <li>Fecha: calculada por la acción de prueba</li>
         </ul>
       </div>
 
-      <Button
-        onClick={handleClick}
-        disabled={isPending}
-        variant="default"
-      >
+      <Button onClick={handleClick} disabled={isPending} variant="default">
         {isPending ? (
           <>
             <Loader2 className="mr-2 size-4 animate-spin" />
@@ -70,11 +68,7 @@ export function DirectTestClient() {
                     : "bg-amber-100 text-amber-700",
               )}
             >
-              {result.error
-                ? "ERROR"
-                : result.appointment?.success
-                  ? "OK"
-                  : "PENDING"}
+              {result.error ? "ERROR" : result.appointment?.success ? "OK" : "PENDING"}
             </span>
           </div>
           <pre className="p-4 text-xs text-stone-700 overflow-x-auto whitespace-pre-wrap break-all">
@@ -85,9 +79,7 @@ export function DirectTestClient() {
 
       {!result && (
         <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-6 py-12 text-center">
-          <p className="text-sm text-stone-400">
-            Pulsa el botón para ejecutar el test.
-          </p>
+          <p className="text-sm text-stone-400">Pulsa el botón para ejecutar el test.</p>
         </div>
       )}
     </div>

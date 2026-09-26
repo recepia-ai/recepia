@@ -1,10 +1,10 @@
 "use client";
 
-import { Calendar, Clock, Syringe, ChevronRight } from "lucide-react";
+import { Calendar, ChevronRight, Clock, Syringe } from "lucide-react";
+import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 import { Button } from "@/components/ui/button";
 import { formatClinicDate, formatClinicTime, toClinicDate } from "@/lib/clinic-datetime";
 import { cn } from "@/lib/utils";
-import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,7 +54,7 @@ function groupByDate(slots: AvailableSlot[]): Map<string, AvailableSlot[]> {
       day: "2-digit",
     });
     if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(s);
+    map.get(key)?.push(s);
   }
   return map;
 }
@@ -90,7 +90,9 @@ export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
       </div>
 
       {Array.from(grouped.entries()).map(([dateKey, daySlots]) => {
-        const label = formatDate(daySlots[0]!.starts_at);
+        const firstSlot = daySlots[0];
+        if (!firstSlot) return null;
+        const label = formatDate(firstSlot.starts_at);
 
         return (
           <div key={dateKey}>
@@ -98,23 +100,22 @@ export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
               {label}
             </p>
             <div className="space-y-1.5">
-              {daySlots.map((slot, i) => {
-                const isSamuel = slot.vet_name.toLowerCase().includes("samuel");
+              {daySlots.map((slot) => {
                 const dur = durationMinutes(slot.starts_at, slot.ends_at);
 
                 return (
                   <div
-                    key={`${slot.vet_user_id}-${slot.starts_at}-${i}`}
+                    key={`${slot.vet_user_id}-${slot.starts_at}`}
                     className={cn(
                       "flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5",
-                      isSamuel ? "border-rose-200 bg-rose-50/50" : "border-stone-200 bg-white",
+                      isSurgery ? "border-rose-200 bg-rose-50/50" : "border-stone-200 bg-white",
                     )}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={cn(
                           "flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-medium",
-                          isSamuel ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600",
+                          isSurgery ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600",
                         )}
                       >
                         {slot.vet_name
@@ -127,7 +128,7 @@ export function AvailabilityResults({ slots, onBookSlot, isSurgery }: Props) {
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 text-sm font-medium text-stone-900 truncate">
                           {slot.vet_name}
-                          {isSurgery && isSamuel && (
+                          {isSurgery && (
                             <span className="inline-flex items-center gap-0.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
                               <Syringe className="size-2.5" />
                               Cirugía

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { toast } from "sonner";
 import { Loader2, Play, Wrench } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -10,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ToolTestResult } from "./_action";
 
@@ -19,24 +19,16 @@ import type { ToolTestResult } from "./_action";
 // ---------------------------------------------------------------------------
 
 const PRE_FILLED: Record<string, string> = {
-  lookup_client: JSON.stringify(
-    { phone: "+34600000200" },
-    null,
-    2,
-  ),
+  lookup_client: JSON.stringify({ phone: "+34600000200" }, null, 2),
   register_new_client: JSON.stringify(
     { name: "Cliente Test Tool", phone: "+34600000199" },
     null,
     2,
   ),
-  lookup_pets_by_client: JSON.stringify(
-    { client_id: "cc000000-0000-0000-0000-000000000001" },
-    null,
-    2,
-  ),
+  lookup_pets_by_client: JSON.stringify({ client_id: "<client_id>" }, null, 2),
   register_new_pet: JSON.stringify(
     {
-      client_id: "cc000000-0000-0000-0000-000000000001",
+      client_id: "<client_id>",
       name: "Mascota Test",
       species: "dog",
     },
@@ -45,20 +37,20 @@ const PRE_FILLED: Record<string, string> = {
   ),
   check_availability: JSON.stringify(
     {
-      service_id: "a79c8b51-4041-446b-bc55-78d30316b627",
-      date_from: "2026-07-09T00:00:00Z",
-      date_to: "2026-07-16T00:00:00Z",
+      service_id: "<service_id>",
+      date_from: "<ISO date_from>",
+      date_to: "<ISO date_to>",
     },
     null,
     2,
   ),
   create_appointment: JSON.stringify(
     {
-      client_id: "cc000000-0000-0000-0000-000000000001",
-      pet_id: "pp000000-0000-0000-0000-000000000001",
-      vet_user_id: "00000000-0000-0000-0000-000000000011",
-      service_id: "8e683cf8-2ca2-4687-8c6f-c05b495eba18",
-      starts_at: "2026-07-11T10:00:00Z",
+      client_id: "<client_id>",
+      pet_id: "<pet_id>",
+      vet_user_id: "<vet_user_id>",
+      service_id: "<service_id>",
+      starts_at: "<ISO starts_at>",
     },
     null,
     2,
@@ -128,18 +120,18 @@ export function ToolsClient() {
     <div className="space-y-4">
       <div>
         <p className="text-sm text-stone-700">
-          Selecciona una tool y pulsa ejecutar. El input se rellena
-          automáticamente con datos del seed. El resultado se muestra crudo.
+          Selecciona una tool y pulsa ejecutar. El input se rellena automáticamente con datos del
+          seed. El resultado se muestra crudo.
         </p>
       </div>
 
       {/* Tool selector */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-stone-600">
+        <label htmlFor="tool-select" className="mb-1.5 block text-xs font-medium text-stone-600">
           Tool
         </label>
         <Select value={toolName} onValueChange={handleToolChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger id="tool-select" className="w-full">
             <SelectValue placeholder="Selecciona una tool…" />
           </SelectTrigger>
           <SelectContent>
@@ -155,10 +147,14 @@ export function ToolsClient() {
       {/* Input textarea */}
       {toolName && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-stone-600">
+          <label
+            htmlFor="tool-input-json"
+            className="mb-1.5 block text-xs font-medium text-stone-600"
+          >
             Input JSON
           </label>
           <textarea
+            id="tool-input-json"
             value={inputJson}
             onChange={(e) => setInputJson(e.target.value)}
             rows={8}
@@ -203,17 +199,13 @@ export function ToolsClient() {
             <span className="text-xs font-semibold text-stone-600">
               {result.tool_name}
               {result.validation_error && (
-                <span className="ml-2 text-amber-600 font-normal">
-                  (validation error)
-                </span>
+                <span className="ml-2 text-amber-600 font-normal">(validation error)</span>
               )}
             </span>
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                result.success
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-red-100 text-red-700",
+                result.success ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700",
               )}
             >
               {result.success ? "OK" : "ERROR"}
@@ -228,9 +220,7 @@ export function ToolsClient() {
       {!result && !toolName && (
         <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-6 py-12 text-center">
           <Wrench className="mx-auto size-6 text-stone-300" strokeWidth={1.5} />
-          <p className="mt-3 text-sm text-stone-400">
-            Selecciona una tool para empezar.
-          </p>
+          <p className="mt-3 text-sm text-stone-400">Selecciona una tool para empezar.</p>
         </div>
       )}
     </div>

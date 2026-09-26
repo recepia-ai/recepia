@@ -1,0 +1,56 @@
+{
+  "clinic": {
+    "name": "Clínica Veterinaria Norte PC-W10A",
+    "public_name": "Veterinaria Norte",
+    "slug": "veterinaria-norte-pcw10a",
+    "locale": "ca-ES",
+    "timezone": "Europe/Madrid",
+    "phone": null,
+    "address": {
+      "street": "Carrer de Proves 10",
+      "city": "Girona",
+      "postal_code": "17001",
+      "country": "ES"
+    }
+  },
+  "admin": {
+    "email": "pcw10a-admin@recepia.test",
+    "display_name": "Administració PC-W10A"
+  },
+  "veterinarians": [
+    {
+      "email": "pcw10a-vet@recepia.test",
+      "display_name": "Dra. Alba Nord",
+      "specialty": "Medicina felina preventiva",
+      "hours": [
+        { "day_of_week": 2, "start_time": "10:00", "end_time": "13:00" },
+        { "day_of_week": 4, "start_time": "15:00", "end_time": "19:00" }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "Consulta felina preventiva",
+      "description": "Revisión preventiva para gatos",
+      "duration_minutes": 40,
+      "price_min_cents": 4500,
+      "price_max_cents": 4500,
+      "is_surgery": false,
+      "requires_fasting": false,
+      "escalates_for_pricing": false,
+      "veterinarian_emails": ["pcw10a-vet@recepia.test"]
+    }
+  ],
+  "agent": {
+    "name": "Nora",
+    "primary_language": "ca-ES",
+    "web_greeting": "Soc la Nora, l'assistent d'IA de Veterinaria Norte. Com et puc ajudar?",
+    "whatsapp_greeting": "Soc la Nora, l'assistent d'IA de Veterinaria Norte. Com et puc ajudar?",
+    "voice_greeting": "Veterinaria Norte, l'atén la Nora, assistent d'intel·ligència artificial de l'equip. Com puc ajudar-lo?",
+    "after_hours_message": "Ara som fora de l'horari configurat. L'equip revisarà el missatge.",
+    "human_fallback_message": "No he pogut completar la gestió. L'equip la revisarà sense confirmar cap cita.",
+    "escalation_rules": [
+      "Derivar una urgència vital o una petició explícita de parlar amb una persona"
+    ]
+  }
+}

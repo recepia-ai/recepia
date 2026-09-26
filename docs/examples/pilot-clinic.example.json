@@ -1,0 +1,48 @@
+{
+  "clinic": {
+    "name": "Clínica Veterinaria Norte",
+    "public_name": "Clínica Veterinaria Norte",
+    "slug": "clinica-norte",
+    "locale": "es-ES",
+    "timezone": "Europe/Madrid",
+    "phone": "+34910000000",
+    "address": {
+      "street": "Calle Ejemplo 1",
+      "city": "Madrid",
+      "postal_code": "28000",
+      "country": "ES"
+    }
+  },
+  "admin": { "email": "admin-clinica@example.com", "display_name": "Administración Norte" },
+  "veterinarians": [
+    {
+      "email": "veterinaria@example.com",
+      "display_name": "Dra. Ejemplo",
+      "specialty": "Medicina felina",
+      "hours": [{ "day_of_week": 2, "start_time": "10:00", "end_time": "13:00" }]
+    }
+  ],
+  "services": [
+    {
+      "name": "Consulta felina",
+      "description": "Consulta general para gatos",
+      "duration_minutes": 40,
+      "price_min_cents": 4500,
+      "price_max_cents": 4500,
+      "is_surgery": false,
+      "requires_fasting": false,
+      "escalates_for_pricing": false,
+      "veterinarian_emails": ["veterinaria@example.com"]
+    }
+  ],
+  "agent": {
+    "name": "Nora",
+    "primary_language": "es-ES",
+    "web_greeting": "Soy Nora, asistente de IA de Clínica Veterinaria Norte. ¿En qué puedo ayudarte?",
+    "whatsapp_greeting": "Soy Nora, asistente de IA de Clínica Veterinaria Norte. ¿En qué puedo ayudarte?",
+    "voice_greeting": "Clínica Veterinaria Norte, le atiende Nora, asistente de inteligencia artificial. ¿En qué puedo ayudarle?",
+    "after_hours_message": "Estamos fuera de horario. Puedo tomar nota para que el equipo responda al abrir.",
+    "human_fallback_message": "No he podido completar esta gestión. El equipo la revisará sin confirmar ninguna cita.",
+    "escalation_rules": ["Derivar consultas de animales exóticos al equipo"]
+  }
+}

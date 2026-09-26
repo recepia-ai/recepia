@@ -1,7 +1,37 @@
 # PC-W10 — Pilot Launch Readiness
 
-Estado: **auditoría y diseño completados; implementación no iniciada** el 26 de
-septiembre de 2026.
+Estado: **PC-W10A implementado y validado en Preview** el 27 de septiembre de 2026.
+
+## PC-W10A — procedimiento interno de alta
+
+La fuente declarativa es un manifiesto JSON validado. El comando es dry-run por
+defecto y solo escribe con `--apply`:
+
+```bash
+pnpm dlx tsx apps/panel/scripts/provision-pilot-clinic.ts \
+  --manifest docs/examples/pilot-clinic.example.json
+```
+
+El operador revisa el plan determinista y repite con `--apply` únicamente tras
+cargar `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` del entorno
+destino. El manifiesto nunca contiene secretos. El alta hace upsert por slug,
+usuario, servicio, franja y asignación; repetirla no crea duplicados. Crea la
+clínica, admin, veterinarios, servicios, horarios y asignaciones con Web,
+WhatsApp, Voz y recording en OFF.
+
+Después del alta, el admin completa desde el panel: identidad/idioma/timezone y
+mensajes en **Ajustes → Clínica**; Google, WhatsApp, Vapi y transferencia en
+**Ajustes → Integraciones**; activación independiente en **Ajustes →
+Operaciones**; y verificación en **Ajustes → Preparación piloto**. Los secretos
+permanecen en Vault/env/configuración segura.
+
+La prueba conectada creó en Supabase Preview `veterinaria-norte-pcw10a` con un
+admin sintético, un veterinario, un servicio propio, dos franjas y una
+asignación. Dos ejecuciones devolvieron el mismo `clinic_id` y los mismos
+conteos. Una sesión sintética del admin verificó por RLS que solo veía su
+clínica; no vio conversaciones, citas ni integraciones de otro tenant. Su
+prompt contiene únicamente identidad/servicio propios, y los tres canales y la
+grabación permanecen OFF.
 
 ## 1. Evidencia y baseline
 

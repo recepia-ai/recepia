@@ -1,5 +1,6 @@
 import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadClinicAgentContext } from "@/lib/clinic-agent-config";
 import { getAnthropicClient } from "./anthropic-client";
 import { getExplicitAppointmentConfirmation } from "./appointment-confirmation";
 import {
@@ -7,7 +8,6 @@ import {
   markAppointmentMutationResultReused,
   shouldBlockBookingErrorEscalation,
 } from "./appointment-reliability";
-import { CLINIC_ADDRESS, CLINIC_NAME, EMERGENCY_HOSPITAL_PHONE } from "./clinic-data";
 import type { MessageRecord } from "./conversation-store";
 import { saveMessage } from "./conversation-store";
 import { buildSystemPrompt } from "./system-prompt";
@@ -46,7 +46,8 @@ type AnthropicMessageParam = Record<string, any>;
 const MAX_TOOL_ITERATIONS = 10;
 
 const ESCALATION_MESSAGES: Record<string, string> = {
-  urgent_medical: `Entiendo que la situacion es urgente. No esperes mas, ven ahora mismo al ${CLINIC_NAME}. Estamos en ${CLINIC_ADDRESS}. Si lo prefieres, contacta con Anicura Tarragona (${EMERGENCY_HOSPITAL_PHONE}). Te paso con el equipo para que te confirmen que todo esta preparado.`,
+  urgent_medical:
+    "Entiendo que la situación puede ser urgente. No esperes: sigue las indicaciones de urgencias de la clínica mientras aviso al equipo.",
   complaint:
     "Lamento mucho que hayas tenido esa experiencia. Tomo nota de tu queja y la traslado al equipo. Alguien del hospital se pondra en contacto contigo hoy para resolverlo personalmente.",
   medication_query:
@@ -187,7 +188,12 @@ export async function runAgentLoop(params: {
   } = params;
 
   try {
-    const systemPrompt = buildSystemPrompt(clientPhone);
+    const [clinicContext, conversation] = await Promise.all([
+      loadClinicAgentContext(supabaseAdmin, clinicId),
+      supabaseAdmin.from("conversations").select("channel").eq("id", conversationId).single(),
+    ]);
+    const promptChannel = conversation.data?.channel === "whatsapp" ? "whatsapp" : "web";
+    const systemPrompt = buildSystemPrompt(clinicContext, clientPhone, promptChannel);
     const anthropic = getAnthropicClient();
     const tools = getAnthropicTools();
 
@@ -244,7 +250,7 @@ export async function runAgentLoop(params: {
         const isOverloaded = statusCode === 429 || statusCode === 529;
         const errorText = isOverloaded
           ? "Estamos recibiendo muchas consultas. He tomado nota de tu mensaje y alguien del equipo te responderá en cuanto podamos."
-          : `Estamos teniendo un problema técnico. He tomado nota de tu mensaje y alguien del equipo te responderá en breve. Si es urgente, por favor llama al ${CLINIC_NAME}.`;
+          : clinicContext.humanFallbackMessage;
 
         await safeSaveMessage(supabaseAdmin, {
           conversationId,
@@ -417,8 +423,7 @@ export async function runAgentLoop(params: {
                 ((tu.input as Record<string, unknown> | undefined)?.reason as string | undefined) ??
                 "other";
               const escalationMessage =
-                ESCALATION_MESSAGES[escalationReason] ??
-                "Te paso ahora mismo con una persona del equipo. Un momento, por favor.";
+                ESCALATION_MESSAGES[escalationReason] ?? clinicContext.humanFallbackMessage;
 
               await safeSaveMessage(supabaseAdmin, {
                 conversationId,
@@ -441,8 +446,7 @@ export async function runAgentLoop(params: {
               toolResult.error ?? "unknown error",
             );
 
-            const failMessage =
-              "Estoy teniendo problemas para conectar con el equipo en este momento. Por favor, llama al hospital directamente o acude sin cita si es urgente.";
+            const failMessage = clinicContext.humanFallbackMessage;
 
             await safeSaveMessage(supabaseAdmin, {
               conversationId,
@@ -484,8 +488,7 @@ export async function runAgentLoop(params: {
     console.error(
       `[loop] Fallback triggered — iterations exhausted or unexpected stop_reason. Tool calls made: ${allToolCalls.length}`,
     );
-    const fallbackText =
-      "Disculpa las molestias. No he podido completar tu solicitud en este momento. El equipo del hospital la revisará y te responderá pronto. Si es urgente, por favor llama al hospital directamente.";
+    const fallbackText = clinicContext.humanFallbackMessage;
 
     await safeSaveMessage(supabaseAdmin, {
       conversationId,

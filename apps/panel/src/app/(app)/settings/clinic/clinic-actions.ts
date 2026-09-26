@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { clinicSchema, type ClinicFormState } from "./clinic-schema";
+import { clinicAgentConfigFromData, mergeClinicAgentConfig } from "@/lib/clinic-agent-config";
+import { createClient } from "@/lib/supabase/server";
+import { type ClinicFormState, clinicSchema } from "./clinic-schema";
 
 type ClinicUserRow = { clinic_id: string; role: string };
 
@@ -26,8 +27,7 @@ export async function updateClinic(
 
   const cu = clinicUser as ClinicUserRow | null;
   if (!cu) return { error: "Sin clínica asignada" };
-  if (cu.role !== "admin")
-    return { error: "Solo el administrador puede editar la clínica" };
+  if (cu.role !== "admin") return { error: "Solo el administrador puede editar la clínica" };
 
   const raw = {
     name: formData.get("name"),
@@ -42,6 +42,15 @@ export async function updateClinic(
     address_country: formData.get("address_country"),
     locale: formData.get("locale"),
     timezone: formData.get("timezone"),
+    public_name: formData.get("public_name"),
+    agent_name: formData.get("agent_name"),
+    primary_language: formData.get("primary_language"),
+    web_greeting: formData.get("web_greeting"),
+    whatsapp_greeting: formData.get("whatsapp_greeting"),
+    voice_greeting: formData.get("voice_greeting"),
+    after_hours_message: formData.get("after_hours_message"),
+    human_fallback_message: formData.get("human_fallback_message"),
+    escalation_rules: formData.get("escalation_rules"),
   };
 
   const parsed = clinicSchema.safeParse(raw);
@@ -81,6 +90,47 @@ export async function updateClinic(
   if (!updated) {
     console.error("[updateClinic] UPDATE affected 0 rows. RLS policy missing?");
     return { error: "No tienes permiso para editar la clínica." };
+  }
+
+  const { data: existingConfig } = await supabase
+    .from("clinic_config")
+    .select("config")
+    .eq("clinic_id", cu.clinic_id)
+    .maybeSingle();
+  const current = clinicAgentConfigFromData(
+    {
+      name: parsed.data.name,
+      locale: parsed.data.locale || "es-ES",
+      timezone: parsed.data.timezone || "Europe/Madrid",
+    },
+    existingConfig?.config,
+  );
+  const config = mergeClinicAgentConfig(existingConfig?.config, {
+    ...current,
+    publicName: parsed.data.public_name,
+    agentName: parsed.data.agent_name,
+    primaryLanguage: parsed.data.primary_language,
+    greetings: {
+      web: parsed.data.web_greeting,
+      whatsapp: parsed.data.whatsapp_greeting,
+      voice: parsed.data.voice_greeting,
+    },
+    afterHoursMessage: parsed.data.after_hours_message,
+    humanFallbackMessage: parsed.data.human_fallback_message,
+    escalationRules: parsed.data.escalation_rules
+      .split("\n")
+      .map((rule) => rule.trim())
+      .filter(Boolean),
+    recordingEnabled: false,
+  });
+  const { error: configError } = await supabase.from("clinic_config").upsert({
+    clinic_id: cu.clinic_id,
+    config,
+    updated_by: user.id,
+  });
+  if (configError) {
+    console.error("[updateClinic] clinic_config", configError);
+    return { error: "La clínica se actualizó, pero no su configuración del agente." };
   }
 
   revalidatePath("/settings/clinic");

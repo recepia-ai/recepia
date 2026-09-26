@@ -1,20 +1,17 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createAppointment } from "@/app/(app)/_actions/appointment-actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminClinicId } from "../_actions/test-helpers";
 
 // ---------------------------------------------------------------------------
-// Hardcoded test data
+// Synthetic identities; operational resources are resolved from the active clinic.
 // ---------------------------------------------------------------------------
 
 const CLIENT_PHONE = "+34600000200";
 const CLIENT_NAME = "Marc TestDirect";
 const PET_NAME = "Firulais";
 const PET_SPECIES = "dog";
-const SERVICE_ID = "8e683cf8-2ca2-4687-8c6f-c05b495eba18";
-const VET_USER_ID = "00000000-0000-0000-0000-000000000011";
-const STARTS_AT = "2026-07-08T14:30:00Z";
 
 // ---------------------------------------------------------------------------
 // Direct test action
@@ -44,12 +41,26 @@ export async function runDirectTest(): Promise<DirectTestLog> {
   log.admin_guard = { clinic_id: clinicId };
 
   const supabaseAdmin = createAdminClient();
+  const { data: assignment, error: assignmentError } = await supabaseAdmin
+    .from("service_vet_assignments")
+    .select("service_id, vet_user_id, services!inner(active)")
+    .eq("clinic_id", clinicId)
+    .eq("services.active", true)
+    .limit(1)
+    .maybeSingle();
+  if (assignmentError || !assignment) {
+    return {
+      error: assignmentError?.message ?? "No hay servicio y veterinario asignados en la clínica.",
+      error_step: "resolve_operational_resources",
+    };
+  }
+  const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  startsAt.setUTCHours(10, 0, 0, 0);
 
   // ------------------------------------------------------------------
   // 2. Upsert client (by phone)
   // ------------------------------------------------------------------
-  const { data: existingClient } = await (supabaseAdmin
-    .from("clients") as any)
+  const { data: existingClient } = await (supabaseAdmin.from("clients") as any)
     .select("id, name")
     .eq("clinic_id", clinicId)
     .eq("phone", CLIENT_PHONE)
@@ -65,8 +76,7 @@ export async function runDirectTest(): Promise<DirectTestLog> {
       name: (existingClient as { id: string; name: string }).name,
     };
   } else {
-    const { data: inserted, error: insertErr } = await (supabaseAdmin
-      .from("clients") as any)
+    const { data: inserted, error: insertErr } = await (supabaseAdmin.from("clients") as any)
       .insert({
         clinic_id: clinicId,
         phone: CLIENT_PHONE,
@@ -90,8 +100,7 @@ export async function runDirectTest(): Promise<DirectTestLog> {
   // ------------------------------------------------------------------
   // 3. Upsert pet (by name + client_id)
   // ------------------------------------------------------------------
-  const { data: existingPet } = await (supabaseAdmin
-    .from("pets") as any)
+  const { data: existingPet } = await (supabaseAdmin.from("pets") as any)
     .select("id, name")
     .eq("client_id", clientId)
     .eq("name", PET_NAME)
@@ -107,8 +116,7 @@ export async function runDirectTest(): Promise<DirectTestLog> {
       name: (existingPet as { id: string; name: string }).name,
     };
   } else {
-    const { data: inserted, error: insertErr } = await (supabaseAdmin
-      .from("pets") as any)
+    const { data: inserted, error: insertErr } = await (supabaseAdmin.from("pets") as any)
       .insert({
         clinic_id: clinicId,
         client_id: clientId,
@@ -136,9 +144,9 @@ export async function runDirectTest(): Promise<DirectTestLog> {
   const apptResult = await createAppointment({
     client_id: clientId,
     pet_id: petId,
-    vet_user_id: VET_USER_ID,
-    service_id: SERVICE_ID,
-    starts_at: STARTS_AT,
+    vet_user_id: assignment.vet_user_id,
+    service_id: assignment.service_id,
+    starts_at: startsAt.toISOString(),
     notes: "[TEST] cita de prueba directa desde /settings/test-availability/direct",
     created_by: "admin",
   });

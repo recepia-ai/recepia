@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
-import { toast } from "sonner";
 import { Loader2, Search, Syringe } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -10,10 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ServiceOption, VetOption } from "../_schemas/test-schemas";
-import type { AvailableSlot } from "@/app/(app)/_actions/availability-schemas";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,10 +67,6 @@ export function AvailabilityForm({
 
   const selectedService = services.find((s) => s.id === serviceId);
   const isSurgery = selectedService?.is_surgery ?? false;
-  const samuelVet = vets.find((v) => (v.display_name ?? "").includes("Samuel"));
-
-  // When service changes to surgery, force Samuel
-  const effectiveVetId = isSurgery && samuelVet ? samuelVet.id : vetId;
 
   // Keep lastParams in a ref so the search function always has fresh access
   const lastParamsRef = useRef(lastParams);
@@ -79,6 +75,7 @@ export function AvailabilityForm({
   // Auto-refetch on external trigger
   const prevTriggerRef = useRef(refetchTrigger);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: executeSearch intentionally reads current form state and the trigger is the only refetch signal.
   useEffect(() => {
     if (
       refetchTrigger !== undefined &&
@@ -86,8 +83,9 @@ export function AvailabilityForm({
       lastParamsRef.current
     ) {
       prevTriggerRef.current = refetchTrigger;
+      const params = lastParamsRef.current;
       startTransition(async () => {
-        await executeSearch(lastParamsRef.current!);
+        if (params) await executeSearch(params);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,12 +95,8 @@ export function AvailabilityForm({
     return {
       service_id: overrides?.service_id ?? serviceId,
       date_from: overrides?.date_from ?? new Date(dateFrom).toISOString(),
-      date_to:
-        overrides?.date_to ??
-        new Date(dateTo + "T23:59:59").toISOString(),
-      vet_user_id:
-        overrides?.vet_user_id ??
-        (isSurgery && samuelVet ? samuelVet.id : vetId || ""),
+      date_to: overrides?.date_to ?? new Date(`${dateTo}T23:59:59`).toISOString(),
+      vet_user_id: overrides?.vet_user_id ?? (vetId || ""),
     };
   }
 
@@ -114,9 +108,7 @@ export function AvailabilityForm({
 
     onBusy(true);
 
-    const { checkAvailabilityWrapper } = await import(
-      "../_actions/test-actions"
-    );
+    const { checkAvailabilityWrapper } = await import("../_actions/test-actions");
 
     const result = await checkAvailabilityWrapper({
       service_id: params.service_id,
@@ -156,9 +148,7 @@ export function AvailabilityForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-stone-900">
-          Buscar disponibilidad
-        </h3>
+        <h3 className="text-sm font-semibold text-stone-900">Buscar disponibilidad</h3>
         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
           TEST INTERNO
         </span>
@@ -166,11 +156,14 @@ export function AvailabilityForm({
 
       {/* Service select */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-stone-600">
+        <label
+          htmlFor="availability-service"
+          className="mb-1.5 block text-xs font-medium text-stone-600"
+        >
           Servicio
         </label>
         <Select value={serviceId} onValueChange={setServiceId}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger id="availability-service" className="w-full">
             <SelectValue placeholder="Selecciona un servicio…" />
           </SelectTrigger>
           <SelectContent>
@@ -178,12 +171,8 @@ export function AvailabilityForm({
               <SelectItem key={svc.id} value={svc.id}>
                 <span className="flex items-center gap-2">
                   {svc.name}
-                  <span className="text-xs text-stone-400">
-                    ({svc.duration_minutes} min)
-                  </span>
-                  {svc.is_surgery && (
-                    <Syringe className="size-3 text-rose-500" />
-                  )}
+                  <span className="text-xs text-stone-400">({svc.duration_minutes} min)</span>
+                  {svc.is_surgery && <Syringe className="size-3 text-rose-500" />}
                 </span>
               </SelectItem>
             ))}
@@ -191,8 +180,7 @@ export function AvailabilityForm({
         </Select>
         {isSurgery && (
           <p className="mt-1 text-xs text-rose-600">
-            Cirugía — se asignará automáticamente a{" "}
-            {samuelVet?.display_name ?? "Samuel"}.
+            Cirugía — la disponibilidad se limita a los veterinarios asignados al servicio.
           </p>
         )}
       </div>
@@ -200,10 +188,14 @@ export function AvailabilityForm({
       {/* Date range */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-stone-600">
+          <label
+            htmlFor="availability-from"
+            className="mb-1.5 block text-xs font-medium text-stone-600"
+          >
             Desde
           </label>
           <input
+            id="availability-from"
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
@@ -216,10 +208,14 @@ export function AvailabilityForm({
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-stone-600">
+          <label
+            htmlFor="availability-to"
+            className="mb-1.5 block text-xs font-medium text-stone-600"
+          >
             Hasta
           </label>
           <input
+            id="availability-to"
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
@@ -235,20 +231,16 @@ export function AvailabilityForm({
 
       {/* Vet select */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-stone-600">
-          Veterinario{" "}
-          <span className="text-stone-400">(opcional)</span>
-        </label>
-        <Select
-          value={effectiveVetId}
-          onValueChange={(v) => setVetId(v)}
-          disabled={isSurgery || isPending}
+        <label
+          htmlFor="availability-vet"
+          className="mb-1.5 block text-xs font-medium text-stone-600"
         >
+          Veterinario <span className="text-stone-400">(opcional)</span>
+        </label>
+        <Select value={vetId} onValueChange={(v) => setVetId(v)} disabled={isPending}>
           <SelectTrigger
-            className={cn(
-              "w-full",
-              (isSurgery || isPending) && "bg-stone-50 text-stone-500",
-            )}
+            id="availability-vet"
+            className={cn("w-full", isPending && "bg-stone-50 text-stone-500")}
           >
             <SelectValue placeholder="Cualquier vet disponible" />
           </SelectTrigger>
@@ -261,20 +253,10 @@ export function AvailabilityForm({
             ))}
           </SelectContent>
         </Select>
-        {isSurgery && (
-          <p className="mt-1 text-xs text-stone-400">
-            Fijado a {samuelVet?.display_name ?? "Samuel"} (único cirujano).
-          </p>
-        )}
       </div>
 
       {/* Submit */}
-      <Button
-        type="submit"
-        disabled={isPending || !serviceId}
-        className="w-full"
-        variant="default"
-      >
+      <Button type="submit" disabled={isPending || !serviceId} className="w-full" variant="default">
         {isPending ? (
           <>
             <Loader2 className="mr-2 size-4 animate-spin" />

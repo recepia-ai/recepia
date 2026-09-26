@@ -2,8 +2,9 @@ import type { Database } from "@recepia/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { startConversation } from "@/lib/agent/conversation-store";
-import { monotonicCallStatus, VAPI_PILOT_ARTIFACT_PLAN } from "@/lib/channels/vapi-resilience";
+import { monotonicCallStatus, vapiArtifactPlan } from "@/lib/channels/vapi-resilience";
 import type { VapiWebhook } from "@/lib/channels/vapi-schema";
+import { loadClinicAgentContext, voiceGreeting } from "@/lib/clinic-agent-config";
 
 export { vapiWebhookSchema } from "@/lib/channels/vapi-schema";
 
@@ -201,16 +202,8 @@ export async function vapiAssistantResponse(
   if (!assistantId) throw new Error("El canal telefónico no tiene assistant_id de Vapi");
   const { caller } = callParties(webhook);
 
-  const [{ data: clinic }, { data: services }, { data: client }] = await Promise.all([
-    supabaseAdmin.from("clinics").select("name, timezone").eq("id", channel.clinic_id).single(),
-    supabaseAdmin
-      .from("services")
-      .select(
-        "name, duration_minutes, price_min_cents, price_max_cents, is_surgery, requires_fasting",
-      )
-      .eq("clinic_id", channel.clinic_id)
-      .eq("active", true)
-      .order("name"),
+  const [clinicContext, { data: client }] = await Promise.all([
+    loadClinicAgentContext(supabaseAdmin, channel.clinic_id),
     caller
       ? supabaseAdmin
           .from("clients")
@@ -234,7 +227,7 @@ export async function vapiAssistantResponse(
           .limit(10),
       ])
     : [{ data: [] }, { data: [] }];
-  const timezone = clinic?.timezone ?? "Europe/Madrid";
+  const timezone = clinicContext.timezone;
   const now = new Date();
   const currentLocalDate = formatInTimeZone(now, timezone, "yyyy-MM-dd");
   const [year, month, day] = currentLocalDate.split("-").map(Number);
@@ -258,7 +251,8 @@ export async function vapiAssistantResponse(
   return {
     assistantId,
     assistantOverrides: {
-      artifactPlan: VAPI_PILOT_ARTIFACT_PLAN,
+      artifactPlan: vapiArtifactPlan(clinicContext.recordingEnabled),
+      firstMessage: voiceGreeting(clinicContext),
       variableValues: {
         currentLocalDate,
         currentLocalTime: formatInTimeZone(now, timezone, "HH:mm:ss"),
@@ -267,20 +261,26 @@ export async function vapiAssistantResponse(
         tomorrowMorningFrom,
         tomorrowMorningTo,
         timezone,
-        clinicName: clinic?.name ?? "el hospital veterinario",
+        clinicName: clinicContext.publicName,
+        agentName: clinicContext.agentName,
+        primaryLanguage: clinicContext.primaryLanguage,
+        voiceGreeting: voiceGreeting(clinicContext),
+        clinicPhone: clinicContext.clinicPhone ?? "no configurado",
+        clinicAddress: clinicContext.clinicAddress ?? "no configurada",
+        afterHoursMessage: clinicContext.afterHoursMessage,
+        humanFallbackMessage: clinicContext.humanFallbackMessage,
+        escalationRules: clinicContext.escalationRules.join("; ") || "ninguna adicional",
         customerPhone: caller || "no disponible",
         customerName: client?.name ?? "cliente no identificado",
         customerContext: JSON.stringify({ pets: pets ?? [], appointments: appointments ?? [] }),
         serviceCatalog: JSON.stringify(
-          (services ?? []).map((service) => ({
+          clinicContext.services.map((service) => ({
             name: service.name,
-            duration_minutes: service.duration_minutes,
-            price_min_euros:
-              service.price_min_cents === null ? null : service.price_min_cents / 100,
-            price_max_euros:
-              service.price_max_cents === null ? null : service.price_max_cents / 100,
-            is_surgery: service.is_surgery,
-            requires_fasting: service.requires_fasting,
+            duration_minutes: service.durationMinutes,
+            price_min_euros: service.priceMinCents === null ? null : service.priceMinCents / 100,
+            price_max_euros: service.priceMaxCents === null ? null : service.priceMaxCents / 100,
+            is_surgery: service.isSurgery,
+            requires_fasting: service.requiresFasting,
           })),
         ),
         humanTransferNumber:

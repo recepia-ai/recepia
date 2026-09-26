@@ -19,12 +19,7 @@ const phoneSchema = z
   .optional()
   .or(z.literal(""));
 
-const emailSchema = z
-  .string()
-  .trim()
-  .email("Email no válido")
-  .optional()
-  .or(z.literal(""));
+const emailSchema = z.string().trim().email("Email no válido").optional().or(z.literal(""));
 
 const postalCodeSchema = z
   .string()
@@ -42,37 +37,20 @@ const countrySchema = z
   .or(z.literal("ES"));
 
 // Locale y timezone: string para evitar conflictos de tipo con zodResolver
-const localeSchema = z
-  .string()
-  .trim()
-  .optional()
-  .or(z.literal("es-ES"));
+const localeSchema = z.string().trim().optional().or(z.literal("es-ES"));
 
-const timezoneSchema = z
-  .string()
-  .trim()
-  .optional()
-  .or(z.literal("Europe/Madrid"));
+const timezoneSchema = z.string().trim().optional().or(z.literal("Europe/Madrid"));
 
 export const clinicSchema = z.object({
   // Identidad
-  name: z
-    .string()
-    .trim()
-    .min(2, "Nombre demasiado corto")
-    .max(100, "Máximo 100 caracteres"),
+  name: z.string().trim().min(2, "Nombre demasiado corto").max(100, "Máximo 100 caracteres"),
   slug: z
     .string()
     .trim()
     .min(2, "Identificador demasiado corto")
     .max(80, "Máximo 80 caracteres")
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Usa minúsculas, números y guiones"),
-  legal_name: z
-    .string()
-    .trim()
-    .max(150, "Máximo 150 caracteres")
-    .optional()
-    .or(z.literal("")),
+  legal_name: z.string().trim().max(150, "Máximo 150 caracteres").optional().or(z.literal("")),
   tax_id: taxIdSchema,
 
   // Contacto
@@ -80,24 +58,25 @@ export const clinicSchema = z.object({
   phone: phoneSchema,
 
   // Dirección
-  address_street: z
-    .string()
-    .trim()
-    .max(200, "Máximo 200 caracteres")
-    .optional()
-    .or(z.literal("")),
-  address_city: z
-    .string()
-    .trim()
-    .max(100, "Máximo 100 caracteres")
-    .optional()
-    .or(z.literal("")),
+  address_street: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+  address_city: z.string().trim().max(100, "Máximo 100 caracteres").optional().or(z.literal("")),
   address_postal_code: postalCodeSchema,
   address_country: countrySchema,
 
   // Configuración regional (select en UI, no input libre)
   locale: localeSchema,
   timezone: timezoneSchema,
+
+  // Configuración operativa del agente; los guardrails globales no son editables.
+  public_name: z.string().trim().min(2).max(120),
+  agent_name: z.string().trim().min(2).max(60),
+  primary_language: z.enum(["es-ES", "ca-ES", "en-GB"]),
+  web_greeting: z.string().trim().min(8).max(500),
+  whatsapp_greeting: z.string().trim().min(8).max(500),
+  voice_greeting: z.string().trim().min(8).max(500),
+  after_hours_message: z.string().trim().min(8).max(1000),
+  human_fallback_message: z.string().trim().min(8).max(1000),
+  escalation_rules: z.string().trim().max(2000),
 });
 
 export type ClinicFormValues = z.infer<typeof clinicSchema>;

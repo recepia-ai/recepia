@@ -11,6 +11,7 @@ const TABS = [
   { key: "team", label: "Equipo", href: "/settings/team" },
   { key: "integrations", label: "Integraciones", href: "/settings/integrations" },
   { key: "operations", label: "Operaciones", href: "/settings/operations" },
+  { key: "onboarding", label: "Preparación piloto", href: "/settings/onboarding" },
   { key: "profile", label: "Perfil", href: "/settings/profile" },
 ] as const;
 
