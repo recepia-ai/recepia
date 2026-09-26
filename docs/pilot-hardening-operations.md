@@ -2,14 +2,18 @@
 
 ## Alcance y estado
 
-PC-W9 endurece Preview para pilotos controlados sin convertir el producto en una
-plataforma de infraestructura. Production queda fuera del paquete.
+PC-W9 endurece Recepia para pilotos controlados sin convertir el producto en una
+plataforma de infraestructura. **PC-W9 queda cerrado el 26 de septiembre de
+2026**; la activación real del piloto se decide en PC-W10.
 
 - **PC-W9A — Observabilidad + regresiones:** **GO**; suite y validaciones locales superadas.
 - **PC-W9B — Resiliencia operativa:** **GO**; controles, degradación, reintentos y alertas persistentes validados.
-- **PC-W9C — Higiene de datos e infraestructura:** Fase 1 auditada; PC-W9C.2
-  separa Preview de Production y está pendiente de reconectar proveedores.
-- **PC-W9D — Grabaciones y privacidad:** no iniciado.
+- **PC-W9C — Higiene, separación de entornos y concurrencia:** **GO**; Preview
+  aislada, duplicados históricos saneados, infraestructura accidental retirada e
+  índice de concurrencia aplicado también a Production tras autorización.
+- **PC-W9D — Grabaciones y privacidad:** **GO técnico condicionado**; audio OFF,
+  transcript/metadata ON y ninguna URL Vapi persistida en Preview. La activación
+  futura de audio queda bloqueada por decisión legal y operativa.
 
 ## PC-W9C.2 — Supabase aislado para Preview
 
@@ -169,10 +173,11 @@ vista operativa mínima, no un monitor de disponibilidad externo.
   push externo; durante el piloto el operador debe revisar Ajustes → Operaciones.
 - El dataset valida políticas deterministas y contratos, no sustituye un smoke
   conectado de proveedores.
-- La carrera entre creaciones simultáneas idénticas queda cerrada en Preview
-  por un índice UNIQUE parcial y recuperación idempotente de `23505`. La
-  aplicación a Production permanece pendiente de autorización explícita.
-- Inventario/limpieza y privacidad de grabaciones siguen reservados a PC-W9C/D.
+- La carrera entre creaciones simultáneas idénticas está cerrada en Preview y
+  Production mediante índice UNIQUE parcial y recuperación idempotente de
+  `23505`.
+- Las alertas siguen siendo internas al panel; el piloto necesita una rutina
+  operativa de revisión hasta que exista transporte externo.
 
 ## PC-W9C.4 — Concurrencia de citas
 
@@ -206,4 +211,5 @@ transaccional y un smoke conectado: dos creaciones simultáneas produjeron un
 `23505`, ambas devolvieron el mismo `appointment_id`, se persistió una fila y
 Google expuso un único evento. El evento y todas las entidades sintéticas se
 eliminaron al finalizar. Production fue auditada (8 citas, 0 identidades
-activas duplicadas y 0 solapamientos), pero la migración no se aplicó allí.
+activas duplicadas y 0 solapamientos) y la migración se aplicó tras autorización,
+conservando 7 citas confirmadas y 1 cancelada.
