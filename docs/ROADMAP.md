@@ -351,11 +351,11 @@ Priorizada. No se resuelve por iniciativa propia de una IA: se resuelve en la fa
 | `clinic_config` solo editable por SQL | Media | Fase K |
 | Sin gestión de secretos (Doppler) | Baja | Antes de comercializar |
 | Sin CI (lint + build en cada push) | Baja | Fase J |
-| 717 conversaciones telefónicas históricas duplicadas; no son `call_sessions` reales | Media | Paquete de saneamiento de datos auditado; no borrar en PC-W8 |
+| Conversaciones telefónicas históricas duplicadas | Resuelta | PC-W9C reasignó evidencia y eliminó 708 duplicados; se conservaron 3 canónicas |
 | Clientes y mascotas sintéticos creados durante pruebas | Baja | Limpieza selectiva solo con trazabilidad inequívoca |
-| Posibles deployments/proyectos Vercel accidentales | Baja | Inventariados en PC-W9C; no eliminar hasta completar la separación ni tocar Production |
-| Grabaciones Vapi sin tratamiento de producto definitivo | Media | Definir artifacts y UI en un paquete posterior |
-| Retención, consentimiento y privacidad del audio pendientes | Alta antes de tráfico real | Fase K / revisión legal antes de grabación permanente |
+| Deployments/proyectos Vercel accidentales | Resuelta | PC-W9C eliminó únicamente los dos proyectos sin tráfico ni dominios canónicos |
+| Grabaciones Vapi sin tratamiento de producto definitivo | Media | PC-W9D recomienda grabación desactivada por defecto y referencia autenticada cuando se habilite |
+| Retención, consentimiento y privacidad del audio pendientes | Alta antes de tráfico real | Diseño PC-W9D completo; falta validación legal y activar controles operativos antes del piloto |
 | Cobertura limitada de expresiones de confirmación por voz | Baja | Dataset golden de voz y ampliación conservadora en Fase J |
 
 ---
@@ -439,3 +439,5 @@ Al cerrar una decisión: anótala aquí con fecha y razonamiento, y refleja el c
 | 2026-09-24 | 1.6 | Marc + Codex | PC-W9B queda en GO: kill switches por clínica/canal, fallback humano, resiliencia Google/Vapi/WhatsApp, idempotencia reforzada, estado operativo y alertas persistentes en Preview. Production intacta; PC-W9C no iniciado. |
 | 2026-09-25 | 1.7 | Marc + Codex | PC-W9C.2 crea y migra `recepia-preview`, configura Auth y overrides Vercel exclusivos de la rama, y despliega la Preview estable contra el nuevo Supabase. No se copian datos ni secretos de Production; Google, WhatsApp y Vapi quedan desactivados hasta su reconexión explícita. |
 | 2026-09-26 | 1.8 | Marc + Codex | PC-W9C.4 endurece la concurrencia de citas en Preview: índice UNIQUE parcial para identidades activas, recuperación idempotente de `23505`, preservación del evento Google ganador y compensación de reprogramaciones. Production solo se audita y queda pendiente de autorización. |
+| 2026-09-26 | 1.9 | Marc + Codex | PC-W9C.4 se aplica a Production tras preflight sin colisiones: código compatible primero, índice UNIQUE parcial después, 8 citas intactas y entorno `ACTIVE_HEALTHY`. PC-W9C queda cerrado en GO. |
+| 2026-09-26 | 2.0 | Marc + Codex | PC-W9D audita artifacts y retención Vapi/Recepia, elimina la persistencia futura de URLs prefirmadas, propone grabación desactivada por defecto y documenta acceso, borrado, consentimiento y reproducción segura. No se habilita audio ni se modifica Production. |

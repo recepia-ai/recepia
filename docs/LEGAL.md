@@ -390,9 +390,13 @@ Configurado en `clinic_config.policies.consent.call_recording_message`. Texto ba
 
 > "Esta llamada será atendida por Recepia, asistente virtual del Hospital Veterinario Dr. Patino, y puede ser grabada para mejorar el servicio. Si prefieres hablar con una persona, dilo en cualquier momento."
 
-Requisitos legales que cumple:
-- **LOPDGDD art. 11**: información transparente al inicio del tratamiento.
-- **Consentimiento informado**: si el cliente continúa la conversación tras este aviso, presta consentimiento implícito. Para tratamientos sensibles, el agente debe ofrecer alternativa (transferir a humano).
+Este texto es un aviso informativo provisional, no una validación jurídica ni un
+consentimiento. Si la base de licitud elegida es el consentimiento, el RGPD exige
+una manifestación inequívoca o acción afirmativa: continuar en línea no constituye
+por sí solo consentimiento tácito. Antes de habilitar grabación en un piloto deben
+validarse con asesoría jurídica la base de licitud, la información por capas, la
+alternativa sin grabación y los plazos. La propuesta técnica vigente se documenta
+en `docs/pc-w9d-recordings-privacy.md`.
 
 ### 7.3 Importante: derecho a rechazar IA y hablar con humano
 

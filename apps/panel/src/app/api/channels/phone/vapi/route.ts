@@ -8,6 +8,7 @@ import {
   vapiAssistantResponse,
   vapiWebhookSchema,
 } from "@/lib/channels/vapi";
+import { redactVapiArtifactReferences } from "@/lib/channels/vapi-artifacts";
 import {
   extractVapiToolCalls,
   isFinalVapiTranscript,
@@ -50,7 +51,7 @@ async function persistVapiEvent(payload: unknown) {
     event_id: eventId,
     event_type: message.type,
     status: "completed",
-    payload: JSON.parse(JSON.stringify(payload)),
+    payload: redactVapiArtifactReferences(payload),
     occurred_at: vapiOccurredAt(message.timestamp),
     processed_at: new Date().toISOString(),
   });
@@ -89,7 +90,7 @@ async function persistVapiEvent(payload: unknown) {
         transcript_status: message.artifact?.transcript ? "completed" : "not_available",
         metadata: {
           ended_reason: message.endedReason ?? "unknown",
-          recording_url: recordingUrl,
+          recording_available: Boolean(recordingUrl),
           transcript: message.artifact?.transcript ?? null,
         },
       })
