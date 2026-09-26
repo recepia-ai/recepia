@@ -169,7 +169,41 @@ vista operativa mínima, no un monitor de disponibilidad externo.
   push externo; durante el piloto el operador debe revisar Ajustes → Operaciones.
 - El dataset valida políticas deterministas y contratos, no sustituye un smoke
   conectado de proveedores.
-- Sin una restricción única nueva en base de datos queda una ventana teórica de
-  carrera entre dos creaciones simultáneas idénticas; la deduplicación de tool,
-  conversación, evento Google y búsqueda previa cubre los reintentos normales.
+- La carrera entre creaciones simultáneas idénticas queda cerrada en Preview
+  por un índice UNIQUE parcial y recuperación idempotente de `23505`. La
+  aplicación a Production permanece pendiente de autorización explícita.
 - Inventario/limpieza y privacidad de grabaciones siguen reservados a PC-W9C/D.
+
+## PC-W9C.4 — Concurrencia de citas
+
+La identidad activa de una cita queda protegida en base de datos por
+`appointments_active_identity_unique_idx`, sobre `clinic_id`, `client_id`,
+`pet_id`, `vet_user_id`, `service_id` y `starts_at`, con `NULLS NOT DISTINCT` y
+predicado `status <> 'cancelled'`. `confirmed`, `completed` y `no_show`
+conservan la identidad; cancelar libera la combinación para una nueva reserva.
+
+La creación sigue buscando primero una cita existente. Si dos ejecuciones
+superan simultáneamente esa lectura, el índice decide el ganador. La ejecución
+que recibe PostgreSQL `23505` no elimina el evento Google determinista, relee
+la cita ganadora y devuelve su `appointment_id` y `google_event_id` como éxito
+idempotente. Un evento recuperado tras conflicto HTTP 409 tampoco se elimina
+por un fallo posterior que no lo creó.
+
+La reprogramación consulta previamente la misma identidad. El índice cubre la
+ventana restante; si el `UPDATE` pierde la carrera, se revierte el cambio de
+Google Calendar de forma best-effort y la tool devuelve `SLOT_ALREADY_BOOKED`.
+
+La migración `20260926090000_appointment_active_identity_unique.sql` aborta si
+detecta duplicados activos antes de crear el índice. Rollback operativo:
+
+```sql
+drop index if exists public.appointments_active_identity_unique_idx;
+```
+
+El rollback del índice no revierte código y solo debe usarse tras detener o
+serializar nuevas reservas. Preview fue validada con una carrera SQL
+transaccional y un smoke conectado: dos creaciones simultáneas produjeron un
+`23505`, ambas devolvieron el mismo `appointment_id`, se persistió una fila y
+Google expuso un único evento. El evento y todas las entidades sintéticas se
+eliminaron al finalizar. Production fue auditada (8 citas, 0 identidades
+activas duplicadas y 0 solapamientos), pero la migración no se aplicó allí.

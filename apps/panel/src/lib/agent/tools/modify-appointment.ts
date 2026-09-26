@@ -5,6 +5,7 @@ import {
   mergeAppointmentNotes,
   updateGoogleCalendarNotes,
 } from "@/lib/agent/appointment-management";
+import { isAppointmentIdentityConflict } from "@/lib/appointment-concurrency";
 import { checkAvailabilityForClinic } from "@/lib/availability-core";
 import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
 import { getValidAccessToken } from "@/lib/google-tokens";
@@ -35,6 +36,8 @@ type AppointmentRecord = {
   ends_at: string;
   google_event_id: string | null;
   google_calendar_id: string | null;
+  client_id: string;
+  pet_id: string | null;
   service_id: string | null;
   vet_user_id: string | null;
   notes: string | null;
@@ -65,7 +68,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
   const { data: appointment, error: lookupError } = await supabase
     .from("appointments")
     .select(
-      "id, status, starts_at, ends_at, google_event_id, google_calendar_id, service_id, vet_user_id, notes",
+      "id, status, starts_at, ends_at, google_event_id, google_calendar_id, client_id, pet_id, service_id, vet_user_id, notes",
     )
     .eq("id", input.appointment_id)
     .eq("clinic_id", ctx.clinicId)
@@ -163,8 +166,47 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     const durationMs = (service as { duration_minutes: number }).duration_minutes * 60 * 1000;
     newStartsAt = input.starts_at;
     newEndsAt = new Date(Date.parse(input.starts_at) + durationMs).toISOString();
+
+    let conflictQuery = supabase
+      .from("appointments")
+      .select("id")
+      .eq("clinic_id", ctx.clinicId)
+      .eq("client_id", appt.client_id)
+      .eq("vet_user_id", appt.vet_user_id)
+      .eq("service_id", appt.service_id)
+      .eq("starts_at", newStartsAt)
+      .neq("status", "cancelled")
+      .neq("id", appt.id);
+    conflictQuery = appt.pet_id
+      ? conflictQuery.eq("pet_id", appt.pet_id)
+      : conflictQuery.is("pet_id", null);
+    const { data: conflictingAppointment, error: conflictLookupError } = await conflictQuery
+      .limit(1)
+      .maybeSingle();
+    if (conflictLookupError) {
+      ctx.logger("[modify_appointment] identity conflict lookup error", conflictLookupError);
+      return {
+        success: false,
+        error: "No se pudo verificar el nuevo horario. No se modificó la cita.",
+        error_code: "IDENTITY_CHECK_FAILED",
+      };
+    }
+    if (conflictingAppointment) {
+      return {
+        success: false,
+        error: "Ya existe esta misma cita activa en el horario elegido.",
+        error_code: "SLOT_ALREADY_BOOKED",
+      };
+    }
   }
 
+  let googleRollback:
+    | {
+        eventUrl: string;
+        accessToken: string;
+        originalDescription?: string;
+      }
+    | undefined;
   if (appt.google_event_id && appt.google_calendar_id) {
     const tokenResult = await getValidAccessToken(ctx.clinicId);
     if ("error" in tokenResult) {
@@ -178,6 +220,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
 
     const eventUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(appt.google_calendar_id)}/events/${encodeURIComponent(appt.google_event_id)}`;
     const patchBody: Record<string, unknown> = {};
+    let originalDescription: string | undefined;
     if (changesStart) {
       patchBody.start = googleCalendarDateTime(newStartsAt);
       patchBody.end = googleCalendarDateTime(newEndsAt);
@@ -199,6 +242,7 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
           };
         }
         const eventData = (await currentEvent.json()) as { description?: string };
+        originalDescription = eventData.description;
         patchBody.description = updateGoogleCalendarNotes(eventData.description, newNotes);
       }
 
@@ -220,6 +264,11 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
           error_code: "GOOGLE_UPDATE_FAILED",
         };
       }
+      googleRollback = {
+        eventUrl,
+        accessToken: tokenResult.access_token,
+        originalDescription,
+      };
     } catch (err) {
       ctx.logger("[modify_appointment] Google Calendar network error", err);
       return {
@@ -244,6 +293,38 @@ async function handler(input: Input, ctx: ToolContext): Promise<ToolResult<Outpu
     .eq("clinic_id", ctx.clinicId);
   if (updateError) {
     ctx.logger("[modify_appointment] update error", updateError);
+    if (googleRollback) {
+      const rollbackBody: Record<string, unknown> = {};
+      if (changesStart) {
+        rollbackBody.start = googleCalendarDateTime(appt.starts_at);
+        rollbackBody.end = googleCalendarDateTime(appt.ends_at);
+      }
+      if (changesNotes) rollbackBody.description = googleRollback.originalDescription ?? "";
+      try {
+        const rollbackResponse = await fetch(googleRollback.eventUrl, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${googleRollback.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(rollbackBody),
+        });
+        if (!rollbackResponse.ok) {
+          ctx.logger("[modify_appointment] Google rollback failed", {
+            status: rollbackResponse.status,
+          });
+        }
+      } catch (rollbackError) {
+        ctx.logger("[modify_appointment] Google rollback network error", rollbackError);
+      }
+    }
+    if (isAppointmentIdentityConflict(updateError)) {
+      return {
+        success: false,
+        error: "Ya existe esta misma cita activa en el horario elegido.",
+        error_code: "SLOT_ALREADY_BOOKED",
+      };
+    }
     return {
       success: false,
       error:

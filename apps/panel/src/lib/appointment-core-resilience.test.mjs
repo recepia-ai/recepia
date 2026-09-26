@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  isActiveAppointmentStatus,
+  isAppointmentIdentityConflict,
+  shouldDeleteGoogleEventAfterInsertFailure,
+} from "./appointment-concurrency.ts";
 import { googleAppointmentEventId } from "./appointment-idempotency.ts";
 
 const intent = {
@@ -28,4 +33,44 @@ test("different appointment intents cannot reuse a Google event", () => {
       starts_at: "2026-09-25T09:00:00+02:00",
     }),
   );
+});
+
+test("PostgreSQL 23505 is recognized as an appointment identity race", () => {
+  assert.equal(isAppointmentIdentityConflict({ code: "23505" }), true);
+  assert.equal(isAppointmentIdentityConflict({ code: "23503" }), false);
+  assert.equal(isAppointmentIdentityConflict(null), false);
+});
+
+test("a losing insert never deletes the deterministic Google event", () => {
+  assert.equal(
+    shouldDeleteGoogleEventAfterInsertFailure({
+      insertError: { code: "23505" },
+      eventCreatedByThisAttempt: true,
+    }),
+    false,
+  );
+});
+
+test("a reused Google event is never deleted after an unrelated insert failure", () => {
+  assert.equal(
+    shouldDeleteGoogleEventAfterInsertFailure({
+      insertError: { code: "23503" },
+      eventCreatedByThisAttempt: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDeleteGoogleEventAfterInsertFailure({
+      insertError: { code: "23503" },
+      eventCreatedByThisAttempt: true,
+    }),
+    true,
+  );
+});
+
+test("only cancelled appointments release an identical identity", () => {
+  assert.equal(isActiveAppointmentStatus("confirmed"), true);
+  assert.equal(isActiveAppointmentStatus("completed"), true);
+  assert.equal(isActiveAppointmentStatus("no_show"), true);
+  assert.equal(isActiveAppointmentStatus("cancelled"), false);
 });

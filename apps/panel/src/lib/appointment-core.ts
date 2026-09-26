@@ -3,6 +3,10 @@ import type {
   CreateAppointmentState,
 } from "@/app/(app)/_actions/appointment-schemas";
 import { createAppointmentSchema } from "@/app/(app)/_actions/appointment-schemas";
+import {
+  isAppointmentIdentityConflict,
+  shouldDeleteGoogleEventAfterInsertFailure,
+} from "@/lib/appointment-concurrency";
 import { googleAppointmentEventId } from "@/lib/appointment-idempotency";
 import { googleCalendarDateTime } from "@/lib/google-calendar-datetime";
 import { getValidAccessToken } from "@/lib/google-tokens";
@@ -23,6 +27,36 @@ type PetRow = { id: string; clinic_id: string; client_id: string; name: string }
 type VetRow = { id: string; clinic_id: string; display_name: string | null };
 type VetCalendarRow = { vet_user_id: string; google_calendar_id: string };
 type ExistingAppointmentRow = { id: string; google_event_id: string | null };
+
+type AppointmentIdentity = {
+  clinicId: string;
+  clientId: string;
+  petId: string;
+  vetUserId: string;
+  serviceId: string;
+  startsAt: string;
+};
+
+async function findActiveAppointmentByIdentity(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  identity: AppointmentIdentity,
+): Promise<{ data: ExistingAppointmentRow | null; error: unknown }> {
+  const { data, error } = await supabaseAdmin
+    .from("appointments")
+    .select("id, google_event_id")
+    .eq("clinic_id", identity.clinicId)
+    .eq("client_id", identity.clientId)
+    .eq("pet_id", identity.petId)
+    .eq("vet_user_id", identity.vetUserId)
+    .eq("service_id", identity.serviceId)
+    .eq("starts_at", identity.startsAt)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return { data: (data as ExistingAppointmentRow | null) ?? null, error };
+}
 
 function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
@@ -171,19 +205,16 @@ export async function createAppointmentForClinic(
   // A repeated confirmation or provider retry must reuse the completed booking.
   // This identity is deliberately narrower than a time-slot lookup: the same
   // pet/service/vet/start combination is the same appointment intent.
-  const { data: existingAppointment, error: existingAppointmentError } = await supabaseAdmin
-    .from("appointments")
-    .select("id, google_event_id")
-    .eq("clinic_id", clinicId)
-    .eq("client_id", client_id)
-    .eq("pet_id", pet_id)
-    .eq("vet_user_id", vet_user_id)
-    .eq("service_id", service_id)
-    .eq("starts_at", starts_at)
-    .neq("status", "cancelled")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const appointmentIdentity = {
+    clinicId,
+    clientId: client_id,
+    petId: pet_id,
+    vetUserId: vet_user_id,
+    serviceId: service_id,
+    startsAt: starts_at,
+  };
+  const { data: existingAppointment, error: existingAppointmentError } =
+    await findActiveAppointmentByIdentity(supabaseAdmin, appointmentIdentity);
   if (existingAppointmentError) {
     console.error(
       "[createAppointmentForClinic] idempotency lookup failed:",
@@ -192,12 +223,11 @@ export async function createAppointmentForClinic(
     return { error: "No se pudo verificar si la cita ya existía. No se creó otra cita." };
   }
   if (existingAppointment) {
-    const existing = existingAppointment as ExistingAppointmentRow;
     return {
       success: true,
       outcome: "confirmed_external_booking",
-      appointment_id: existing.id,
-      google_event_id: existing.google_event_id ?? undefined,
+      appointment_id: existingAppointment.id,
+      google_event_id: existingAppointment.google_event_id ?? undefined,
     };
   }
 
@@ -240,6 +270,7 @@ export async function createAppointmentForClinic(
     .join("\n");
 
   let googleEventId: string | null = null;
+  let googleEventCreatedByThisAttempt = false;
   const requestedGoogleEventId = googleAppointmentEventId(clinicId, parsed.data);
   try {
     const eventRes = await fetch(
@@ -287,6 +318,8 @@ export async function createAppointmentForClinic(
         outcome: "provider_failure",
         error: "No se pudo crear el evento en Google Calendar. Verifica los permisos.",
       };
+    } else {
+      googleEventCreatedByThisAttempt = true;
     }
 
     const eventData = eventRes.status === 409 ? null : await eventRes.json();
@@ -329,7 +362,35 @@ export async function createAppointmentForClinic(
 
     if (insertError || !inserted) {
       console.error("[createAppointmentForClinic] INSERT error:", insertError);
-      if (googleEventId) {
+      if (isAppointmentIdentityConflict(insertError)) {
+        const { data: winner, error: winnerError } = await findActiveAppointmentByIdentity(
+          supabaseAdmin,
+          appointmentIdentity,
+        );
+        if (winner) {
+          return {
+            success: true,
+            outcome: "confirmed_external_booking",
+            appointment_id: winner.id,
+            google_event_id: winner.google_event_id ?? googleEventId ?? undefined,
+          };
+        }
+        console.error(
+          "[createAppointmentForClinic] identity conflict winner lookup failed:",
+          winnerError,
+        );
+        return {
+          error:
+            "La cita fue creada por otra solicitud, pero no se pudo recuperar todavía. Reintenta la misma operación.",
+        };
+      }
+      if (
+        googleEventId &&
+        shouldDeleteGoogleEventAfterInsertFailure({
+          insertError,
+          eventCreatedByThisAttempt: googleEventCreatedByThisAttempt,
+        })
+      ) {
         try {
           await fetch(
             `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events/${encodeURIComponent(googleEventId)}`,
@@ -354,7 +415,7 @@ export async function createAppointmentForClinic(
     };
   } catch (err) {
     console.error("[createAppointmentForClinic] unexpected error:", err);
-    if (googleEventId) {
+    if (googleEventId && googleEventCreatedByThisAttempt) {
       try {
         await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.google_calendar_id)}/events/${encodeURIComponent(googleEventId)}`,
