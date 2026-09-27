@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "release:preflight": "pnpm dlx tsx scripts/release-preflight.ts",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },

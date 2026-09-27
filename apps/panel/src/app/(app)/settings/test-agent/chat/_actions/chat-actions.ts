@@ -1,16 +1,17 @@
 "use server";
 
 import { getAdminClinicId } from "@/app/(app)/settings/test-availability/_actions/test-helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import type { ConversationRecord, MessageRecord } from "@/lib/agent/conversation-store";
 import {
-  startConversation,
   loadConversation,
   loadMessages,
   loadRecentConversations,
+  startConversation,
 } from "@/lib/agent/conversation-store";
-import { runAgentLoop } from "@/lib/agent/loop";
-import type { ConversationRecord, MessageRecord } from "@/lib/agent/conversation-store";
 import type { ToolCallRecord } from "@/lib/agent/loop";
+import { runAgentLoop } from "@/lib/agent/loop";
+import { isOwnedByOrganization } from "@/lib/organization-context";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,9 +49,7 @@ export type LoadConversationsResult = {
 // Start a new conversation
 // ---------------------------------------------------------------------------
 
-export async function startNewConversation(
-  clientPhone?: string,
-): Promise<ChatActionResult> {
+export async function startNewConversation(clientPhone?: string): Promise<ChatActionResult> {
   const clinicIdOrError = await getAdminClinicId();
   if (typeof clinicIdOrError !== "string") {
     return { success: false, error: clinicIdOrError.error };
@@ -90,14 +89,13 @@ export async function sendMessage(
   try {
     // Load conversation to get client_phone from metadata
     const conversation = await loadConversation(supabaseAdmin, conversationId);
-    if (!conversation) {
+    if (!conversation || !isOwnedByOrganization(clinicIdOrError, conversation)) {
       return { success: false, error: "Conversación no encontrada." };
     }
 
-    const clientPhone =
-      (conversation.metadata as Record<string, unknown> | null)?.client_phone as
-        | string
-        | undefined;
+    const clientPhone = (conversation.metadata as Record<string, unknown> | null)?.client_phone as
+      | string
+      | undefined;
 
     // Load previous messages
     const previousMessages = await loadMessages(supabaseAdmin, conversationId);
@@ -141,7 +139,7 @@ export async function loadConversationWithMessages(
 
   try {
     const conversation = await loadConversation(supabaseAdmin, conversationId);
-    if (!conversation) {
+    if (!conversation || !isOwnedByOrganization(clinicIdOrError, conversation)) {
       return { success: false, error: "Conversación no encontrada." };
     }
 
@@ -171,11 +169,7 @@ export async function loadRecentConversationsList(): Promise<LoadConversationsRe
   const supabaseAdmin = createAdminClient();
 
   try {
-    const conversations = await loadRecentConversations(
-      supabaseAdmin,
-      clinicIdOrError,
-      50,
-    );
+    const conversations = await loadRecentConversations(supabaseAdmin, clinicIdOrError, 50);
     return { success: true, conversations };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error desconocido";
