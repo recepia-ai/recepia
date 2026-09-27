@@ -6,6 +6,8 @@ Fecha de corte: 2026-09-27. Esta revisión no despliega ni migra Production y no
 
 El código validado tiene una procedencia reproducible: `codex/product-construction-w1` contiene `main` y todo el trabajo comprometido de las ramas históricas auditadas. El preflight no destructivo de Preview pasa, y el único P0 de aplicación hallado —un IDOR en las acciones del chat de prueba— queda corregido en este paquete.
 
+El aviso de GitHub durante el primer push descubrió además dos advisories críticos sobre Next.js 15.5.23. El RC fija Next.js 15.5.24 y actualiza los overrides transitivos con parche disponible. `pnpm audit --prod --audit-level high` termina sin vulnerabilidades conocidas.
+
 El release a Production permanece bloqueado por dos P0 operativos que requieren actuación explícita fuera del código:
 
 1. Production aún no tiene aplicada `20260926190000_redact_vapi_artifact_references.sql`; pueden quedar referencias históricas de artifacts Vapi hasta ejecutar esa redacción.
@@ -107,6 +109,7 @@ No se imprimieron valores. Estado observado en `recepia-panel`:
 ### P0
 
 - **Cerrado en código:** IDOR en `/settings/test-agent/chat`. Un admin podía suministrar un UUID de conversación de otra clínica y las acciones con `service_role` no validaban `clinic_id`. Las rutas de envío y lectura ahora rechazan todo objeto no perteneciente al tenant antes de leer mensajes o ejecutar el Agent.
+- **Cerrado en dependencias:** Next.js 15.5.23 estaba afectado por dos advisories críticos (uno Windows-only y otro en Image Optimization/AVIF). El RC usa 15.5.24; `sharp` y los overrides transitivos se elevan a sus versiones parcheadas. El audit de dependencias de Production queda limpio en niveles high/critical.
 - **Abierto, configuración:** separación de secretos/scopes indicada en §5.
 - **Abierto, Production data hygiene:** migración PC-W9D pendiente indicada en §4.
 
