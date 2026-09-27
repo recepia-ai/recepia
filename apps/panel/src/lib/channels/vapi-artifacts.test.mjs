@@ -99,3 +99,37 @@ test("redacts presigned URLs outside known artifact paths", () => {
   assert.equal("download" in redacted.message.evidence, false);
   assert.equal(redacted.message.evidence.publicUrl, payload.message.evidence.publicUrl);
 });
+
+test("redacts sensitive Vapi values recursively across event types and arrays", () => {
+  const payload = {
+    message: {
+      type: "transcript",
+      transcript: "Quiero una consulta mañana",
+      call: { id: "call-2" },
+      copies: [
+        {
+          transport: { callToken: "ephemeral" },
+          server: {
+            url: "https://preview.example/webhook?x-vercel-protection-bypass=secret",
+            headers: { Authorization: "Bearer secret", "x-safe": "trace" },
+          },
+        },
+      ],
+      evidence: {
+        signed: "https://storage.example/audio?X-Amz-Credential=id&X-Amz-Signature=secret",
+        public: "https://recepia.example/calls/call-2",
+      },
+    },
+  };
+
+  const redacted = redactVapiArtifactReferences(payload);
+
+  assert.equal(redacted.message.transcript, payload.message.transcript);
+  assert.equal(redacted.message.call.id, "call-2");
+  assert.equal("callToken" in redacted.message.copies[0].transport, false);
+  assert.equal("url" in redacted.message.copies[0].server, false);
+  assert.equal("Authorization" in redacted.message.copies[0].server.headers, false);
+  assert.equal(redacted.message.copies[0].server.headers["x-safe"], "trace");
+  assert.equal("signed" in redacted.message.evidence, false);
+  assert.equal(redacted.message.evidence.public, payload.message.evidence.public);
+});
