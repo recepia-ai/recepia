@@ -12,6 +12,10 @@ const updateSchema = z.object({
   enabled: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
+const resolveAlertSchema = z.object({
+  alert_event_id: z.string().uuid(),
+});
+
 export async function setAutomationChannelState(formData: FormData) {
   const access = await getAdminSettingsContext();
   if (!access.ok) return { error: access.error };
@@ -48,6 +52,51 @@ export async function setAutomationChannelState(formData: FormData) {
   if (error) {
     console.error("[setAutomationChannelState]", error);
     return { error: "No se pudo actualizar el kill switch" };
+  }
+
+  revalidatePath("/settings/operations");
+  return { success: true };
+}
+
+export async function resolveOperationalAlert(formData: FormData) {
+  const access = await getAdminSettingsContext();
+  if (!access.ok) return { error: access.error };
+  const parsed = resolveAlertSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Alerta inválida" };
+
+  const { data: auth } = await access.context.supabase.auth.getUser();
+  if (!auth.user) return { error: "No autenticado" };
+  const admin = createAdminClient();
+  const { data: alert, error: readError } = await admin
+    .from("channel_events")
+    .select("id, channel, conversation_id")
+    .eq("id", parsed.data.alert_event_id)
+    .eq("clinic_id", access.context.clinicId)
+    .eq("provider", "recepia-operations")
+    .eq("event_type", "operational.alert")
+    .maybeSingle();
+  if (readError || !alert) return { error: "Alerta no encontrada" };
+
+  const resolvedAt = new Date().toISOString();
+  const { error } = await admin.from("channel_events").insert({
+    clinic_id: access.context.clinicId,
+    conversation_id: alert.conversation_id,
+    channel: alert.channel,
+    provider: "recepia-operations",
+    event_id: `alert-resolved:${alert.id}`,
+    event_type: "operational.alert.resolved",
+    status: "completed",
+    payload: {
+      alert_event_id: alert.id,
+      resolved_by: auth.user.id,
+      resolved_at: resolvedAt,
+    },
+    occurred_at: resolvedAt,
+    processed_at: resolvedAt,
+  });
+  if (error && error.code !== "23505") {
+    console.error("[resolveOperationalAlert]", error);
+    return { error: "No se pudo resolver la alerta" };
   }
 
   revalidatePath("/settings/operations");

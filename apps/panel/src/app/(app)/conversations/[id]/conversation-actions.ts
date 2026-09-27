@@ -111,6 +111,17 @@ export async function takeControl(
     return { error: "No tienes permiso para tomar el control." };
   }
 
+  const admin = createAdminClient();
+  const { error: auditError } = await admin.from("events").insert({
+    clinic_id: clinicId,
+    conversation_id,
+    actor_id: actorId,
+    actor_type: "clinic_user",
+    event_type: "conversation.human_takeover",
+    payload: { previous_status: convGuard.status },
+  });
+  if (auditError) console.error("[takeControl] audit event", auditError);
+
   revalidatePath(`/conversations/${conversation_id}`);
   revalidatePath("/conversations");
   return { success: true };
@@ -209,6 +220,17 @@ export async function returnToAgent(
   if (!updated) {
     return { error: "No tienes permiso para devolver al agente." };
   }
+
+  const admin = createAdminClient();
+  const { error: auditError } = await admin.from("events").insert({
+    clinic_id: clinicId,
+    conversation_id,
+    actor_id: actorId,
+    actor_type: "clinic_user",
+    event_type: "conversation.returned_to_ai",
+    payload: { previous_status: "human_handling" },
+  });
+  if (auditError) console.error("[returnToAgent] audit event", auditError);
 
   revalidatePath(`/conversations/${conversation_id}`);
   revalidatePath("/conversations");

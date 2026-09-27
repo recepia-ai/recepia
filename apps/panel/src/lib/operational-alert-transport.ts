@@ -77,6 +77,12 @@ export async function recordOperationalSignal(
         group: alert.group,
         description: definition?.description ?? alert.id,
         destination: "settings_operations",
+        channel: channel(record.channel),
+        provider: record.provider ?? null,
+        error_code: record.error_code ?? null,
+        tool: record.tool ?? null,
+        conversation_id: record.conversation_id ?? null,
+        call_session_id: record.call_session_id ?? null,
       };
       const { error: alertError } = await supabaseAdmin.from("channel_events").insert({
         clinic_id: record.clinic_id,
