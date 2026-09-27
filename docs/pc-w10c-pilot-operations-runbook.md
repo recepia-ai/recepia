@@ -1,6 +1,13 @@
 # PC-W10C — Runbook de operación y métricas del piloto
 
-Estado: implementación en Preview. Este documento no autoriza activar una clínica real ni desplegar Production.
+Estado: **PC-W10C GO en Preview** el 27 de septiembre de 2026. Este documento no autoriza activar una clínica real ni desplegar Production.
+
+La validación conectada de la clínica Preview mostró Web, WhatsApp, Voz/Vapi y
+Google Calendar operativos; 5 conversaciones de la ventana (1 Web, 2 WhatsApp,
+2 Voz), 11 tools correctas, 0 tools fallidas y 0 fallos assistant-request. La
+prueba fue de lectura, no creó citas ni nueva evidencia. El aislamiento por
+clínica se valida además con un test que mezcla deliberadamente filas de dos
+tenants y excluye por completo el ajeno.
 
 ## 1. Responsabilidades y reglas de seguridad
 

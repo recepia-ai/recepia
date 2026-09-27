@@ -1,6 +1,12 @@
 # PC-W10 — Pilot Launch Readiness
 
-Estado: **PC-W10A implementado y validado en Preview** el 27 de septiembre de 2026.
+Estado: **PC-W10A, PC-W10B y PC-W10C en GO** el 27 de septiembre de 2026. PC-W10D no iniciado.
+
+PC-W10C reutiliza **Ajustes → Operaciones** como dashboard por clínica, con
+estados de canal/proveedor, kill switches, métricas de siete días, alertas
+abiertas/resueltas, conversaciones, llamadas y fallos de tools recientes. El
+runbook ejecutable, definiciones y resumen semanal están en
+`docs/pc-w10c-pilot-operations-runbook.md`.
 
 ## PC-W10A — procedimiento interno de alta
 
